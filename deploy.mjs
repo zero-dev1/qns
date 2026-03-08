@@ -1,7 +1,8 @@
 // deploy.mjs — QNS deployment script for QF Network (pallet-revive via eth-rpc)
 import { createWalletClient, createPublicClient, http, defineChain, keccak256, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
+import { execSync } from 'child_process';
 
 // ============================================
 // CONFIG
@@ -91,6 +92,40 @@ async function callContract(name, address, abi, functionName, args = []) {
   console.log(`  ✅ ${functionName} succeeded`);
   return receipt;
 }
+
+// ============================================
+// COMPILE CONTRACTS
+// ============================================
+console.log('============================================');
+console.log('COMPILING CONTRACTS');
+console.log('============================================');
+
+// Delete existing combined.json if it exists
+const combinedJsonPath = 'contracts/combined.json';
+if (existsSync(combinedJsonPath)) {
+  console.log('Deleting existing contracts/combined.json...');
+  unlinkSync(combinedJsonPath);
+}
+
+// Run resolc compilation
+console.log('Running resolc compilation...');
+try {
+  execSync(
+    'resolc contracts/QNSRegistry.sol contracts/QNSResolver.sol contracts/QNSRegistrar.sol --combined-json abi,bin -o contracts/ --overwrite',
+    { stdio: 'inherit' }
+  );
+} catch (err) {
+  console.error('❌ Compilation failed:', err.message);
+  process.exit(1);
+}
+
+// Verify combined.json was created
+if (!existsSync(combinedJsonPath)) {
+  console.error('❌ Compilation failed: contracts/combined.json was not created');
+  process.exit(1);
+}
+console.log('✅ Compilation successful');
+console.log('');
 
 // ============================================
 // STEP 1: LOAD COMPILED CONTRACTS
