@@ -22,6 +22,8 @@ export type SearchResult = {
 
 type TxState = 'idle' | 'pending' | 'success' | 'failed';
 
+type TxErrorType = 'insufficient_balance' | 'generic';
+
 const durations = [
   { label: '1 year', years: 1, permanent: false },
   { label: '2 years', years: 2, permanent: false },
@@ -37,15 +39,34 @@ export default function Hero() {
   const [input, setInput] = useState('');
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<SearchResult>({ status: 'idle', name: '' });
+  const [searchPrice, setSearchPrice] = useState<bigint | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Registration state
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(0);
   const [txState, setTxState] = useState<TxState>('idle');
+  const [txError, setTxError] = useState<{ type: TxErrorType; message: string } | null>(null);
+  const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const duration = durations[selectedDuration];
-  const price = selectedName ? getPrice(selectedName, duration.years, duration.permanent) : 0n;
+  
+  // Registration price state
+  const [regPrice, setRegPrice] = useState<bigint | null>(null);
+  const [regPriceLoading, setRegPriceLoading] = useState(false);
+  
+  // Fetch registration price when selectedName or duration changes
+  useEffect(() => {
+    if (!selectedName) {
+      setRegPrice(null);
+      return;
+    }
+    setRegPriceLoading(true);
+    getPrice(selectedName, duration.years, duration.permanent)
+      .then(price => setRegPrice(price))
+      .catch(() => setRegPrice(null))
+      .finally(() => setRegPriceLoading(false));
+  }, [selectedName, duration.years, duration.permanent]);
 
   // Search logic
   const search = useCallback(async (value: string) => {
@@ -62,10 +83,18 @@ export default function Hero() {
     }
 
     setSearching(true);
+    setSearchPrice(null);
     try {
       const isAvailable = await checkAvailability(name);
       if (isAvailable) {
         setResult({ status: 'available', name });
+        // Fetch price asynchronously
+        try {
+          const priceWei = await getPrice(name, 1, false);
+          setSearchPrice(priceWei);
+        } catch {
+          setSearchPrice(null);
+        }
       } else {
         const reg = await getRegistration(name);
         if (reg) {
@@ -98,11 +127,13 @@ export default function Hero() {
     const name = input.toLowerCase().replace(/\.qf$/, '').trim();
     if (!name) {
       setResult({ status: 'idle', name: '' });
+      setSearchPrice(null);
       return;
     }
     const validation = validateNameLocal(name);
     if (!validation.valid) {
       setResult({ status: 'invalid', name, error: validation.error! });
+      setSearchPrice(null);
       return;
     }
     debounceRef.current = setTimeout(() => search(input), 400);
@@ -115,6 +146,11 @@ export default function Hero() {
   const handleSelectName = (name: string) => {
     setSelectedName(name);
     setTxState('idle');
+    setTxError(null);
+    if (errorDismissTimerRef.current) {
+      clearTimeout(errorDismissTimerRef.current);
+      errorDismissTimerRef.current = null;
+    }
   };
 
   const handleRegister = async () => {
@@ -124,22 +160,59 @@ export default function Hero() {
       return;
     }
     setTxState('pending');
+    setTxError(null);
+    if (errorDismissTimerRef.current) {
+      clearTimeout(errorDismissTimerRef.current);
+      errorDismissTimerRef.current = null;
+    }
     try {
       await registerName(selectedName, duration.years, duration.permanent, address);
       setTxState('success');
       await refreshName();
-    } catch {
+    } catch (err: any) {
+      const errorMessage = (err?.message || err?.cause?.message || '').toLowerCase();
+      const isInsufficientBalance = 
+        errorMessage.includes('insufficient') || 
+        errorMessage.includes('balance') || 
+        errorMessage.includes('funds');
+      
+      if (isInsufficientBalance && regPrice) {
+        setTxError({
+          type: 'insufficient_balance',
+          message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.`
+        });
+      } else {
+        setTxError({ type: 'generic', message: 'Transaction failed. Please try again.' });
+      }
       setTxState('failed');
+      
+      // Auto-dismiss error after 8 seconds
+      if (errorDismissTimerRef.current) {
+        clearTimeout(errorDismissTimerRef.current);
+      }
+      errorDismissTimerRef.current = setTimeout(() => {
+        setTxError(null);
+      }, 8000);
     }
   };
 
   const handleRetry = () => {
     setTxState('idle');
+    setTxError(null);
+    if (errorDismissTimerRef.current) {
+      clearTimeout(errorDismissTimerRef.current);
+      errorDismissTimerRef.current = null;
+    }
   };
 
   const handleNewSearch = () => {
     setSelectedName(null);
     setTxState('idle');
+    setTxError(null);
+    if (errorDismissTimerRef.current) {
+      clearTimeout(errorDismissTimerRef.current);
+      errorDismissTimerRef.current = null;
+    }
     setInput('');
     setResult({ status: 'idle', name: '' });
   };
@@ -158,16 +231,17 @@ export default function Hero() {
   };
 
   const priceDisplay = () => {
-    if (!selectedName) return '';
-    const qf = formatQF(price);
-    const usd = formatUSD(price);
+    if (!selectedName || regPrice === null) return regPriceLoading ? 'Loading price...' : '';
+    const qf = formatQF(regPrice);
+    const usd = formatUSD(regPrice);
     if (duration.permanent) {
       return `${qf} QF (${usd}) — own forever`;
     }
     if (duration.years === 1) {
       return `Total: ${qf} QF (${usd})`;
     }
-    const annualPrice = getPrice(selectedName, 1, false);
+    // For multi-year, estimate annual based on 1 year price
+    const annualPrice = regPrice / BigInt(duration.years);
     return `${formatQF(annualPrice)} QF × ${duration.years} years = ${qf} QF (${usd})`;
   };
 
@@ -264,10 +338,9 @@ export default function Hero() {
                         <span className="text-black/80 text-sm">is available</span>
                       </div>
                       <div className="text-sm text-black/70">
-                        {(() => {
-                          const price = getPrice(result.name, 1, false);
-                          return `${formatQF(price)} QF / year (${formatUSD(price)})`;
-                        })()}
+                        {searchPrice !== null
+                          ? `${formatQF(searchPrice)} QF / year (${formatUSD(searchPrice)})`
+                          : 'Loading price...'}
                       </div>
                       <button
                         onClick={() => handleSelectName(result.name)}
@@ -317,6 +390,13 @@ export default function Hero() {
           {/* Registration Panel */}
           {selectedName && (
             <div className="mt-0 bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6 transition-all duration-150 ease-in-out animate-fade-in">
+              {/* Error Toast */}
+              {txError && (
+                <div className="mb-4 px-4 py-3 rounded-xl bg-[#E5484D]/10 border border-[#E5484D] text-white text-sm font-medium animate-fade-in">
+                  {txError.message}
+                </div>
+              )}
+
               {/* Idle State */}
               {txState === 'idle' && (
                 <div className="transition-all duration-150 ease-in-out">

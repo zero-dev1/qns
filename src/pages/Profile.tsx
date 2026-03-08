@@ -10,17 +10,18 @@ import {
   MessageCircle,
   Loader2,
   ExternalLink,
+  Share2,
+  Download,
+  Gift,
 } from 'lucide-react';
-import {
-  namehash,
-  getPublicClient,
-  getRegistration,
-  validateNameLocal,
-} from '../utils/qns';
+import { namehash, getPublicClient, getRegistration, validateNameLocal, getWalletClient, getQFBalance, formatQF } from '../utils/qns';
+import { generateShareCard, downloadShareCard } from '../utils/shareCard';
 import {
   QNS_RESOLVER_ADDRESS,
   QNS_RESOLVER_ABI,
 } from '../config/contracts';
+import { useWalletStore } from '../stores/walletStore';
+import { parseEther } from 'viem';
 
 interface ProfileData {
   name: string;
@@ -66,6 +67,20 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [canvasDataUrl, setCanvasDataUrl] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  
+  // Gift modal state
+  const [giftModalOpen, setGiftModalOpen] = useState(false);
+  const [giftAmount, setGiftAmount] = useState('');
+  const [senderBalance, setSenderBalance] = useState<bigint>(0n);
+  const [isSending, setIsSending] = useState(false);
+  const [giftError, setGiftError] = useState<string | null>(null);
+  const [giftSuccess, setGiftSuccess] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  
+  const { address: senderAddress, connect, connecting } = useWalletStore();
 
   useEffect(() => {
     if (!name) return;
@@ -239,6 +254,119 @@ export default function ProfilePage() {
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
 
+  const handleShareCard = async () => {
+    if (!profile) return;
+    setCapturing(true);
+    try {
+      const dataUrl = await generateShareCard({
+        name: profile.name,
+        address: profile.address,
+        avatar: profile.avatar || undefined,
+        bio: profile.bio || undefined,
+        twitter: profile.twitter || undefined,
+        github: profile.github || undefined,
+        url: profile.url || undefined,
+        discord: profile.discord || undefined,
+        registeredAt: profile.registeredAt,
+        isPermanent: profile.isPermanent,
+        expires: profile.expires,
+      });
+      setCanvasDataUrl(dataUrl);
+      setShareModalOpen(true);
+    } catch (err) {
+      console.error('Error generating share card:', err);
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!canvasDataUrl || !profile) return;
+    downloadShareCard(canvasDataUrl, `${profile.name}-qf-profile.png`);
+  };
+
+  const handleShareX = () => {
+    if (!profile) return;
+    const profileUrl = `${window.location.origin}/profile/${profile.name}`;
+    const text = `Check out my identity on $QF Network`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
+    window.open(url, '_blank');
+  };
+
+  // Gift modal handlers
+  const openGiftModal = async () => {
+    setGiftModalOpen(true);
+    setGiftAmount('');
+    setGiftError(null);
+    setGiftSuccess(false);
+    setTxHash(null);
+    if (senderAddress) {
+      const balance = await getQFBalance(senderAddress);
+      setSenderBalance(balance);
+    }
+  };
+
+  const closeGiftModal = () => {
+    setGiftModalOpen(false);
+    setGiftAmount('');
+    setGiftError(null);
+    setGiftSuccess(false);
+    setTxHash(null);
+  };
+
+  const handleQuickSelect = (amount: number) => {
+    setGiftAmount(amount.toString());
+    setGiftError(null);
+  };
+
+  const handleSendGift = async () => {
+    if (!senderAddress || !profile?.address || !giftAmount) return;
+    
+    const amount = parseFloat(giftAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setGiftError('Please enter a valid amount');
+      return;
+    }
+
+    // Check balance
+    const balance = await getQFBalance(senderAddress);
+    const requiredAmount = parseEther(giftAmount);
+    
+    if (balance < requiredAmount) {
+      setGiftError('Insufficient QF balance');
+      return;
+    }
+
+    setIsSending(true);
+    setGiftError(null);
+
+    try {
+      const walletClient = getWalletClient();
+      if (!walletClient) throw new Error('No wallet connected');
+
+      const hash = await walletClient.sendTransaction({
+        to: profile.address as `0x${string}`,
+        value: requiredAmount,
+        account: senderAddress,
+      });
+
+      setTxHash(hash);
+      setGiftSuccess(true);
+    } catch (err) {
+      console.error('Gift transaction failed:', err);
+      setGiftError('Transaction failed. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleShareGiftOnX = () => {
+    if (!profile || !giftAmount) return;
+    const text = `Just gifted ${giftAmount} QF to ${profile.name}.qf on @QFNetwork`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
   // Get available socials
   const availableSocials = profile
     ? Object.entries(SOCIAL_CONFIG).filter(([key]) => profile[key as keyof ProfileData] as string)
@@ -337,20 +465,28 @@ export default function ProfilePage() {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
         <div className="w-full max-w-md animate-fade-in">
-          {/* Profile Card */}
+          {/* Profile Card - transparent background with border only */}
           <div
-            className="bg-[#141414] rounded-[16px] p-8 relative overflow-hidden"
-            style={{
-              boxShadow: 'inset 0 0 0 1px rgba(0, 209, 121, 0.2), 0 0 60px rgba(0, 209, 121, 0.08)',
-            }}
+            className="rounded-[16px] p-8 relative overflow-hidden border border-[#1E1E1E]"
           >
-            {/* Subtle gradient border */}
-            <div
-              className="absolute inset-0 rounded-[16px] pointer-events-none"
-              style={{
-                background: 'linear-gradient(135deg, rgba(0, 209, 121, 0.1) 0%, transparent 50%, rgba(0, 209, 121, 0.03) 100%)',
-              }}
-            />
+            {/* Share and Gift icon buttons - top right */}
+            <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+              <button
+                onClick={openGiftModal}
+                className="p-2 rounded-lg text-[#8A8A8A] hover:text-[#00D179] hover:bg-[#1E1E1E] transition-all duration-200"
+                title="Gift QF"
+              >
+                <Gift size={18} />
+              </button>
+              <button
+                onClick={handleShareCard}
+                disabled={capturing}
+                className="p-2 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200 disabled:opacity-50"
+                title="Share Card"
+              >
+                <Share2 size={18} />
+              </button>
+            </div>
 
             <div className="relative z-10">
               {/* Name Header */}
@@ -443,25 +579,236 @@ export default function ProfilePage() {
                   )}
                 </div>
               </div>
+
+              {/* Footer inside the card */}
+              <div className="mt-8 pt-6 border-t border-[#1E1E1E] text-center">
+                <Link
+                  to="/"
+                  className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#00D179] transition-colors duration-200"
+                >
+                  <span className="font-clash font-semibold text-white">
+                    QNS<span className="text-[#00D179]">.</span>
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-[#555555]" />
+                  <span>Powered by QNS</span>
+                  <ExternalLink size={12} />
+                </Link>
+              </div>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#00D179] transition-colors duration-200"
+          {/* Share Card and Gift QF buttons below */}
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <button
+              onClick={handleShareCard}
+              disabled={capturing}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200 disabled:opacity-50"
             >
-              <span className="font-clash font-semibold text-white">
-                QNS<span className="text-[#00D179]">.</span>
-              </span>
-              <span className="w-1 h-1 rounded-full bg-[#555555]" />
-              <span>Powered by QNS</span>
-              <ExternalLink size={12} />
-            </Link>
+              {capturing ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Share2 size={18} />
+              )}
+              {capturing ? 'Generating...' : 'Share Card'}
+            </button>
+            <button
+              onClick={openGiftModal}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border border-[#1E1E1E] text-[#8A8A8A] hover:text-[#00D179] hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200"
+            >
+              <Gift size={18} />
+              Gift QF
+            </button>
           </div>
         </div>
       </main>
+
+      {/* Share Modal */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-lg w-full animate-fade-in">
+            <h3 className="font-clash font-medium text-xl text-white mb-4 text-center">
+              Your Profile Card
+            </h3>
+
+            {canvasDataUrl && (
+              <div className="mb-6 rounded-xl overflow-hidden border border-[#1E1E1E]">
+                <img
+                  src={canvasDataUrl}
+                  alt="Profile Card Preview"
+                  className="w-full h-auto"
+                />
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDownload}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200"
+              >
+                <Download size={18} />
+                Download PNG
+              </button>
+              <button
+                onClick={handleShareX}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200"
+              >
+                <Twitter size={18} />
+                Share on X
+              </button>
+              <button
+                onClick={() => setShareModalOpen(false)}
+                className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200 py-2"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gift Modal */}
+      {giftModalOpen && profile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6 max-w-md w-full animate-fade-in">
+            {!giftSuccess ? (
+              <>
+                {/* Recipient Info */}
+                <div className="text-center mb-6">
+                  <h3 className="font-clash font-medium text-xl text-white mb-1">
+                    Gift QF to {profile.name}.qf
+                  </h3>
+                  <p className="text-sm text-[#8A8A8A] font-mono">
+                    {profile.address}
+                  </p>
+                </div>
+
+                {/* Wallet Connection Check */}
+                {!senderAddress ? (
+                  <div className="text-center py-4">
+                    <p className="text-[#8A8A8A] mb-4">
+                      Connect wallet to send a gift
+                    </p>
+                    <button
+                      onClick={connect}
+                      disabled={connecting}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 disabled:opacity-50"
+                    >
+                      {connecting ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : null}
+                      {connecting ? 'Connecting...' : 'Connect Wallet'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Amount Input */}
+                    <div className="mb-4">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={giftAmount}
+                          onChange={(e) => {
+                            setGiftAmount(e.target.value);
+                            setGiftError(null);
+                          }}
+                          placeholder="Enter amount"
+                          min="0"
+                          step="0.01"
+                          className="w-full px-4 py-3 bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl text-white font-satoshi focus:outline-none focus:border-[#00D179] transition-colors"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8A8A8A] font-medium">
+                          QF
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Select Buttons */}
+                    <div className="flex items-center gap-2 mb-4">
+                      {[10, 50, 100, 500].map((amount) => (
+                        <button
+                          key={amount}
+                          onClick={() => handleQuickSelect(amount)}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            giftAmount === amount.toString()
+                              ? 'bg-[#00D179] text-white'
+                              : 'bg-[#1E1E1E] text-[#8A8A8A] hover:text-[#00D179]'
+                          }`}
+                        >
+                          {amount} QF
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Balance Display */}
+                    <div className="mb-4 text-center">
+                      <span className="text-sm text-[#8A8A8A]">
+                        Your balance: <span className="text-white font-medium">{formatQF(senderBalance)} QF</span>
+                      </span>
+                    </div>
+
+                    {/* Error Message */}
+                    {giftError && (
+                      <p className="text-center text-[#E5484D] text-sm mb-4">
+                        {giftError}
+                      </p>
+                    )}
+
+                    {/* Send Gift Button */}
+                    <button
+                      onClick={handleSendGift}
+                      disabled={isSending || !giftAmount}
+                      className="w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isSending ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : null}
+                      {isSending ? 'Sending...' : 'Send Gift'}
+                    </button>
+                  </>
+                )}
+
+                {/* Close Button */}
+                <button
+                  onClick={closeGiftModal}
+                  className="w-full text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200 py-2 mt-3"
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              /* Success Screen */
+              <div className="text-center py-4">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#00D179]/20 flex items-center justify-center">
+                  <Check size={32} className="text-[#00D179]" />
+                </div>
+                <h3 className="font-clash font-medium text-xl text-white mb-2">
+                  You sent {giftAmount} QF to {profile.name}.qf!
+                </h3>
+                {txHash && (
+                  <p className="text-sm text-[#8A8A8A] font-mono mb-4 break-all">
+                    {txHash.slice(0, 20)}...{txHash.slice(-8)}
+                  </p>
+                )}
+                <div className="flex flex-col gap-3 mt-6">
+                  <button
+                    onClick={handleShareGiftOnX}
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200"
+                  >
+                    <Twitter size={18} />
+                    Share on X
+                  </button>
+                  <button
+                    onClick={closeGiftModal}
+                    className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200 py-2"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fade-in {

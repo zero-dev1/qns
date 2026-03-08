@@ -13,6 +13,7 @@ interface IQNSResolver {
     function setName(bytes32 node, string memory _name) external;
     function setReverse(address _addr, bytes32 node) external;
     function clearReverse(address _addr) external;
+    function nameHash(address _addr) external view returns (bytes32);
 }
 
 contract QNSRegistrar {
@@ -49,6 +50,7 @@ contract QNSRegistrar {
     mapping(address => mapping(string => uint256)) private _ownedNameIndex;
 
     bytes32 public immutable qfNode;
+    bytes32 public immutable reverseNode;
 
     event NameRegistered(
         string name,
@@ -93,6 +95,7 @@ contract QNSRegistrar {
         burnPercent = 5;
 
         qfNode = keccak256(abi.encodePacked(bytes32(0), keccak256("qf")));
+        reverseNode = keccak256(abi.encodePacked(bytes32(0), keccak256("reverse")));
     }
 
     function validateName(string memory name) internal pure returns (string memory) {
@@ -182,8 +185,10 @@ contract QNSRegistrar {
         registry.setResolver(nameNode, address(resolver));
         resolver.setAddr(nameNode, msg.sender);
         resolver.setName(nameNode, lowered);
-        resolver.setReverse(msg.sender, nameNode);
         registry.setOwner(nameNode, msg.sender);
+
+        // Auto-claim reverse record if user doesn't have one set
+        _autoSetReverseRecord(msg.sender, lowered);
 
         _splitPayment(fee);
 
@@ -311,8 +316,10 @@ contract QNSRegistrar {
         registry.setResolver(nameNode, address(resolver));
         resolver.setAddr(nameNode, to);
         resolver.setName(nameNode, lowered);
-        resolver.setReverse(to, nameNode);
         registry.setOwner(nameNode, to);
+
+        // Auto-claim reverse record if recipient doesn't have one set
+        _autoSetReverseRecord(to, lowered);
 
         reserved[labelHash] = false;
 
@@ -399,6 +406,53 @@ contract QNSRegistrar {
     // ──────────────────────────────────────────────
     // Internal Helpers
     // ──────────────────────────────────────────────
+
+    function _autoSetReverseRecord(address addr, string memory name) internal {
+        // Check if user already has a reverse record
+        bytes32 existingNode = resolver.nameHash(addr);
+        if (existingNode != bytes32(0)) {
+            // User already has a primary name set, don't overwrite
+            return;
+        }
+
+        // Convert address to hex string (without 0x prefix, lowercase)
+        string memory addrStr = _addrToString(addr);
+
+        // Compute the user's reverse subnode label hash
+        bytes32 addrLabelHash = keccak256(bytes(addrStr));
+
+        // Compute the user's reverse node: reverseNode + addrLabelHash
+        bytes32 userReverseNode = keccak256(abi.encodePacked(reverseNode, addrLabelHash));
+
+        // Claim the reverse subnode for this user (Registrar owns reverse node, so it can do this)
+        registry.setSubnodeOwner(reverseNode, addrLabelHash, addr);
+
+        // Set the name on the reverse node (Resolver checks msg.sender is the node owner)
+        // Note: The user (addr) needs to be the owner to call setName, so we use a different approach
+        // Since the Resolver is authorized to set names, we can use a different approach
+        // Actually, we need to check the Resolver's authorization model
+        // Looking at QNSResolver: setName requires isAuthorized(node)
+        // isAuthorized checks: msg.sender == registry.owner(node) || authorizedCallers[msg.sender]
+        // The Registrar IS an authorized caller (added in deploy.mjs)
+        // So we can directly call resolver.setName()
+
+        // Set the reverse record in the resolver (maps address => node)
+        resolver.setReverse(addr, userReverseNode);
+
+        // Set the name on the reverse node (Registrar is authorized caller)
+        resolver.setName(userReverseNode, name);
+    }
+
+    function _addrToString(address addr) internal pure returns (string memory) {
+        bytes memory alphabet = "0123456789abcdef";
+        bytes memory data = abi.encodePacked(addr);
+        bytes memory str = new bytes(40);
+        for (uint256 i = 0; i < 20; i++) {
+            str[i * 2] = alphabet[uint256(uint8(data[i] >> 4))];
+            str[1 + i * 2] = alphabet[uint256(uint8(data[i] & 0x0f))];
+        }
+        return string(str);
+    }
 
     function _isAvailable(bytes32 labelHash) internal view returns (bool) {
         Registration storage reg = registrations[labelHash];

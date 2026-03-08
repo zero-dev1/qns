@@ -1,13 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ArrowRight, Check, Shield, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { validateNameLocal, checkAvailability, getRegistration, truncateAddress, getPrice, formatQF, formatUSD } from '../utils/qns';
+import { validateNameLocal, checkAvailability, getRegistration, truncateAddress, getPrice, formatUSD } from '../utils/qns';
+import { formatEther } from 'viem';
 
 export type SearchResult = {
   status: 'available' | 'taken' | 'reserved' | 'invalid' | 'idle';
   name: string;
   error?: string;
   owner?: string;
+  price?: string;
+  priceUsd?: string;
 };
 
 interface SearchBarProps {
@@ -19,6 +22,7 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
   const [input, setInput] = useState('');
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<SearchResult>({ status: 'idle', name: '' });
+  const [priceLoading, setPriceLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback(async (value: string) => {
@@ -38,7 +42,23 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
     try {
       const isAvailable = await checkAvailability(name);
       if (isAvailable) {
+        setPriceLoading(true);
         setResult({ status: 'available', name });
+        // Fetch live price from contract
+        try {
+          console.log('[SearchBar] about to call getPrice, name:', name);
+          const priceWei = await getPrice(name, 1, false);
+          console.log('[SearchBar] priceWei received:', priceWei, typeof priceWei);
+          const priceStr = formatEther(priceWei);
+          console.log('[SearchBar] priceStr:', priceStr);
+          const usdStr = formatUSD(priceWei);
+          setResult({ status: 'available', name, price: priceStr, priceUsd: usdStr });
+        } catch (err) {
+          // If price fetch fails, still show as available but without price
+          setResult({ status: 'available', name });
+        } finally {
+          setPriceLoading(false);
+        }
       } else {
         const reg = await getRegistration(name);
         if (reg) {
@@ -178,10 +198,13 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
                 <span className="text-black/80 text-sm">is available</span>
               </div>
               <div className="text-sm text-black/70">
-                {(() => {
-                  const price = getPrice(result.name, 1, false);
-                  return `${formatQF(price)} QF / year (${formatUSD(price)})`;
-                })()}
+                {priceLoading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                ) : result.price ? (
+                  `${result.price} QF / year (${result.priceUsd})`
+                ) : (
+                  'Loading price...'
+                )}
               </div>
               {onSelect && (
                 <button

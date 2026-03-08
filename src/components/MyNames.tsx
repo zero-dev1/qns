@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Download, X, Twitter } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
 import {
   renewName,
@@ -8,6 +9,7 @@ import {
   resolveForward,
   getNamesOwnedByAddress,
 } from '../utils/qns';
+import { generateShareCard, downloadShareCard } from '../utils/shareCard';
 
 interface OwnedName {
   name: string;
@@ -31,6 +33,11 @@ export default function MyNames() {
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
+
+  // Share modal state
+  const [shareModal, setShareModal] = useState<string | null>(null);
+  const [shareCanvasUrl, setShareCanvasUrl] = useState<string | null>(null);
+  const [generatingShare, setGeneratingShare] = useState(false);
 
   const loadNames = useCallback(async () => {
     if (!address) return;
@@ -181,6 +188,51 @@ export default function MyNames() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleShare = async (item: OwnedName) => {
+    setShareModal(item.name);
+    setGeneratingShare(true);
+    setShareCanvasUrl(null);
+    try {
+      // Get text records for this name
+      const records: Record<string, string> = {};
+      for (const key of TEXT_KEYS) {
+        records[key] = await getTextRecord(item.name, key);
+      }
+      
+      const dataUrl = await generateShareCard({
+        name: item.name,
+        address: address || '',
+        avatar: records.avatar || undefined,
+        bio: records.bio || undefined,
+        twitter: records.twitter || undefined,
+        github: records.github || undefined,
+        url: records.url || undefined,
+        discord: records.discord || undefined,
+        registeredAt: item.registeredAt,
+        isPermanent: item.isPermanent,
+        expires: item.expires,
+      });
+      setShareCanvasUrl(dataUrl);
+    } catch (err) {
+      console.error('Error generating share card:', err);
+    } finally {
+      setGeneratingShare(false);
+    }
+  };
+
+  const handleDownloadShare = () => {
+    if (!shareCanvasUrl || !shareModal) return;
+    downloadShareCard(shareCanvasUrl, `${shareModal}-qf-profile.png`);
+  };
+
+  const handleShareX = () => {
+    if (!shareModal) return;
+    const profileUrl = `${window.location.origin}/profile/${shareModal}`;
+    const text = `Check out my ${shareModal}.qf identity on @QFNetwork`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <section id="my-names" className="py-[100px] px-6">
       <div className="max-w-[1120px] mx-auto">
@@ -240,21 +292,29 @@ export default function MyNames() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap gap-2 mt-3">
                     {!item.isPermanent && (
                       <button
                         onClick={() => handleRenew(item.name)}
                         disabled={renewingName === item.name}
-                        className="px-4 py-2 text-sm rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-colors duration-200 disabled:opacity-50 cursor-pointer"
+                        className="px-3 py-1.5 text-xs rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-colors duration-200 disabled:opacity-50 cursor-pointer"
                       >
                         {renewingName === item.name ? 'Renewing...' : 'Renew'}
                       </button>
                     )}
                     <button
-                      onClick={() => toggleProfile(item.name)}
-                      className="px-4 py-2 text-sm rounded-lg bg-[#1E1E1E] text-white hover:bg-[#2a2a2a] transition-colors duration-200 cursor-pointer"
+                      onClick={() => handleShare(item)}
+                      disabled={generatingShare && shareModal === item.name}
+                      className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
+                      title="Share Card"
                     >
-                      {expandedProfile === item.name ? 'Close' : 'Edit Profile'}
+                      Share
+                    </button>
+                    <button
+                      onClick={() => toggleProfile(item.name)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-[#1E1E1E] text-white hover:bg-[#2a2a2a] transition-colors duration-200 cursor-pointer"
+                    >
+                      {expandedProfile === item.name ? 'Close' : 'Edit'}
                     </button>
                     <button
                       onClick={() => {
@@ -262,7 +322,7 @@ export default function MyNames() {
                         setTransferRecipient('');
                         setTransferError(null);
                       }}
-                      className="px-4 py-2 text-sm text-[#555555] hover:text-white transition-colors cursor-pointer"
+                      className="px-3 py-1.5 text-xs rounded-lg text-[#555555] hover:text-white transition-colors cursor-pointer"
                     >
                       Transfer
                     </button>
@@ -349,6 +409,61 @@ export default function MyNames() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {shareModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+            <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-lg w-full animate-fade-in">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-clash font-medium text-xl text-white">
+                  {shareModal}<span className="text-[#00D179]">.qf</span>
+                </h3>
+                <button
+                  onClick={() => setShareModal(null)}
+                  className="p-2 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {generatingShare ? (
+                <div className="py-12 text-center">
+                  <div className="inline-block w-8 h-8 border-2 border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin mb-4" />
+                  <p className="text-[#8A8A8A] text-sm">Generating share card...</p>
+                </div>
+              ) : shareCanvasUrl ? (
+                <>
+                  <div className="mb-6 rounded-xl overflow-hidden border border-[#1E1E1E]">
+                    <img
+                      src={shareCanvasUrl}
+                      alt={`${shareModal}.qf Profile Card`}
+                      className="w-full h-auto"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={handleDownloadShare}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 cursor-pointer"
+                    >
+                      <Download size={18} />
+                      Download PNG
+                    </button>
+                    <button
+                      onClick={handleShareX}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200 cursor-pointer"
+                    >
+                      <Twitter size={18} />
+                      Share on X
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-[#E5484D] text-sm">Failed to generate share card. Please try again.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -145,6 +145,7 @@ console.log('============================================');
 
 const rootNode = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const qfLabel = keccak256(toHex('qf'));
+const reverseLabel = keccak256(toHex('reverse'));
 
 await callContract('QNSRegistry', registryAddress, contracts.QNSRegistry.abi, 'setSubnodeOwner', [
   rootNode,
@@ -153,6 +154,20 @@ await callContract('QNSRegistry', registryAddress, contracts.QNSRegistry.abi, 's
 ]);
 
 await callContract('QNSResolver', resolverAddress, contracts.QNSResolver.abi, 'addAuthorizedCaller', [
+  registrarAddress,
+]);
+
+// Create the "reverse" top-level node owned by the deployer first
+await callContract('QNSRegistry', registryAddress, contracts.QNSRegistry.abi, 'setSubnodeOwner', [
+  rootNode,
+  reverseLabel,
+  account.address, // deployer owns it initially
+]);
+
+// Now transfer ownership of the "reverse" node to the Registrar so it can create subnodes
+await callContract('QNSRegistry', registryAddress, contracts.QNSRegistry.abi, 'setSubnodeOwner', [
+  rootNode,
+  reverseLabel,
   registrarAddress,
 ]);
 

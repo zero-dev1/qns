@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, http, keccak256, encodePacked, type Hex, formatEther, parseEther } from 'viem';
+import { createPublicClient, createWalletClient, custom, http, keccak256, encodePacked, type Hex, formatEther } from 'viem';
 import {
   localChain,
   QNS_REGISTRY_ADDRESS,
@@ -19,11 +19,58 @@ declare global {
   }
 }
 
-const PRICE_3_CHAR = parseEther('1000');
-const PRICE_4_CHAR = parseEther('300');
-const PRICE_5_PLUS_CHAR = parseEther('100');
-const PERMANENT_MULTIPLIER = 15n;
-const QF_USD_RATE = 0.01;
+export async function getContractPrice(name: string, years: number, permanent: boolean): Promise<bigint> {
+  const client = getPublicClient();
+  
+  console.log('[QNS] getPrice() name:', name, 'length:', name.length);
+  
+  const [price3Char, price4Char, price5PlusChar, permanentMultiplier] = await Promise.all([
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'price3Char',
+    }),
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'price4Char',
+    }),
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'price5PlusChar',
+    }),
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'permanentMultiplier',
+    }),
+  ]);
+  
+  const len = name.length;
+  let base: bigint;
+  let priceFunction: string;
+  
+  if (len === 3) {
+    base = price3Char as bigint;
+    priceFunction = 'price3Char';
+  } else if (len === 4) {
+    base = price4Char as bigint;
+    priceFunction = 'price4Char';
+  } else {
+    base = price5PlusChar as bigint;
+    priceFunction = 'price5PlusChar';
+  }
+
+  console.log('[QNS] getPrice() using price function:', priceFunction);
+  console.log('[QNS] getPrice() raw wei from contract:', base.toString());
+  console.log('[QNS] getPrice() after formatEther:', formatEther(base));
+
+  const finalPrice = permanent ? base * (permanentMultiplier as bigint) : base * BigInt(years);
+  
+  console.log('[QNS] getPrice() final return value (wei):', finalPrice.toString());
+  return finalPrice;
+}
 
 export function getPublicClient() {
   // Use /rpc proxy in dev mode to avoid CORS, otherwise use env URL
@@ -32,6 +79,40 @@ export function getPublicClient() {
     chain: localChain,
     transport: http(rpcUrl),
   });
+}
+
+export async function getContractPrices(): Promise<{
+  price3Char: bigint;
+  price4Char: bigint;
+  price5PlusChar: bigint;
+  permanentMultiplier: bigint;
+}> {
+  const client = getPublicClient();
+  
+  const [price3Char, price4Char, price5PlusChar, permanentMultiplier] = await Promise.all([
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'price3Char',
+    }) as Promise<bigint>,
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'price4Char',
+    }) as Promise<bigint>,
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'price5PlusChar',
+    }) as Promise<bigint>,
+    client.readContract({
+      address: QNS_REGISTRAR_ADDRESS,
+      abi: QNS_REGISTRAR_ABI,
+      functionName: 'permanentMultiplier',
+    }) as Promise<bigint>,
+  ]);
+  
+  return { price3Char, price4Char, price5PlusChar, permanentMultiplier };
 }
 
 export function getWalletClient() {
@@ -66,22 +147,31 @@ export function validateNameLocal(name: string): { valid: boolean; error: string
   return { valid: true, error: null };
 }
 
-export function getPrice(name: string, years: number, permanent: boolean): bigint {
-  const len = name.length;
+export function calculatePrice(
+  nameLength: number,
+  years: number,
+  permanent: boolean,
+  prices: { price3Char: bigint; price4Char: bigint; price5PlusChar: bigint; permanentMultiplier: bigint }
+): bigint {
   let base: bigint;
-  if (len === 3) base = PRICE_3_CHAR;
-  else if (len === 4) base = PRICE_4_CHAR;
-  else base = PRICE_5_PLUS_CHAR;
+  if (nameLength === 3) base = prices.price3Char;
+  else if (nameLength === 4) base = prices.price4Char;
+  else base = prices.price5PlusChar;
 
-  if (permanent) return base * PERMANENT_MULTIPLIER;
+  if (permanent) return base * prices.permanentMultiplier;
   return base * BigInt(years);
 }
 
+const QF_USD_RATE = 0.01;
+
+export async function getPrice(name: string, years: number, permanent: boolean): Promise<bigint> {
+  return getContractPrice(name, years, permanent);
+}
+
 export function formatQF(wei: bigint): string {
-  const qf = formatEther(wei);
-  const num = parseFloat(qf);
-  if (num >= 1000) return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const qf = parseFloat(formatEther(wei));
+  if (qf >= 1000) return qf.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return qf.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 export function formatUSD(wei: bigint): string {
@@ -190,7 +280,7 @@ export async function registerName(
 ): Promise<`0x${string}`> {
   const walletClient = getWalletClient();
   if (!walletClient) throw new Error('No wallet connected');
-  const fee = getPrice(name, years, permanent);
+  const fee = await getPrice(name, years, permanent);
   const hash = await walletClient.writeContract({
     address: QNS_REGISTRAR_ADDRESS,
     abi: QNS_REGISTRAR_ABI,
@@ -210,7 +300,7 @@ export async function renewName(
 ): Promise<`0x${string}`> {
   const walletClient = getWalletClient();
   if (!walletClient) throw new Error('No wallet connected');
-  const fee = getPrice(name, years, false);
+  const fee = await getPrice(name, years, false);
   const hash = await walletClient.writeContract({
     address: QNS_REGISTRAR_ADDRESS,
     abi: QNS_REGISTRAR_ABI,
@@ -273,6 +363,39 @@ export async function setTextRecord(
     account,
     chain: localChain,
   });
+}
+
+export async function setPrimaryName(
+  name: string,
+  account: `0x${string}`
+): Promise<`0x${string}`> {
+  const walletClient = getWalletClient();
+  if (!walletClient) throw new Error('No wallet connected');
+
+  // Compute reverse node: namehash of "{address lowercase without 0x}.reverse"
+  const cleanAddress = account.toLowerCase().slice(2);
+  const reverseName = `${cleanAddress}.reverse`;
+  const reverseNode = namehash(reverseName);
+
+  console.log('[QNS] setPrimaryName() calling setName with:');
+  console.log('  account:', account);
+  console.log('  reverseName:', reverseName);
+  console.log('  reverseNode:', reverseNode);
+  console.log('  name (to set):', name);
+
+  // The reverse node should already exist (created during first registration)
+  // Just update the name on the reverse node
+  const hash = await walletClient.writeContract({
+    address: QNS_RESOLVER_ADDRESS,
+    abi: QNS_RESOLVER_ABI,
+    functionName: 'setName',
+    args: [reverseNode, name],
+    account,
+    chain: localChain,
+  });
+
+  console.log('[QNS] setPrimaryName() transaction hash:', hash);
+  return hash;
 }
 
 export async function getNamesOwnedByAddress(address: string): Promise<{

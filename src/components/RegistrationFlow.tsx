@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { getPrice, formatQF, formatUSD, registerName } from '../utils/qns';
@@ -20,11 +20,25 @@ export default function RegistrationFlow() {
   const [name, setName] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(0);
   const [txState, setTxState] = useState<TxState>('idle');
+  const [price, setPrice] = useState<bigint | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
 
   const activeName = name;
   const duration = durations[selectedDuration];
 
-  const price = activeName ? getPrice(activeName, duration.years, duration.permanent) : 0n;
+  // Fetch live price when name or duration changes
+  useEffect(() => {
+    if (!activeName) {
+      setPrice(null);
+      return;
+    }
+    
+    setPriceLoading(true);
+    getPrice(activeName, duration.years, duration.permanent)
+      .then(setPrice)
+      .catch(() => setPrice(null))
+      .finally(() => setPriceLoading(false));
+  }, [activeName, duration.years, duration.permanent, selectedDuration]);
 
   const handleRegister = async () => {
     if (!activeName) return;
@@ -65,7 +79,7 @@ export default function RegistrationFlow() {
   };
 
   const priceDisplay = () => {
-    if (!activeName) return '';
+    if (!activeName || price === null) return priceLoading ? 'Loading price...' : '';
     const qf = formatQF(price);
     const usd = formatUSD(price);
     if (duration.permanent) {
@@ -74,8 +88,7 @@ export default function RegistrationFlow() {
     if (duration.years === 1) {
       return `Total: ${qf} QF (${usd})`;
     }
-    const annualPrice = getPrice(activeName, 1, false);
-    return `${formatQF(annualPrice)} QF × ${duration.years} years = ${qf} QF (${usd})`;
+    return `${formatQF(price / BigInt(duration.years))} QF × ${duration.years} years = ${qf} QF (${usd})`;
   };
 
   return (
@@ -126,7 +139,8 @@ export default function RegistrationFlow() {
 
             <button
               onClick={handleRegister}
-              className="w-full py-3.5 bg-[#00D179] hover:bg-[#00B868] text-white font-bold rounded-xl transition-all duration-200 text-base cursor-pointer"
+              disabled={price === null || priceLoading}
+              className="w-full py-3.5 bg-[#00D179] hover:bg-[#00B868] text-white font-bold rounded-xl transition-all duration-200 text-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {address ? `Register ${activeName}.qf` : 'Connect Wallet'}
             </button>

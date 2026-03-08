@@ -389,4 +389,14 @@ export const QNS_RESOLVER_ABI = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
+  {
+    type: 'function',
+    name: 'setName',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: '_name', type: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
 ] as const;

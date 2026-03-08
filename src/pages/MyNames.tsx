@@ -5,7 +5,6 @@ import html2canvas from 'html2canvas';
 import {
   ArrowLeft,
   Download,
-  Share2,
   Twitter,
   Github,
   Globe,
@@ -13,6 +12,7 @@ import {
   Loader2,
   Check,
   Link as LinkIcon,
+  Star,
 } from 'lucide-react';
 import {
   renewName,
@@ -21,6 +21,8 @@ import {
   setTextRecord,
   resolveForward,
   getNamesOwnedByAddress,
+  setPrimaryName,
+  resolveReverse,
 } from '../utils/qns';
 
 interface OwnedName {
@@ -40,7 +42,7 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
 };
 
 export default function MyNamesPage() {
-  const { address, connect } = useWalletStore();
+  const { address, connect, refreshName } = useWalletStore();
   const [searchParams] = useSearchParams();
   const expandName = searchParams.get('expand');
 
@@ -55,6 +57,8 @@ export default function MyNamesPage() {
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [primaryName, setPrimaryNameState] = useState<string | null>(null);
+  const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
 
   // Share card modal state
   const [shareModalName, setShareModalName] = useState<string | null>(null);
@@ -89,6 +93,29 @@ export default function MyNamesPage() {
   useEffect(() => {
     loadNames();
   }, [loadNames]);
+
+  // Fetch primary name when address changes
+  useEffect(() => {
+    if (address) {
+      resolveReverse(address).then((name) => {
+        setPrimaryNameState(name);
+      });
+    }
+  }, [address]);
+
+  const handleSetPrimary = async (name: string) => {
+    if (!address) return;
+    setSettingPrimary(name);
+    try {
+      await setPrimaryName(name, address); // Pass just the label, no .qf suffix
+      setPrimaryNameState(name);
+      await refreshName();
+    } catch {
+      // tx failed
+    } finally {
+      setSettingPrimary(null);
+    }
+  };
 
   // Auto-expand if URL param is set
   useEffect(() => {
@@ -415,37 +442,53 @@ export default function MyNamesPage() {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-satoshi font-bold text-xl text-white">
-                        {item.name}<span className="text-[#00D179]">.qf</span>
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-satoshi font-bold text-xl text-white">
+                          {item.name}<span className="text-[#00D179]">.qf</span>
+                        </h3>
+                        {primaryName === item.name && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-[#00D179] bg-[#00D17915] px-2 py-0.5 rounded-full">
+                            <Star size={10} fill="currentColor" />
+                            Primary
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-3 mt-1.5">
                         {getStatusBadge(item)}
                         <span className="text-sm text-[#8A8A8A]">{formatExpiry(item)}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {primaryName !== item.name && (
+                        <button
+                          onClick={() => handleSetPrimary(item.name)}
+                          disabled={settingPrimary === item.name}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A62315] transition-all duration-150 disabled:opacity-50 cursor-pointer"
+                        >
+                          {settingPrimary === item.name ? 'Setting...' : 'Primary'}
+                        </button>
+                      )}
                       {!item.isPermanent && (
                         <button
                           onClick={() => handleRenew(item.name)}
                           disabled={renewingName === item.name}
-                          className="px-4 py-2 text-sm rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-all duration-150 disabled:opacity-50 cursor-pointer"
+                          className="px-3 py-1.5 text-xs rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-all duration-150 disabled:opacity-50 cursor-pointer"
                         >
                           {renewingName === item.name ? 'Renewing...' : 'Renew'}
                         </button>
                       )}
                       <button
                         onClick={() => openShareModal(item.name)}
-                        className="px-4 py-2 text-sm rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179]/50 transition-all duration-150 cursor-pointer flex items-center gap-2"
+                        className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179]/50 transition-all duration-150 cursor-pointer"
                       >
-                        <Share2 size={14} />
                         Share
                       </button>
                       <button
                         onClick={() => toggleProfile(item.name)}
-                        className="px-4 py-2 text-sm rounded-lg bg-[#1E1E1E] text-white hover:bg-[#2a2a2a] transition-all duration-150 cursor-pointer"
+                        className="px-3 py-1.5 text-xs rounded-lg bg-[#1E1E1E] text-white hover:bg-[#2a2a2a] transition-all duration-150 cursor-pointer"
                       >
-                        {expandedProfile === item.name ? 'Close' : 'Edit Profile'}
+                        {expandedProfile === item.name ? 'Close' : 'Edit'}
                       </button>
                       <button
                         onClick={() => {
@@ -453,7 +496,7 @@ export default function MyNamesPage() {
                           setTransferRecipient('');
                           setTransferError(null);
                         }}
-                        className="px-4 py-2 text-sm text-[#555555] hover:text-white transition-colors cursor-pointer"
+                        className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179]/50 transition-all duration-150 cursor-pointer"
                       >
                         Transfer
                       </button>
