@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.development
+.env.production
+contracts/combined.json
+.DS_Store
+*.log
