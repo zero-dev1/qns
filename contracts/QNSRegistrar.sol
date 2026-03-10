@@ -18,6 +18,8 @@ interface IQNSResolver {
 
 contract QNSRegistrar {
 
+    bool private _locked;
+
     struct Registration {
         address owner;
         uint256 expires;
@@ -70,10 +72,19 @@ contract QNSRegistrar {
         address indexed from,
         address indexed to
     );
+    event AdminChanged(address indexed oldAdmin, address indexed newAdmin);
+    event TreasuryChanged(address indexed oldTreasury, address indexed newTreasury);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "QNSRegistrar: not admin");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(!_locked, "QNSRegistrar: reentrant call");
+        _locked = true;
+        _;
+        _locked = false;
     }
 
     constructor(
@@ -82,6 +93,10 @@ contract QNSRegistrar {
         address treasuryAddress,
         address _burnAddress
     ) {
+        require(registryAddress != address(0), "QNSRegistrar: invalid registry");
+        require(resolverAddress != address(0), "QNSRegistrar: invalid resolver");
+        require(treasuryAddress != address(0), "QNSRegistrar: invalid treasury");
+        require(_burnAddress != address(0), "QNSRegistrar: invalid burn address");
         registry = IQNSRegistry(registryAddress);
         resolver = IQNSResolver(resolverAddress);
         treasury = treasuryAddress;
@@ -147,7 +162,8 @@ contract QNSRegistrar {
         string memory name,
         uint256 durationInYears,
         bool permanent
-    ) external payable {
+    ) external payable nonReentrant {
+        require(permanent || durationInYears > 0, "QNSRegistrar: invalid duration");
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
 
@@ -200,7 +216,8 @@ contract QNSRegistrar {
         emit NameRegistered(lowered, labelHash, msg.sender, expiry, fee);
     }
 
-    function renew(string memory name, uint256 durationYears) external payable {
+    function renew(string memory name, uint256 durationYears) external payable nonReentrant {
+        require(durationYears > 0, "QNSRegistrar: invalid duration");
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
 
@@ -294,7 +311,7 @@ contract QNSRegistrar {
         }
     }
 
-    function assignReservedName(string memory name, address to) external onlyAdmin {
+    function assignReservedName(string memory name, address to) external onlyAdmin nonReentrant {
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
         require(reserved[labelHash], "QNSRegistrar: name not reserved");
@@ -346,14 +363,17 @@ contract QNSRegistrar {
     }
 
     function setTreasury(address newTreasury) external onlyAdmin {
+        require(newTreasury != address(0), "QNSRegistrar: zero address");
+        address oldTreasury = treasury;
         treasury = newTreasury;
+        emit TreasuryChanged(oldTreasury, newTreasury);
     }
 
     function setBurnAddress(address newBurn) external onlyAdmin {
         burnAddress = newBurn;
     }
 
-    function withdrawToTreasury() external onlyAdmin {
+    function withdrawToTreasury() external onlyAdmin nonReentrant {
         uint256 balance = address(this).balance;
         require(balance > 0, "QNSRegistrar: no balance");
         (bool success, ) = payable(treasury).call{value: balance}("");
@@ -366,7 +386,9 @@ contract QNSRegistrar {
 
     function setAdmin(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "QNSRegistrar: zero address");
+        address oldAdmin = admin;
         admin = newAdmin;
+        emit AdminChanged(oldAdmin, newAdmin);
     }
 
     function getNamesByOwner(address owner) external view returns (string[] memory) {

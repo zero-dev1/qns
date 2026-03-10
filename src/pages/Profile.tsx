@@ -2,20 +2,17 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
-  Copy,
   Check,
   Twitter,
   Github,
   Globe,
   MessageCircle,
   Loader2,
-  ExternalLink,
   Share2,
-  Download,
   Gift,
+  Copy,
 } from 'lucide-react';
 import { namehash, getPublicClient, getRegistration, validateNameLocal, getWalletClient, getQFBalance, formatQF } from '../utils/qns';
-import { generateShareCard, downloadShareCard } from '../utils/shareCard';
 import {
   QNS_RESOLVER_ADDRESS,
   QNS_RESOLVER_ABI,
@@ -65,11 +62,10 @@ export default function ProfilePage() {
   const { name } = useParams<{ name: string }>();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [copied, setCopied] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [canvasDataUrl, setCanvasDataUrl] = useState<string | null>(null);
-  const [capturing, setCapturing] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   // Gift modal state
   const [giftModalOpen, setGiftModalOpen] = useState(false);
@@ -241,54 +237,32 @@ export default function ProfilePage() {
     }
   };
 
-  const handleCopy = () => {
-    if (!profile?.address) return;
-    navigator.clipboard.writeText(profile.address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const formatDate = (timestamp: bigint) => {
     if (timestamp === 0n) return 'Unknown';
     const date = new Date(Number(timestamp) * 1000);
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  const handleShareCard = async () => {
-    if (!profile) return;
-    setCapturing(true);
-    try {
-      const dataUrl = await generateShareCard({
-        name: profile.name,
-        address: profile.address,
-        avatar: profile.avatar || undefined,
-        bio: profile.bio || undefined,
-        twitter: profile.twitter || undefined,
-        github: profile.github || undefined,
-        url: profile.url || undefined,
-        discord: profile.discord || undefined,
-        registeredAt: profile.registeredAt,
-        isPermanent: profile.isPermanent,
-        expires: profile.expires,
-      });
-      setCanvasDataUrl(dataUrl);
-      setShareModalOpen(true);
-    } catch (err) {
-      console.error('Error generating share card:', err);
-    } finally {
-      setCapturing(false);
-    }
+  const handleShareCard = () => {
+    setShareModalOpen(true);
   };
 
-  const handleDownload = () => {
-    if (!canvasDataUrl || !profile) return;
-    downloadShareCard(canvasDataUrl, `${profile.name}-qf-profile.png`);
+  const handleCopyLink = async () => {
+    if (!profile) return;
+    const url = `https://dotqf.xyz/name/${profile.name}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const handleShareX = () => {
     if (!profile) return;
-    const profileUrl = `${window.location.origin}/profile/${profile.name}`;
-    const text = `Check out my identity on $QF Network`;
+    const profileUrl = `https://dotqf.xyz/name/${profile.name}`;
+    const text = `Check out my .qf identity`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
     window.open(url, '_blank');
   };
@@ -465,12 +439,13 @@ export default function ProfilePage() {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
         <div className="w-full max-w-md animate-fade-in">
-          {/* Profile Card - transparent background with border only */}
+          {/* Profile Card */}
           <div
-            className="rounded-[16px] p-8 relative overflow-hidden border border-[#1E1E1E]"
+            className="rounded-[16px] p-8 relative overflow-hidden border border-[#1E1E1E] bg-[#0A0A0A]"
+            style={{ width: '600px', maxWidth: '100%' }}
           >
             {/* Share and Gift icon buttons - top right */}
-            <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+            <div className="card-buttons absolute top-4 right-4 flex items-center gap-2 z-20">
               <button
                 onClick={openGiftModal}
                 className="p-2 rounded-lg text-[#8A8A8A] hover:text-[#00D179] hover:bg-[#1E1E1E] transition-all duration-200"
@@ -480,8 +455,7 @@ export default function ProfilePage() {
               </button>
               <button
                 onClick={handleShareCard}
-                disabled={capturing}
-                className="p-2 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200 disabled:opacity-50"
+                className="p-2 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200"
                 title="Share Card"
               >
                 <Share2 size={18} />
@@ -506,8 +480,8 @@ export default function ProfilePage() {
                     className="w-[120px] h-[120px] rounded-full object-cover border-2 border-[#00D179]/30"
                   />
                 ) : (
-                  <div className="w-[120px] h-[120px] rounded-full bg-[#00D179]/20 flex items-center justify-center border-2 border-[#00D179]/30">
-                    <span className="text-5xl font-clash font-bold text-[#00D179]">
+                  <div className="w-[120px] h-[120px] rounded-full bg-[#1a3a2a] flex items-center justify-center border-2 border-[#00D179]">
+                    <span className="text-5xl font-clash font-bold text-white">
                       {profile.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -545,35 +519,28 @@ export default function ProfilePage() {
 
               {/* Wallet Address */}
               <div className="mb-6">
-                <div className="bg-[#0A0A0A] rounded-xl px-4 py-3 flex items-center justify-between border border-[#1E1E1E]">
-                  <span className="font-mono text-sm text-[#8A8A8A] truncate">
-                    {profile.address}
+                <div className="bg-[#1E1E1E] rounded-xl px-4 py-3 flex items-center justify-center border border-[#1E1E1E]">
+                  <span className="font-mono text-sm text-[#8A8A8A]">
+                    {profile.address.slice(0, 8)}...{profile.address.slice(-8)}
                   </span>
-                  <button
-                    onClick={handleCopy}
-                    className="ml-3 p-1.5 rounded-lg hover:bg-[#1E1E1E] transition-colors text-[#8A8A8A] hover:text-[#00D179] shrink-0"
-                    title="Copy address"
-                  >
-                    {copied ? <Check size={16} className="text-[#00D179]" /> : <Copy size={16} />}
-                  </button>
                 </div>
               </div>
 
               {/* Registration Info */}
               <div className="flex flex-col items-center gap-2 text-sm">
-                <div className="flex items-center gap-2 text-[#555555]">
+                <div className="flex items-center gap-2 text-[#6A6A6A]">
                   <span>Member since {formatDate(profile.registeredAt)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {profile.isPermanent ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#00D179] bg-[#00D17915] px-3 py-1.5 rounded-full">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#00D179] bg-[#00D179]/15 px-3 py-1.5 rounded-full">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
                       Permanent
                     </span>
                   ) : (
-                    <span className="text-[#8A8A8A]">
+                    <span className="text-[#00D179] text-xs font-medium bg-[#00D179]/15 px-3 py-1.5 rounded-full">
                       Expires {formatDate(profile.expires)}
                     </span>
                   )}
@@ -582,17 +549,13 @@ export default function ProfilePage() {
 
               {/* Footer inside the card */}
               <div className="mt-8 pt-6 border-t border-[#1E1E1E] text-center">
-                <Link
-                  to="/"
-                  className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#00D179] transition-colors duration-200"
-                >
+                <div className="inline-flex items-center gap-2 text-sm">
                   <span className="font-clash font-semibold text-white">
                     QNS<span className="text-[#00D179]">.</span>
                   </span>
-                  <span className="w-1 h-1 rounded-full bg-[#555555]" />
-                  <span>Powered by QNS</span>
-                  <ExternalLink size={12} />
-                </Link>
+                  <span className="w-1 h-1 rounded-full bg-[#6A6A6A]" />
+                  <span className="text-[#6A6A6A]">Powered by QNS</span>
+                </div>
               </div>
             </div>
           </div>
@@ -601,15 +564,10 @@ export default function ProfilePage() {
           <div className="mt-6 flex items-center justify-center gap-3">
             <button
               onClick={handleShareCard}
-              disabled={capturing}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200"
             >
-              {capturing ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Share2 size={18} />
-              )}
-              {capturing ? 'Generating...' : 'Share Card'}
+              <Share2 size={18} />
+              Share Card
             </button>
             <button
               onClick={openGiftModal}
@@ -623,30 +581,20 @@ export default function ProfilePage() {
       </main>
 
       {/* Share Modal */}
-      {shareModalOpen && (
+      {shareModalOpen && profile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-lg w-full animate-fade-in">
-            <h3 className="font-clash font-medium text-xl text-white mb-4 text-center">
-              Your Profile Card
+          <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-sm w-full animate-fade-in">
+            <h3 className="font-clash font-medium text-xl text-white mb-6 text-center">
+              Share {profile.name}.qf
             </h3>
-
-            {canvasDataUrl && (
-              <div className="mb-6 rounded-xl overflow-hidden border border-[#1E1E1E]">
-                <img
-                  src={canvasDataUrl}
-                  alt="Profile Card Preview"
-                  className="w-full h-auto"
-                />
-              </div>
-            )}
 
             <div className="flex flex-col gap-3">
               <button
-                onClick={handleDownload}
+                onClick={handleCopyLink}
                 className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200"
               >
-                <Download size={18} />
-                Download PNG
+                {copied ? <Check size={18} /> : <Copy size={18} />}
+                {copied ? 'Copied!' : 'Copy Link'}
               </button>
               <button
                 onClick={handleShareX}

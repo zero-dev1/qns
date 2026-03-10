@@ -4,6 +4,76 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readFileSync } from 'fs';
 
 // ============================================
+// RESERVED NAMES (must match deploy.mjs)
+// ============================================
+const RESERVED_NAMES = new Set([
+  'qflink', 'qfpad', 'qfclash', 'qfstream', 'nucleusx', 'quantumnotary',
+  'quantum', 'fusion', 'quantumfusion', 'dapp', 'bridge', 'governance',
+  'admin', 'treasury', 'validator', 'node', 'swap', 'stake', 'pool',
+  'vault', 'dao', 'nft', 'token', 'wallet', 'vector', 'nucleus',
+  'protocol', 'network', 'chain', 'testnet', 'mainnet', 'explorer',
+  'faucet', 'docs', 'api', 'sdk', 'cli', 'hub', 'portal', 'gateway',
+  'relay', 'oracle', 'index', 'registry', 'resolver', 'registrar',
+  'contract', 'deploy', 'genesis', 'block', 'epoch', 'shard',
+  'main', 'labs', 'ben', 'memechi',
+  'abu', 'alaoui', 'altstein', 'anthony', 'ariff', 'bitomoney', 'bob',
+  'bullishbear', 'crayola', 'crypto44', 'cryptofella', 'gideon', 'jopp',
+  'cryptomanic', 'cryptomonk', 'cryptonova', 'rishad', 'cryptocaesar',
+  'ctgymrat', 'degenkenn', 'dippy', 'drew', 'druya', 'ezmoney', 'fattony',
+  'gemdetector', 'goomba', 'hawk', 'hwmedia', 'intrepid', 'justiinape',
+  'karamata', 'kito', 'lawless', 'layeralpha', 'lsd', 'matteo', 'gorgonite',
+  'mezcez', 'moneylord', 'goodie', 'musa', 'nite', 'nilsb', 'noach',
+  'panamax', 'paw', 'roshi', 'rush', 'satoshiflipper', 'sharky', 'soef',
+  'sykodelic', 'tang', 'tareeq', 'teddy', 'alchemist', 'altcoinsensei',
+  'uponlygreg', 'web3princess',
+  'swampmonkey', 'kenobi', 'dtcrypto', 'axeledger', 'singularity',
+  'chadpumpiano', 'octgems', 'axe',
+  'drprofit', 'cryptogodjohn', 'becker',
+  'pentoshi', 'ansem', 'bluntz', 'hsaka', 'cobie', 'lookonchain',
+  'watcherguru', 'saylor', 'vitalik', 'donalt', 'raoul', 'arthurhays',
+  'zhusu', 'eliz', 'murad', 'kaleo', 'crediblecrypto', 'cryptotony',
+  'bitboy', 'larkdavis', 'cryptobanter', 'rektcapital', 'cryptobirb',
+  'altcoingordon', 'cryptowizard', 'nebraskagooner', 'degenpoet',
+  'inversebrah', 'gainzy', 'cryptoyoda', 'cryptomanran',
+  'usa', 'uae', 'dubai', 'london', 'newyork', 'tokyo', 'singapore',
+  'hongkong', 'europe', 'africa', 'asia', 'australia', 'canada',
+  'germany', 'france', 'india', 'china', 'korea', 'japan', 'brazil',
+  'mexico', 'nigeria', 'kenya', 'egypt', 'saudi', 'qatar', 'bahrain',
+  'kuwait', 'oman', 'jordan', 'turkey', 'russia', 'ukraine',
+  'president', 'potus', 'congress', 'senate', 'government', 'royal',
+  'kingdom', 'embassy', 'united', 'nations', 'olympic', 'fifa',
+  'minister', 'chancellor', 'governor', 'mayor',
+  'bitcoin', 'ethereum', 'solana', 'polkadot', 'polygon', 'avalanche',
+  'cardano', 'ripple', 'dogecoin', 'shiba', 'pepe', 'meme', 'memecoin',
+  'official', 'verified', 'founder', 'ceo', 'cto', 'developer',
+  'engineer', 'investor', 'whale', 'alpha', 'sigma', 'chad', 'degen',
+  'hodl', 'moon', 'lambo', 'pump', 'bull', 'bear',
+  'exchange', 'market', 'trade', 'defi', 'liquidity', 'amm', 'dex',
+  'cex', 'fee', 'reward', 'airdrop', 'vest', 'mint', 'burn', 'lend',
+  'borrow', 'yield', 'farm', 'harvest', 'compound', 'leverage',
+  'margin', 'futures', 'options', 'perps', 'spot',
+  'name', 'identity', 'profile', 'avatar', 'bio', 'link', 'follow',
+  'badge', 'creator', 'influencer', 'artist', 'musician',
+  'gamer', 'streamer', 'trader', 'analyst', 'researcher',
+  'binance', 'coinbase', 'kraken', 'metamask', 'uniswap', 'opensea',
+  'aave', 'curve', 'maker', 'lido', 'chainlink', 'compound',
+  'ledger', 'trezor', 'phantom', 'rabby', 'rainbow',
+  'google', 'apple', 'amazon', 'microsoft', 'meta', 'tesla',
+  'twitter', 'discord', 'telegram', 'reddit', 'youtube', 'tiktok',
+  'alice', 'james', 'john', 'michael', 'sarah', 'david', 'emma',
+  'alex', 'max', 'sam', 'chris', 'dan', 'tom', 'jack', 'nick',
+  'ryan', 'mark', 'paul', 'luke', 'adam', 'jason', 'kevin',
+  'brian', 'eric', 'matt', 'mike', 'steve', 'peter', 'joe',
+  'maria', 'anna', 'lisa', 'kate', 'jane', 'rachel', 'laura',
+  'emily', 'sophie', 'olivia', 'ella', 'mia', 'noah', 'leo',
+  'omar', 'ali', 'ahmed', 'hassan', 'mohammed', 'fatima', 'aisha',
+  'home', 'root', 'test', 'demo', 'info', 'contact', 'terms',
+  'privacy', 'search', 'register', 'renew', 'manage', 'settings',
+  'app', 'web', 'welcome', 'help', 'support', 'status', 'blog',
+  'news', 'media', 'press', 'team', 'about', 'careers', 'jobs'
+]);
+
+// ============================================
 // CONFIG
 // ============================================
 const RPC_URL = 'http://localhost:8545';
@@ -281,18 +351,23 @@ async function main() {
   // ============================================
   // STEP 3: Register names (100 wallets, 1 name each)
   // ============================================
-  const names = [
-    "alice", "marco", "stella", "nova", "pixel", "storm", "ember", "atlas", "lunar", "cedar",
+  // Filter out any names that are in RESERVED_NAMES
+  const allNames = [
+    "marco", "stella", "nova", "pixel", "storm", "ember", "atlas", "lunar", "cedar",
     "river", "sage", "onyx", "iris", "felix", "hazel", "wolf", "raven", "jade", "blaze",
     "echo", "frost", "coral", "dusk", "aero", "bolt", "cleo", "drift", "eve", "flint",
     "glow", "haze", "ionic", "jinx", "karma", "lyric", "muse", "neon", "opal", "pulse",
     "quest", "ridge", "solar", "titan", "umbra", "vibe", "wren", "xenon", "yuma", "zephyr",
     "axel", "brix", "cipher", "delta", "elara", "forge", "glitch", "hydra", "ignis", "jolt",
-    "koda", "lark", "mirth", "nexus", "orbit", "prism", "quill", "rust", "shard", "thorn",
+    "koda", "lark", "mirth", "nexus", "orbit", "prism", "quill", "rust", "thorn",
     "ultra", "volt", "wisp", "xeno", "yonder", "zen", "amber", "brink", "crash", "dawn",
     "flare", "grain", "haven", "inlet", "juno", "keen", "lotus", "maple", "north", "ocean",
-    "pine", "quartz", "rain", "silk", "teal", "unity", "vivid", "west", "yarrow", "zinc", "apex"
+    "pine", "quartz", "rain", "silk", "teal", "unity", "vivid", "west", "yarrow", "zinc", "apex",
+    // Extra names to ensure we have 100 after filtering
+    "bravo", "cairo", "draco", "ether", "fable", "grant", "hector", "ivory", "jupiter", "krypton",
+    "lumen", "mango", "nebula", "orion", "pluto", "quasar", "rocket", "sirius", "tango", "uranus"
   ];
+  const names = allNames.filter(n => !RESERVED_NAMES.has(n.toLowerCase())).slice(0, 100);
 
   console.log('STEP 3: Registering names (5+ char names permanent for first 5 wallets, rest annual)...');
   let registeredCount = 0;
@@ -564,12 +639,9 @@ async function main() {
   // ============================================
   // STEP 9: Admin assigns 10 reserved names
   // ============================================
-  // Reserved names from deploy.mjs - must match exactly what was reserved
-  // These are all 5+ characters to avoid pricing issues
-  const reservedNames = [
-    "qflink", "qfpad", "qfclash", "qfstream", "nucleusx",
-    "quantumnotary", "quantum", "fusion", "quantumfusion", "dapp"
-  ];
+  // Pick 10 reserved names (5+ chars) from the RESERVED_NAMES set
+  const reservedNamesArray = Array.from(RESERVED_NAMES).filter(n => n.length >= 5);
+  const reservedNames = reservedNamesArray.slice(0, 10);
 
   console.log('STEP 9: Admin assigning reserved names to wallets 80-89...');
   let reservedAssigned = 0;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, X, Twitter } from 'lucide-react';
+import { X, Twitter, Copy, Check } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
 import {
   renewName,
@@ -9,7 +9,6 @@ import {
   resolveForward,
   getNamesOwnedByAddress,
 } from '../utils/qns';
-import { generateShareCard, downloadShareCard } from '../utils/shareCard';
 
 interface OwnedName {
   name: string;
@@ -36,14 +35,12 @@ export default function MyNames() {
 
   // Share modal state
   const [shareModal, setShareModal] = useState<string | null>(null);
-  const [shareCanvasUrl, setShareCanvasUrl] = useState<string | null>(null);
-  const [generatingShare, setGeneratingShare] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const loadNames = useCallback(async () => {
     if (!address) return;
     setLoading(true);
     try {
-      // Get all names owned by this address from events
       const ownedNames = await getNamesOwnedByAddress(address);
       
       if (ownedNames.length > 0) {
@@ -188,47 +185,26 @@ export default function MyNames() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleShare = async (item: OwnedName) => {
+  const handleShare = (item: OwnedName) => {
     setShareModal(item.name);
-    setGeneratingShare(true);
-    setShareCanvasUrl(null);
-    try {
-      // Get text records for this name
-      const records: Record<string, string> = {};
-      for (const key of TEXT_KEYS) {
-        records[key] = await getTextRecord(item.name, key);
-      }
-      
-      const dataUrl = await generateShareCard({
-        name: item.name,
-        address: address || '',
-        avatar: records.avatar || undefined,
-        bio: records.bio || undefined,
-        twitter: records.twitter || undefined,
-        github: records.github || undefined,
-        url: records.url || undefined,
-        discord: records.discord || undefined,
-        registeredAt: item.registeredAt,
-        isPermanent: item.isPermanent,
-        expires: item.expires,
-      });
-      setShareCanvasUrl(dataUrl);
-    } catch (err) {
-      console.error('Error generating share card:', err);
-    } finally {
-      setGeneratingShare(false);
-    }
   };
 
-  const handleDownloadShare = () => {
-    if (!shareCanvasUrl || !shareModal) return;
-    downloadShareCard(shareCanvasUrl, `${shareModal}-qf-profile.png`);
+  const handleCopyLink = async () => {
+    if (!shareModal) return;
+    const url = `https://dotqf.xyz/name/${shareModal}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const handleShareX = () => {
     if (!shareModal) return;
-    const profileUrl = `${window.location.origin}/profile/${shareModal}`;
-    const text = `Check out my ${shareModal}.qf identity on @QFNetwork`;
+    const profileUrl = `https://dotqf.xyz/name/${shareModal}`;
+    const text = `Check out my .qf identity`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
     window.open(url, '_blank');
   };
@@ -304,7 +280,6 @@ export default function MyNames() {
                     )}
                     <button
                       onClick={() => handleShare(item)}
-                      disabled={generatingShare && shareModal === item.name}
                       className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
                       title="Share Card"
                     >
@@ -412,10 +387,11 @@ export default function MyNames() {
             </div>
           </div>
         )}
+
         {shareModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-            <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-lg w-full animate-fade-in">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-sm w-full animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="font-clash font-medium text-xl text-white">
                   {shareModal}<span className="text-[#00D179]">.qf</span>
                 </h3>
@@ -427,43 +403,22 @@ export default function MyNames() {
                 </button>
               </div>
 
-              {generatingShare ? (
-                <div className="py-12 text-center">
-                  <div className="inline-block w-8 h-8 border-2 border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin mb-4" />
-                  <p className="text-[#8A8A8A] text-sm">Generating share card...</p>
-                </div>
-              ) : shareCanvasUrl ? (
-                <>
-                  <div className="mb-6 rounded-xl overflow-hidden border border-[#1E1E1E]">
-                    <img
-                      src={shareCanvasUrl}
-                      alt={`${shareModal}.qf Profile Card`}
-                      className="w-full h-auto"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <button
-                      onClick={handleDownloadShare}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 cursor-pointer"
-                    >
-                      <Download size={18} />
-                      Download PNG
-                    </button>
-                    <button
-                      onClick={handleShareX}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200 cursor-pointer"
-                    >
-                      <Twitter size={18} />
-                      Share on X
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="py-8 text-center">
-                  <p className="text-[#E5484D] text-sm">Failed to generate share card. Please try again.</p>
-                </div>
-              )}
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleCopyLink}
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 cursor-pointer"
+                >
+                  {copied ? <Check size={18} /> : <Copy size={18} />}
+                  {copied ? 'Copied!' : 'Copy Link'}
+                </button>
+                <button
+                  onClick={handleShareX}
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200 cursor-pointer"
+                >
+                  <Twitter size={18} />
+                  Share on X
+                </button>
+              </div>
             </div>
           </div>
         )}
