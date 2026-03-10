@@ -568,7 +568,7 @@ async function main() {
   // These are all 5+ characters to avoid pricing issues
   const reservedNames = [
     "qflink", "qfpad", "qfclash", "qfstream", "nucleusx",
-    "quantumnotary", "governance", "treasury", "validator", "token"
+    "quantumnotary", "quantum", "fusion", "quantumfusion", "dapp"
   ];
 
   console.log('STEP 9: Admin assigning reserved names to wallets 80-89...');
