@@ -249,7 +249,7 @@ export default function Hero() {
     <section className="pt-[160px] pb-[100px] px-6">
       <div className="max-w-[1120px] mx-auto text-center">
         <h1 className="font-clash font-semibold text-[40px] md:text-[64px] leading-[1.1] text-[#FFFFFF] mb-6">
-          Your identity on Quantum Fusion
+          Your identity on QF Network
         </h1>
         <p className="font-satoshi text-lg md:text-xl text-[#8A8A8A] max-w-[560px] mx-auto mb-10">
           Register a <span className="text-[#00D179]">.qf</span> name and use it across every dApp — messaging, trading, gaming, and everything built on QF Network.

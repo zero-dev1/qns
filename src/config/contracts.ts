@@ -10,10 +10,10 @@ export const localChain = defineChain({
   },
 });
 
-// Production Quantum Fusion chain
+// Production QF Network chain
 export const quantumFusion = defineChain({
   id: 1,
-  name: 'Quantum Fusion',
+  name: 'QF Network',
   nativeCurrency: { name: 'QF', symbol: 'QF', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://rpc.quantumfusion.network'] },

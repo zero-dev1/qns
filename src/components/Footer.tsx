@@ -3,12 +3,9 @@ import { useAdminStore } from '../stores/adminStore';
 import { Link } from 'react-router-dom';
 
 const links = [
-  { label: 'QF Network', href: 'https://quantumfusion.network' },
-  { label: 'QFLink', href: 'https://qflink.io' },
-  { label: 'QFClash', href: 'https://qfclash.io' },
-  { label: 'Docs', href: '#' },
-  { label: 'Twitter', href: '#' },
-  { label: 'Discord', href: '#' },
+  { label: 'QF Network', href: 'https://qfnetwork.xyz' },
+  { label: 'QFLink', href: 'https://qflink.app' },
+  { label: 'Twitter', href: 'https://x.com/dotqfns' },
 ];
 
 export default function Footer() {
@@ -26,7 +23,7 @@ export default function Footer() {
               QNS<span className="text-[#00D179]">.</span>
             </span>
             <span className="text-sm text-[#555555]">
-              The identity layer for Quantum Fusion
+              The identity layer for QF Network
             </span>
           </div>
 
@@ -54,7 +51,7 @@ export default function Footer() {
         </div>
 
         <p className="mt-8 text-center text-xs text-[#555555]">
-          QNS is community-built infrastructure for the QF ecosystem.
+          QNS is community-built infrastructure for the QF Network ecosystem.
         </p>
       </div>
     </footer>
