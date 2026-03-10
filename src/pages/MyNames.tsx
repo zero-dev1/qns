@@ -1,18 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWalletStore } from '../stores/walletStore';
 import { Link, useSearchParams } from 'react-router-dom';
-import html2canvas from 'html2canvas';
 import {
   ArrowLeft,
-  Download,
   Twitter,
-  Github,
-  Globe,
-  MessageCircle,
   Loader2,
   Check,
-  Link as LinkIcon,
+  Copy,
   Star,
+  X,
 } from 'lucide-react';
 import {
   renewName,
@@ -34,13 +30,6 @@ interface OwnedName {
 
 const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'discord'] as const;
 
-const SOCIAL_ICONS: Record<string, React.ReactNode> = {
-  twitter: <Twitter size={16} />,
-  github: <Github size={16} />,
-  url: <Globe size={16} />,
-  discord: <MessageCircle size={16} />,
-};
-
 export default function MyNamesPage() {
   const { address, connect, refreshName } = useWalletStore();
   const [searchParams] = useSearchParams();
@@ -60,11 +49,9 @@ export default function MyNamesPage() {
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
   const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
 
-  // Share card modal state
+  // Share modal state
   const [shareModalName, setShareModalName] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
 
   const loadNames = useCallback(async () => {
     if (!address) return;
@@ -208,43 +195,27 @@ export default function MyNamesPage() {
   };
 
   const openShareModal = (name: string) => {
-    if (!textRecords[name]) {
-      loadTextRecords(name).then(() => {
-        setShareModalName(name);
-      });
-    } else {
-      setShareModalName(name);
-    }
+    setShareModalName(name);
   };
 
-  const downloadCard = async () => {
-    if (!cardRef.current || !shareModalName) return;
-    setDownloading(true);
+  const handleCopyLink = async () => {
+    if (!shareModalName) return;
+    const url = `https://dotqf.xyz/name/${shareModalName}`;
     try {
-      const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: '#0A0A0A',
-        scale: 2,
-      });
-      const link = document.createElement('a');
-      link.download = `${shareModalName}.qf-card.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } finally {
-      setDownloading(false);
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
     }
   };
 
-  const shareOnX = (name: string) => {
-    const text = `Just claimed ${name}.qf on @QFNetwork 🟢 #QNS #QuantumFusion`;
-    const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
+  const handleShareX = () => {
+    if (!shareModalName) return;
+    const profileUrl = `https://dotqf.xyz/name/${shareModalName}`;
+    const text = `Check out my .qf identity`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
     window.open(url, '_blank');
-  };
-
-  const copyProfileLink = (name: string) => {
-    const link = `${window.location.origin}/name/${name}`;
-    navigator.clipboard.writeText(link);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const getStatusBadge = (item: OwnedName) => {
@@ -280,87 +251,7 @@ export default function MyNamesPage() {
     return `Expires ${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
   };
 
-  // Share Card Component
-  const ShareCard = ({ name }: { name: string }) => {
-    const records = textRecords[name] || {};
-    const avatar = records.avatar;
-    const bio = records.bio;
-    const hasSocials = TEXT_KEYS.slice(2).some((k) => records[k]);
 
-    return (
-      <div
-        ref={cardRef}
-        className="w-[600px] h-[340px] bg-[#0A0A0A] rounded-[12px] p-8 flex flex-col justify-between relative overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, #0A0A0A 0%, #0A0A0A 100%)',
-          boxShadow: 'inset 0 0 0 1px rgba(0, 209, 121, 0.3), 0 0 40px rgba(0, 209, 121, 0.1)',
-        }}
-      >
-        {/* Subtle gradient border effect */}
-        <div
-          className="absolute inset-0 rounded-[12px] pointer-events-none"
-          style={{
-            background: 'linear-gradient(135deg, rgba(0, 209, 121, 0.15) 0%, transparent 50%, rgba(0, 209, 121, 0.05) 100%)',
-          }}
-        />
-
-        <div className="relative z-10">
-          {/* Avatar and Name */}
-          <div className="flex items-center gap-4 mb-4">
-            {avatar ? (
-              <img
-                src={avatar}
-                alt={name}
-                className="w-16 h-16 rounded-full object-cover border-2 border-[#00D179]/30"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-[#00D179]/20 flex items-center justify-center border-2 border-[#00D179]/30">
-                <span className="text-2xl font-clash font-bold text-[#00D179]">
-                  {name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-            <div>
-              <h2 className="font-clash font-bold text-4xl text-white">
-                {name}<span className="text-[#00D179]">.qf</span>
-              </h2>
-            </div>
-          </div>
-
-          {/* Bio */}
-          {bio && (
-            <p className="text-[#8A8A8A] text-lg max-w-md mb-4 font-satoshi">{bio}</p>
-          )}
-
-          {/* Social Links */}
-          {hasSocials && (
-            <div className="flex items-center gap-3">
-              {TEXT_KEYS.slice(2).map(
-                (key) =>
-                  records[key] && (
-                    <div
-                      key={key}
-                      className="w-8 h-8 rounded-lg bg-[#141414] border border-[#1E1E1E] flex items-center justify-center text-[#00D179]"
-                    >
-                      {SOCIAL_ICONS[key] || <Globe size={14} />}
-                    </div>
-                  )
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="relative z-10 flex items-center gap-2 text-sm text-[#8A8A8A]">
-          <span className="font-clash font-semibold text-white">
-            QNS<span className="text-[#00D179]">.</span>
-          </span>
-          <span className="w-1 h-1 rounded-full bg-[#00D179]" />
-          <span>Powered by QNS</span>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
@@ -480,7 +371,7 @@ export default function MyNamesPage() {
                       )}
                       <button
                         onClick={() => openShareModal(item.name)}
-                        className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179]/50 transition-all duration-150 cursor-pointer"
+                        className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-150 cursor-pointer"
                       >
                         Share
                       </button>
@@ -588,64 +479,35 @@ export default function MyNamesPage() {
         </div>
       )}
 
-      {/* Share Card Modal */}
+      {/* Share Modal */}
       {shareModalName && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-8 max-w-2xl w-full transition-all duration-150 ease-in-out animate-fade-in">
+          <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-sm w-full animate-fade-in">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-clash font-medium text-xl text-white">Share Profile</h3>
+              <h3 className="font-clash font-medium text-xl text-white">
+                {shareModalName}<span className="text-[#00D179]">.qf</span>
+              </h3>
               <button
                 onClick={() => setShareModalName(null)}
-                className="text-[#8A8A8A] hover:text-white transition-colors"
+                className="p-2 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+                <X size={18} />
               </button>
             </div>
 
-            {/* Card Preview */}
-            <div className="flex justify-center mb-6 overflow-x-auto">
-              <div className="scale-[0.65] sm:scale-[0.8] md:scale-100 origin-top">
-                <ShareCard name={shareModalName} />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex flex-col gap-3">
               <button
-                onClick={() => copyProfileLink(shareModalName)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0A0A0A] hover:bg-[#1E1E1E] text-white font-medium transition-colors border border-[#1E1E1E] cursor-pointer"
+                onClick={handleCopyLink}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 cursor-pointer"
               >
-                {copiedLink ? (
-                  <>
-                    <Check size={16} className="text-[#00D179]" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon size={16} />
-                    Copy Link
-                  </>
-                )}
+                {copied ? <Check size={18} /> : <Copy size={18} />}
+                {copied ? 'Copied!' : 'Copy Link'}
               </button>
               <button
-                onClick={downloadCard}
-                disabled={downloading}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                onClick={handleShareX}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200 cursor-pointer"
               >
-                {downloading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Download size={16} />
-                )}
-                Download
-              </button>
-              <button
-                onClick={() => shareOnX(shareModalName)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1E1E1E] hover:bg-[#2a2a2a] text-white font-medium transition-colors cursor-pointer"
-              >
-                <Twitter size={16} />
+                <Twitter size={18} />
                 Share on X
               </button>
             </div>
