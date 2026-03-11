@@ -2,10 +2,11 @@ import { useWalletStore } from '../stores/walletStore';
 import { useAdminStore } from '../stores/adminStore';
 import { Link } from 'react-router-dom';
 
-const links = [
+const links: ({ label: string; href: string } | { label: string; to: string })[] = [
   { label: 'QF Network', href: 'https://qfnetwork.xyz' },
   { label: 'QFLink', href: 'https://qflink.app' },
   { label: 'Twitter', href: 'https://x.com/dotqfns' },
+  { label: 'Docs', to: '/docs' },
 ];
 
 export default function Footer() {
@@ -28,17 +29,27 @@ export default function Footer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {links.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
-              >
-                {link.label}
-              </a>
-            ))}
+            {links.map((link) =>
+              'to' in link ? (
+                <Link
+                  key={link.label}
+                  to={link.to}
+                  className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
+                >
+                  {link.label}
+                </a>
+              )
+            )}
             {isAdmin && (
               <Link
                 to="/admin"

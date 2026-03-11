@@ -8,6 +8,7 @@ import RegistrationFlow from './components/RegistrationFlow';
 import Footer from './components/Footer';
 import MyNamesPage from './pages/MyNames';
 import ProfilePage from './pages/Profile';
+import DocsPage from './pages/Docs';
 import AdminLayout from './components/admin/AdminLayout';
 
 function LandingPage() {
@@ -32,6 +33,7 @@ function App() {
         <Route path="/my-names" element={<MyNamesPage />} />
         <Route path="/name/:name" element={<ProfilePage />} />
         <Route path="/admin" element={<AdminLayout />} />
+        <Route path="/docs" element={<DocsPage />} />
       </Routes>
     </BrowserRouter>
   );
