@@ -76,6 +76,14 @@ export default function ProfilePage() {
   const [giftSuccess, setGiftSuccess] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   
+  // Avatar error state - reset when profile changes
+  const [avatarError, setAvatarError] = useState(false);
+  
+  // Reset avatar error when name changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [name]);
+  
   const { address: senderAddress, connect, connecting } = useWalletStore();
 
   useEffect(() => {
@@ -214,6 +222,10 @@ export default function ProfilePage() {
           })
           .catch(() => ''),
       ]);
+
+      // Debug: Log avatar URL from resolver
+      console.log('Avatar URL from resolver:', avatar);
+      console.log('Is full URL?', avatar?.startsWith('http') || false);
 
       setProfile({
         name: normalizedName,
@@ -386,7 +398,7 @@ export default function ProfilePage() {
           </p>
           <Link
             to={`/?search=${encodeURIComponent(name || '')}`}
-            className="inline-block px-8 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-bold transition-colors duration-200"
+            className="inline-block px-8 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-bold transition-colors duration-200"
           >
             Register this name
           </Link>
@@ -473,11 +485,15 @@ export default function ProfilePage() {
 
               {/* Avatar */}
               <div className="flex justify-center mb-6">
-                {profile.avatar ? (
+                {profile.avatar && !avatarError ? (
                   <img
                     src={profile.avatar}
                     alt={profile.name}
                     className="w-[120px] h-[120px] rounded-full object-cover border-2 border-[#00D179]/30"
+                    onError={() => {
+                      console.log('Avatar failed to load, falling back to initial letter');
+                      setAvatarError(true);
+                    }}
                   />
                 ) : (
                   <div className="w-[120px] h-[120px] rounded-full bg-[#1a3a2a] flex items-center justify-center border-2 border-[#00D179]">
@@ -519,15 +535,23 @@ export default function ProfilePage() {
 
               {/* Wallet Address */}
               <div className="mb-6">
-                <div className="bg-[#1E1E1E] rounded-xl px-4 py-3 flex items-center justify-center border border-[#1E1E1E]">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(profile.address);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="w-full bg-transparent rounded-lg px-4 py-3 flex items-center justify-center gap-2 border border-[#1E1E1E] hover:border-[#00D179]/50 transition-colors duration-200"
+                >
                   <span className="font-mono text-sm text-[#8A8A8A]">
-                    {profile.address.slice(0, 8)}...{profile.address.slice(-8)}
+                    {profile.address.slice(0, 36)}...
                   </span>
-                </div>
+                  {copied ? <Check size={16} className="text-[#00D179]" /> : <Copy size={16} className="text-[#8A8A8A]" />}
+                </button>
               </div>
 
               {/* Registration Info */}
-              <div className="flex flex-col items-center gap-2 text-sm">
+              <div className="flex flex-col items-center gap-2 text-sm mb-6">
                 <div className="flex items-center gap-2 text-[#6A6A6A]">
                   <span>Member since {formatDate(profile.registeredAt)}</span>
                 </div>
@@ -548,7 +572,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Footer inside the card */}
-              <div className="mt-8 pt-6 border-t border-[#1E1E1E] text-center">
+              <div className="pt-6 border-t border-[#1E1E1E] text-center">
                 <div className="inline-flex items-center gap-2 text-sm">
                   <span className="font-clash font-semibold text-white">
                     QNS<span className="text-[#00D179]">.</span>
@@ -560,23 +584,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Share Card and Gift QF buttons below */}
-          <div className="mt-6 flex items-center justify-center gap-3">
-            <button
-              onClick={handleShareCard}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200"
-            >
-              <Share2 size={18} />
-              Share Card
-            </button>
-            <button
-              onClick={openGiftModal}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border border-[#1E1E1E] text-[#8A8A8A] hover:text-[#00D179] hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-200"
-            >
-              <Gift size={18} />
-              Gift QF
-            </button>
-          </div>
         </div>
       </main>
 
@@ -591,7 +598,7 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-3">
               <button
                 onClick={handleCopyLink}
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200"
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium transition-colors duration-200"
               >
                 {copied ? <Check size={18} /> : <Copy size={18} />}
                 {copied ? 'Copied!' : 'Copy Link'}
@@ -639,7 +646,7 @@ export default function ProfilePage() {
                     <button
                       onClick={connect}
                       disabled={connecting}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium transition-colors duration-200 disabled:opacity-50"
                     >
                       {connecting ? (
                         <Loader2 size={18} className="animate-spin" />
@@ -678,7 +685,7 @@ export default function ProfilePage() {
                           onClick={() => handleQuickSelect(amount)}
                           className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                             giftAmount === amount.toString()
-                              ? 'bg-[#00D179] text-white'
+                              ? 'bg-[#00D179] text-black'
                               : 'bg-[#1E1E1E] text-[#8A8A8A] hover:text-[#00D179]'
                           }`}
                         >
@@ -705,7 +712,7 @@ export default function ProfilePage() {
                     <button
                       onClick={handleSendGift}
                       disabled={isSending || !giftAmount}
-                      className="w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium transition-colors duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {isSending ? (
                         <Loader2 size={18} className="animate-spin" />

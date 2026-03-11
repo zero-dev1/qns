@@ -419,7 +419,7 @@ export default function Hero() {
                         onClick={() => setSelectedDuration(i)}
                         className={`py-2.5 text-sm font-medium rounded-lg transition-all duration-150 ease-in-out cursor-pointer ${
                           selectedDuration === i
-                            ? 'bg-[#00D179] text-white'
+                            ? 'bg-[#00D179] text-black'
                             : 'text-[#8A8A8A] hover:text-white'
                         }`}
                       >
@@ -434,7 +434,7 @@ export default function Hero() {
 
                   <button
                     onClick={handleRegister}
-                    className="w-full py-3.5 bg-[#00D179] hover:bg-[#00B868] text-white font-bold rounded-xl transition-all duration-200 text-base cursor-pointer"
+                    className="w-full py-3.5 bg-[#00D179] hover:bg-[#00B868] text-black font-bold rounded-xl transition-all duration-200 text-base cursor-pointer"
                   >
                     {address ? `Register ${selectedName}.qf` : 'Connect Wallet'}
                   </button>

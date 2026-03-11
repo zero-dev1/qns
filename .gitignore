@@ -6,3 +6,4 @@ dist/
 contracts/combined.json
 .DS_Store
 *.log
+deployments.json

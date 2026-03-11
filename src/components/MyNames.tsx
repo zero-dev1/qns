@@ -243,7 +243,7 @@ export default function MyNames() {
             </p>
             <button
               onClick={scrollToHero}
-              className="px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-bold transition-colors duration-200 cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-bold transition-colors duration-200 cursor-pointer"
             >
               Register your first name
             </button>
@@ -332,7 +332,7 @@ export default function MyNames() {
                             savingField === `${item.name}-${key}` ||
                             (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
                           }
-                          className="px-3 py-2 text-xs rounded-lg bg-[#00D179] hover:bg-[#00B868] text-white font-medium disabled:opacity-30 transition-colors duration-200 cursor-pointer"
+                          className="px-3 py-2 text-xs rounded-lg bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-30 transition-colors duration-200 cursor-pointer"
                         >
                           {savingField === `${item.name}-${key}` ? '...' : 'Save'}
                         </button>
@@ -406,7 +406,7 @@ export default function MyNames() {
               <div className="flex flex-col gap-3">
                 <button
                   onClick={handleCopyLink}
-                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-white font-medium transition-colors duration-200 cursor-pointer"
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium transition-colors duration-200 cursor-pointer"
                 >
                   {copied ? <Check size={18} /> : <Copy size={18} />}
                   {copied ? 'Copied!' : 'Copy Link'}

@@ -3,13 +3,17 @@ import { createWalletClient, createPublicClient, http, defineChain, keccak256, t
 import { privateKeyToAccount } from 'viem/accounts';
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { execSync } from 'child_process';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 // ============================================
 // CONFIG
 // ============================================
-const RPC_URL = 'http://localhost:8545';
+const RPC_URL = process.env.VITE_WALLET_RPC_URL;
+if (!RPC_URL) throw new Error('VITE_WALLET_RPC_URL environment variable is required');
 const CHAIN_ID = 42;
-const DEPLOYER_KEY = '0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc4da702133';
+const DEPLOYER_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+if (!DEPLOYER_KEY) throw new Error('DEPLOYER_PRIVATE_KEY environment variable is required');
 const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD';
 
 const qfChain = defineChain({
@@ -20,7 +24,7 @@ const qfChain = defineChain({
 });
 
 const account = privateKeyToAccount(DEPLOYER_KEY);
-const TREASURY = account.address;
+const TREASURY = "0xA65cE65fFA2C1bb1D782CeAfb2Af94Fd636C6514";
 
 const walletClient = createWalletClient({
   account,
@@ -361,6 +365,30 @@ console.log(`Treasury:     ${TREASURY}`);
 console.log(`Burn:         ${BURN_ADDRESS}`);
 console.log(`Names reserved: ${reserved}/${reservedNames.length}`);
 console.log('\nRun your dev server to start using QNS.');
+
+// ============================================
+// STEP 6: WRITE deployments.json (shared with QFLink)
+// ============================================
+console.log('\n============================================');
+console.log('STEP 6: Writing deployments.json');
+console.log('============================================');
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const deploymentsPath = resolve(__dirname, 'deployments.json');
+
+const deployments = {
+  network: 'local',
+  timestamp: new Date().toISOString(),
+  contracts: {
+    QNSRegistry: registryAddress,
+    QNSRegistrar: registrarAddress,
+    QNSResolver: resolverAddress
+  }
+};
+
+writeFileSync(deploymentsPath, JSON.stringify(deployments, null, 2));
+console.log(`✅ QNS addresses written to ${deploymentsPath}`);
+console.log(JSON.stringify(deployments.contracts, null, 2));
 
 // Export for potential external use
 export { RESERVED_NAMES };
