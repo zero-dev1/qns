@@ -79,6 +79,11 @@ interface AdminState {
   setDefaultResolver: (newResolver: Address, account: Address) => Promise<`0x${string}`>;
 }
 
+// Static list of reserved names from deploy script
+const RESERVED_NAMES_LIST = [
+  'btc','eth','usdt','bnb','sol','usdc','xrp','doge','ton','ada','avax','trx','link','near','matic','pepe','dai','uni','cro','atom','okb','xlm','algo','fil','apt','ldo','rune','icp','etc','arb','grt','op','tao','bonk','fet','nexo','zk','jup','theta','ondo','ftm','bome','ar','sand','chz','axs','gala','flock','sei','sui','bch','ltc','dot','kas','vet','mnt','strk','imx','egld','snx','zec','gmt','flow','floki','band','celo','hot','gno','iota','wld','kcs','dash','mkr','dydx','ray','beam','qtum','kava','ont','zen','kda','usdd','ftn','tusd','gas','pepecoin','bsv','lunc','xdg','safemoon','wbtc','twt','shib','eos','xtz','btt','shiba','paxg','neo','leo','xmr','mina','kuji','xaut','cake','kaspa','rndr','enj','crv','mana','aave','bat','comp','one','yfi','cvx','woo','celr','ankr','ocean','iotx','cocos','cfx','sc','lsk','rvn','dgb','hive','steem','xem','bcd','srm','dcr','kmd','nav','xvg','burst','qkc','wan','dodo','elf','ardr','strax','ark','mtl','req','storj','ogn','poly','fun','cvc','nkn','blz','data','gnosis','amp','audio','spell','trb','uft','snow','rook','pha','akro','strm','front','mir','perp','tko','rad','mta','dia','jst','wnxm','wexpoly','mdx','sun','bifi','marsh','auto','nuls','tomoe','wiotx','wing','for','lina','rlc','hnt','alpha','coti','ctsi','chess','sfp','alpine','bsw','c98','quick','ach','dusk','tfuel','solana','polkadot','avalanche','chainlink','polygon','uniswap','cosmos','algorand','stellar','filecoin','internetcomputer','tezos','eosio','nearprotocol','flow','elrond','maker','compound','curve','synthetix','balancer','yearn','sushiswap','1inch','loopring','bancor','kyber','0x','gitcoin','chain','basicattentiontoken','decred','digibyte','ravencoin','bitcoincash','litecoin','ethereumclassic','dash','zcash','monero','bitcoin','ethereum','binance','coinbase','kraken','gemini','bitfinex','huobi','okx','bybit','kucoin','gateio','bitstamp','bithumb','coincheck','bitflyer','blockchain','crypto','cryptocurrency','defi','nft','web3','metaverse','dao','dex','cex','wallet','mining','staking','yield','farming','liquidity','token','coin','altcoin','stablecoin','bitcoins','eths','ethers','satoshi','nakamoto','vitalik','buterin','cz','sbf','hoskinson','wood','foundation','labs','ventures','capital','digital','finance','payment','exchange','trade','trading','invest','investment','fund','asset','bank','money','cash','gold','silver','fiat','paypal','venmo','cashapp','stripe','square','applepay','googlepay','amazon','meta','google','microsoft','apple','tesla','spacex','twitter','xcorp','facebook','instagram','whatsapp','snapchat','tiktok','youtube','netflix','spotify','uber','airbnb','lyft','doordash','grubhub','ubereats','robinhood','coinmarketcap','coingecko','messari','dapp','dappradar','defipulse','defillama','l2','layer2','rollup','zkrollup','optimism','arbitrum','base','zksync','scroll','linea','zkevm','polygonzkevm','starknet','starkware','taiko','mantle','blast','manta','parallel','sei','injective','celestia','dymension','berachain','monad','eclipse','fuel','movement','supra','anoma','namada','penumbra','ironfish','aleo','zksnark','zkproof','quantum','fusion','qflink','qfnetwork','qfchain','qfswap','qfbridge','qffoundation'
+];
+
 export const useAdminStore = create<AdminState>((set, get) => ({
   // Initial state
   adminAddress: null,
@@ -130,7 +135,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const [
         totalReg,
-        reservedList,
         balance,
         treasury,
         burnAddr,
@@ -144,11 +148,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'totalRegistrations',
-        }),
-        client.readContract({
-          address: QNS_REGISTRAR_ADDRESS,
-          abi: QNS_REGISTRAR_ABI,
-          functionName: 'getReservedNames',
         }),
         client.getBalance({ address: QNS_REGISTRAR_ADDRESS }),
         client.readContract({
@@ -190,7 +189,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       
       set({
         totalRegistrations: totalReg,
-        reservedNamesCount: (reservedList as string[]).length,
+        reservedNamesCount: 387,
         contractBalance: balance,
         treasuryAddress: treasury,
         burnAddress: burnAddr,
@@ -207,20 +206,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   
   // Load reserved names
   loadReservedNames: async () => {
-    set({ isLoadingReserved: true });
-    try {
-      const client = getPublicClient();
-      const names = await client.readContract({
-        address: QNS_REGISTRAR_ADDRESS,
-        abi: QNS_REGISTRAR_ABI,
-        functionName: 'getReservedNames',
-      });
-      set({ reservedNames: names as string[], reservedNamesCount: (names as string[]).length });
-    } catch (err) {
-      console.error('Error loading reserved names:', err);
-    } finally {
-      set({ isLoadingReserved: false });
-    }
+    set({ isLoadingReserved: true, reservedNames: [...new Set(RESERVED_NAMES_LIST)], reservedNamesCount: [...new Set(RESERVED_NAMES_LIST)].length });
+    set({ isLoadingReserved: false });
   },
   
   // Reserve a name

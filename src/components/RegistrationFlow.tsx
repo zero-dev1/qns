@@ -73,8 +73,8 @@ export default function RegistrationFlow() {
 
   const handleShareOnX = () => {
     if (!activeName) return;
-    const text = `Just claimed ${activeName}.qf on @QFNetwork 🟢 #QNS #QuantumFusion`;
-    const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    const text = `I just claimed my .qf name on @theqfnetwork 🟢 #QNS`;
+    const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${activeName}`)}`;
     window.open(url, '_blank');
   };
 

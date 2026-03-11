@@ -225,8 +225,8 @@ export default function Hero() {
 
   const handleShareOnX = () => {
     if (!selectedName) return;
-    const text = `Just claimed ${selectedName}.qf on @QFNetwork 🟢 #QNS #QuantumFusion`;
-    const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    const text = `I just claimed my .qf name on @theqfnetwork 🟢 #QNS`;
+    const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
   };
 
