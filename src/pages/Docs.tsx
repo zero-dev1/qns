@@ -427,15 +427,6 @@ export default function DocsPage() {
                     Need help? Check out the{' '}
                     <a href="/" className="text-[#00D179] hover:underline">
                       QNS app
-                    </a>{' '}
-                    or view the{' '}
-                    <a
-                      href="https://github.com/quantumfusion/qns"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#00D179] hover:underline"
-                    >
-                      source code
                     </a>.
                   </p>
                   <span className="font-clash font-semibold text-white">
