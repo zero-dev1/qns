@@ -17,7 +17,16 @@ interface OwnedName {
   registeredAt: bigint;
 }
 
-const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'discord'] as const;
+const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'telegram'] as const;
+
+const PLACEHOLDERS: Record<typeof TEXT_KEYS[number], string> = {
+  avatar: 'https://example.com/avatar.png',
+  bio: 'Tell the world about yourself',
+  twitter: '@dotqfns or https://x.com/dotqfns',
+  github: 'username or https://github.com/username',
+  url: 'https://example.com',
+  telegram: '@username or https://t.me/username',
+};
 
 export default function MyNames() {
   const { address, connect } = useWalletStore();
@@ -142,7 +151,7 @@ export default function MyNames() {
       setTransferRecipient('');
       await loadNames();
     } catch {
-      setTransferError('Transaction failed. Try again.');
+      setTransferError('Transaction rejected');
     } finally {
       setTransferring(false);
     }
@@ -204,7 +213,7 @@ export default function MyNames() {
   const handleShareX = () => {
     if (!shareModal) return;
     const profileUrl = `https://dotqf.xyz/name/${shareModal}`;
-    const text = `Check out my .qf identity`;
+    const text = `Check out my .qf identity on @dotqfns`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
     window.open(url, '_blank');
   };
@@ -323,7 +332,7 @@ export default function MyNames() {
                               },
                             }))
                           }
-                          placeholder={`Enter ${key}`}
+                          placeholder={PLACEHOLDERS[key]}
                           className="flex-1 bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#00D179] transition-colors duration-200"
                         />
                         <button

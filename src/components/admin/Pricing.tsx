@@ -57,7 +57,21 @@ export default function Pricing() {
       await updatePrices({ char3: p3, char4: p4, char5Plus: p5 }, address);
       showSuccess('Prices updated successfully');
     } catch (err: any) {
-      showError(err.message || 'Failed to update prices');
+      console.error('Price update failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to update prices';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        }
+      }
+      
+      showError(err.message || userMessage);
     } finally {
       setIsUpdatingPrices(false);
     }
@@ -79,7 +93,21 @@ export default function Pricing() {
       await updatePermanentMultiplier(mult, address);
       showSuccess('Permanent multiplier updated');
     } catch (err: any) {
-      showError(err.message || 'Failed to update multiplier');
+      console.error('Multiplier update failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to update multiplier';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        }
+      }
+      
+      showError(err.message || userMessage);
     } finally {
       setIsUpdatingMultiplier(false);
     }
@@ -101,17 +129,26 @@ export default function Pricing() {
       await updateBurnPercent(percent, address);
       showSuccess('Burn percentage updated');
     } catch (err: any) {
-      showError(err.message || 'Failed to update burn percent');
+      console.error('Burn percent update failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to update burn percent';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        }
+      }
+      
+      showError(err.message || userMessage);
     } finally {
       setIsUpdatingBurn(false);
     }
   };
 
-  const formatUSD = (qf: string) => {
-    const num = parseFloat(qf);
-    const usd = num * 0.01;
-    return `~$${usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-  };
 
   return (
     <div className="space-y-6">
@@ -148,7 +185,7 @@ export default function Pricing() {
               {price3Char !== null ? parseFloat(formatEther(price3Char)).toLocaleString() : '-'} <span className="text-[#00D179] text-lg">QF</span>
             </p>
             <p className="text-[#8A8A8A] text-xs">
-              {price3Char !== null ? formatUSD(formatEther(price3Char)) : ''}
+              {price3Char !== null ? 'QF tokens' : ''}
             </p>
           </div>
           <div className="p-4 bg-[#0A0A0A] rounded-xl">
@@ -157,7 +194,7 @@ export default function Pricing() {
               {price4Char !== null ? parseFloat(formatEther(price4Char)).toLocaleString() : '-'} <span className="text-[#00D179] text-lg">QF</span>
             </p>
             <p className="text-[#8A8A8A] text-xs">
-              {price4Char !== null ? formatUSD(formatEther(price4Char)) : ''}
+              {price4Char !== null ? 'QF tokens' : ''}
             </p>
           </div>
           <div className="p-4 bg-[#0A0A0A] rounded-xl">
@@ -166,7 +203,7 @@ export default function Pricing() {
               {price5PlusChar !== null ? parseFloat(formatEther(price5PlusChar)).toLocaleString() : '-'} <span className="text-[#00D179] text-lg">QF</span>
             </p>
             <p className="text-[#8A8A8A] text-xs">
-              {price5PlusChar !== null ? formatUSD(formatEther(price5PlusChar)) : ''}
+              {price5PlusChar !== null ? 'QF tokens' : ''}
             </p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ArrowRight, Check, Shield, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { validateNameLocal, checkAvailability, getRegistration, truncateAddress, getPrice, formatUSD } from '../utils/qns';
+import { validateNameLocal, checkAvailability, getRegistration, truncateAddress, getPrice } from '../utils/qns';
 import { formatEther } from 'viem';
 
 export type SearchResult = {
@@ -10,7 +10,6 @@ export type SearchResult = {
   error?: string;
   owner?: string;
   price?: string;
-  priceUsd?: string;
 };
 
 interface SearchBarProps {
@@ -51,8 +50,7 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
           console.log('[SearchBar] priceWei received:', priceWei, typeof priceWei);
           const priceStr = formatEther(priceWei);
           console.log('[SearchBar] priceStr:', priceStr);
-          const usdStr = formatUSD(priceWei);
-          setResult({ status: 'available', name, price: priceStr, priceUsd: usdStr });
+          setResult({ status: 'available', name, price: priceStr });
         } catch (err) {
           // If price fetch fails, still show as available but without price
           setResult({ status: 'available', name });
@@ -201,7 +199,7 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
                 {priceLoading ? (
                   <span className="inline-block w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                 ) : result.price ? (
-                  `${result.price} QF / year (${result.priceUsd})`
+                  `${result.price} QF / year`
                 ) : (
                   'Loading price...'
                 )}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useWalletStore } from '../../stores/walletStore';
 import { useAdminStore } from '../../stores/adminStore';
-import { formatQF, formatUSD } from '../../utils/qns';
+import { formatQF } from '../../utils/qns';
 import { Wallet, ArrowUpRight, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function Treasury() {
@@ -78,7 +78,7 @@ export default function Treasury() {
           {contractBalance !== null ? formatQF(contractBalance) : '-'} <span className="text-2xl">QF</span>
         </p>
         <p className="text-[#8A8A8A]">
-          {contractBalance !== null ? formatUSD(contractBalance) : ''}
+          {contractBalance !== null ? 'QF tokens' : ''}
         </p>
       </div>
 

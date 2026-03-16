@@ -19,10 +19,14 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   #root {
     min-height: 100vh;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   ::selection {

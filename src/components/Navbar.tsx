@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { Copy, LogOut, Wallet } from 'lucide-react';
 import { getQFBalance, formatQF, getNamesOwnedByAddress } from '../utils/qns';
+import { useCopy } from '../hooks/useCopy';
 
 export default function Navbar() {
   const { address, displayName, qnsName, connecting, connect, disconnect } = useWalletStore();
@@ -11,6 +12,7 @@ export default function Navbar() {
   const [balance, setBalance] = useState<bigint | null>(null);
   const [ownedNames, setOwnedNames] = useState<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { copy } = useCopy();
 
   // Fetch balance and names when dropdown opens
   useEffect(() => {
@@ -40,7 +42,7 @@ export default function Navbar() {
 
   const copyAddress = () => {
     if (address) {
-      navigator.clipboard.writeText(address);
+      copy(address);
     }
   };
 

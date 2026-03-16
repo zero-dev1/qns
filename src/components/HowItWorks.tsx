@@ -1,3 +1,5 @@
+import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+
 const steps = [
   {
     num: '01',
@@ -20,8 +22,15 @@ const steps = [
 ];
 
 export default function HowItWorks() {
+  const { elementRef: sectionRef, isVisible: sectionVisible } = useIntersectionObserver();
+
   return (
-    <section className="py-[100px] px-6">
+    <section
+      ref={sectionRef}
+      className={`py-[100px] px-6 scroll-fade-in ${
+        sectionVisible ? 'visible' : ''
+      }`}
+    >
       <div className="max-w-[1120px] mx-auto">
         <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-10 text-center">
           HOW IT WORKS
@@ -46,6 +55,18 @@ export default function HowItWorks() {
           ))}
         </div>
       </div>
+
+      <style>{`
+        .scroll-fade-in {
+          opacity: 0;
+          transform: translateY(20px);
+          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .scroll-fade-in.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      `}</style>
     </section>
   );
 }

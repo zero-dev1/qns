@@ -50,7 +50,23 @@ export default function ReserveNames() {
       showSuccess(`Reserved "${singleName.toLowerCase()}"`);
       setSingleName('');
     } catch (err: any) {
-      showError(err.message || 'Failed to reserve name');
+      console.error('Reserve failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to reserve name';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        } else if (message.includes('already exists') || message.includes('already taken') || message.includes('already registered')) {
+          userMessage = 'Name is already taken or reserved';
+        }
+      }
+      
+      showError(err.message || userMessage);
     } finally {
       setIsReserving(false);
     }
@@ -90,7 +106,21 @@ export default function ReserveNames() {
       showSuccess(`Reserved ${names.length} names`);
       setBulkNames('');
     } catch (err: any) {
-      showError(err.message || 'Failed to reserve some names');
+      console.error('Bulk reserve failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to reserve some names';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        }
+      }
+      
+      showError(err.message || userMessage);
     } finally {
       setIsReserving(false);
       setReservingProgress({ current: 0, total: 0 });
@@ -108,7 +138,21 @@ export default function ReserveNames() {
       await unreserveName(name, address);
       showSuccess(`Unreserved "${name}"`);
     } catch (err: any) {
-      showError(err.message || 'Failed to unreserve name');
+      console.error('Unreserve failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to unreserve name';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        }
+      }
+      
+      showError(err.message || userMessage);
     }
   };
 
@@ -128,7 +172,21 @@ export default function ReserveNames() {
       setAssignName('');
       setAssignAddress('');
     } catch (err: any) {
-      showError(err.message || 'Failed to assign name');
+      console.error('Assign failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Failed to assign name';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not authorized') || message.includes('permission')) {
+          userMessage = 'You are not authorized to perform this action';
+        }
+      }
+      
+      showError(err.message || userMessage);
     } finally {
       setIsAssigning(false);
     }

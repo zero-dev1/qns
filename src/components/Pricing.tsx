@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getContractPrices, formatQF, formatUSD, calculatePrice } from '../utils/qns';
+import { getContractPrices, formatQF, calculatePrice } from '../utils/qns';
 import { Loader2 } from 'lucide-react';
+import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 
 export default function Pricing() {
+  const { elementRef: sectionRef, isVisible: sectionVisible } = useIntersectionObserver();
+
   const [prices, setPrices] = useState<{
     price3Char: bigint;
     price4Char: bigint;
@@ -36,29 +39,34 @@ export default function Pricing() {
   const tiers = [
     {
       label: 'Premium',
-      chars: '3 characters',
-      example: 'ace',
-      prices: price3,
+      chars: 3,
+      example: 'ace.qf',
+      price: price3,
       highlighted: false,
     },
     {
       label: 'Standard',
-      chars: '4 characters',
-      example: 'alex',
-      prices: price4,
+      chars: 4,
+      example: 'alex.qf',
+      price: price4,
       highlighted: true,
     },
     {
       label: 'Basic',
-      chars: '5+ characters',
-      example: 'alice',
-      prices: price5,
+      chars: 5,
+      example: 'alice.qf',
+      price: price5,
       highlighted: false,
     },
   ];
 
   return (
-    <section className="py-[100px] px-6">
+    <section
+      ref={sectionRef}
+      className={`py-[100px] px-6 scroll-fade-in ${
+        sectionVisible ? 'visible' : ''
+      }`}
+    >
       <div className="max-w-[1120px] mx-auto">
         <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-4 text-center">
           PRICING
@@ -79,48 +87,57 @@ export default function Pricing() {
             {tiers.map((tier) => (
               <div
                 key={tier.label}
-                className={`relative rounded-xl p-8 md:p-10 border text-center ${
-                  tier.highlighted ? 'bg-[#0D1512] border-[#00D179]' : 'border-[#1E1E1E]'
+                className={`relative rounded-2xl border transition-all duration-300 bg-[#0A0A0A] text-center ${
+                  tier.highlighted
+                    ? 'border-[#00D179] bg-[#00D17908] scale-105'
+                    : 'border-[#1E1E1E] hover:border-[#333333]'
                 }`}
               >
                 {tier.highlighted && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-medium text-black bg-[#00D179] px-3 py-1 rounded-full">
-                    Most popular
-                  </span>
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-[#00D179] text-black text-xs font-bold rounded-full">
+                    MOST POPULAR
+                  </div>
                 )}
+                
+                <div className="p-8">
+                  <p className="font-clash font-semibold text-xl text-white mb-1">
+                    {tier.label}
+                  </p>
+                  
+                  <p className="text-[#8A8A8A] text-sm mb-4">
+                    {tier.chars} characters
+                  </p>
+                  
+                  <p className="text-[#00D179] text-lg mb-6">
+                    {tier.example}
+                  </p>
 
-                <p className="font-satoshi font-medium text-sm mb-1 text-[#8A8A8A]">
-                  {tier.label}
-                </p>
-                <p className="font-satoshi text-xs mb-6 text-[#555555]">
-                  {tier.chars}
-                </p>
-
-                <p className="font-satoshi font-medium text-white mb-8">
-                  {tier.example}<span className="text-[#00D179]">.qf</span>
-                </p>
-
-                {tier.prices ? (
-                  <>
-                    <p className="font-clash font-medium text-[32px] text-white">
-                      {formatQF(tier.prices.annual)} <span className="text-lg text-[#00D179]">QF</span>
-                    </p>
-                    <p className="font-satoshi text-sm mb-8 text-[#555555]">
-                      {formatUSD(tier.prices.annual)} / year
-                    </p>
-
-                    <div className="border-t border-[#1E1E1E] pt-6">
-                      <p className="font-clash font-medium text-xl text-white">
-                        {formatQF(tier.prices.permanent)} <span className="text-lg text-[#00D179]">QF</span>
-                      </p>
-                      <p className="font-satoshi text-sm text-[#555555]">
-                        {formatUSD(tier.prices.permanent)} — own forever
-                      </p>
+                  {tier.price ? (
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex items-baseline justify-center gap-2">
+                          <span className="text-3xl font-bold text-white">{formatQF(tier.price.annual)}</span>
+                          <span className="text-[#00D179] font-medium">QF</span>
+                        </div>
+                        <p className="text-[#555555] text-sm mt-1">/ year</p>
+                      </div>
+                      
+                      <div className="h-px bg-[#1E1E1E] w-full" />
+                      
+                      <div className="flex items-baseline justify-center gap-2">
+                        <span className="text-xl font-semibold text-white">{formatQF(tier.price.permanent)}</span>
+                        <span className="text-[#00D179] font-medium">QF</span>
+                        <span className="text-[#555555] text-sm ml-1">— own forever</span>
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <p className="text-[#8A8A8A]">Loading...</p>
-                )}
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="h-7 bg-[#1E1E1E] rounded animate-pulse"></div>
+                      <div className="h-px bg-[#1E1E1E]"></div>
+                      <div className="h-5 bg-[#1E1E1E] rounded animate-pulse w-3/4 mx-auto"></div>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -130,6 +147,18 @@ export default function Pricing() {
           Multi-year registration available. Renew anytime. 30-day grace period after expiry.
         </p>
       </div>
+
+      <style>{`
+        .scroll-fade-in {
+          opacity: 0;
+          transform: translateY(20px);
+          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .scroll-fade-in.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      `}</style>
     </section>
   );
 }

@@ -20,6 +20,8 @@ import {
   setPrimaryName,
   resolveReverse,
 } from '../utils/qns';
+import { useToast } from '../contexts/ToastContext';
+import { useCopy } from '../hooks/useCopy';
 
 interface OwnedName {
   name: string;
@@ -28,10 +30,21 @@ interface OwnedName {
   registeredAt: bigint;
 }
 
-const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'discord'] as const;
+const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'telegram'] as const;
+
+const PLACEHOLDERS: Record<typeof TEXT_KEYS[number], string> = {
+  avatar: 'https://example.com/avatar.png',
+  bio: 'Tell the world about yourself',
+  twitter: '@dotqfns or https://x.com/dotqfns',
+  github: 'username or https://github.com/username',
+  url: 'https://example.com',
+  telegram: '@username or https://t.me/username',
+};
 
 export default function MyNamesPage() {
   const { address, connect, refreshName } = useWalletStore();
+  const { showToast } = useToast();
+  const { copy } = useCopy();
   const [searchParams] = useSearchParams();
   const expandName = searchParams.get('expand');
 
@@ -48,6 +61,8 @@ export default function MyNamesPage() {
   const [transferError, setTransferError] = useState<string | null>(null);
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
   const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
+  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
 
   // Share modal state
   const [shareModalName, setShareModalName] = useState<string | null>(null);
@@ -97,8 +112,21 @@ export default function MyNamesPage() {
       await setPrimaryName(name, address); // Pass just the label, no .qf suffix
       setPrimaryNameState(name);
       await refreshName();
-    } catch {
-      // tx failed
+    } catch (err: any) {
+      console.error('Set primary failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Transaction rejected';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        }
+      }
+      
+      // Could show a toast here, but for now just log it
+      console.error('Primary name setting failed:', userMessage);
     } finally {
       setSettingPrimary(null);
     }
@@ -136,14 +164,29 @@ export default function MyNamesPage() {
     if (!address) return;
     const value = editValues[name]?.[key] ?? '';
     setSavingField(`${name}-${key}`);
+    setProfileUpdateError(null);
     try {
       await setTextRecord(name, key, value, address);
       setTextRecords((prev) => ({
         ...prev,
         [name]: { ...prev[name], [key]: value },
       }));
-    } catch {
-      // tx failed
+      showToast('Profile updated successfully', 'success');
+    } catch (err: any) {
+      console.error('Profile update failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Transaction rejected';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        }
+      }
+      
+      setProfileUpdateError(`Failed to update ${key}: ${userMessage}`);
+      showToast('Failed to save, please try again', 'error');
     } finally {
       setSavingField(null);
     }
@@ -152,11 +195,26 @@ export default function MyNamesPage() {
   const handleRenew = async (name: string) => {
     if (!address) return;
     setRenewingName(name);
+    setRenewError(null);
     try {
       await renewName(name, 1, address);
       await loadNames();
-    } catch {
-      // tx failed
+    } catch (err: any) {
+      console.error('Renewal failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Transaction rejected';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('insufficient funds') || message.includes('insufficient balance')) {
+          userMessage = 'Insufficient QF balance';
+        } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        }
+      }
+      
+      setRenewError(`Failed to renew ${name}: ${userMessage}`);
     } finally {
       setRenewingName(null);
     }
@@ -187,8 +245,22 @@ export default function MyNamesPage() {
       setTransferModal(null);
       setTransferRecipient('');
       await loadNames();
-    } catch {
-      setTransferError('Transaction failed. Try again.');
+    } catch (err: any) {
+      console.error('Transfer failed:', err);
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Transaction rejected';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('unauthorized') || message.includes('not owner')) {
+          userMessage = 'You are not the owner of this name';
+        }
+      }
+      
+      setTransferError(userMessage);
     } finally {
       setTransferring(false);
     }
@@ -201,19 +273,15 @@ export default function MyNamesPage() {
   const handleCopyLink = async () => {
     if (!shareModalName) return;
     const url = `https://dotqf.xyz/name/${shareModalName}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
+    copy(url, false); // Don't show toast for this since we have visual feedback
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShareX = () => {
     if (!shareModalName) return;
     const profileUrl = `https://dotqf.xyz/name/${shareModalName}`;
-    const text = `Check out my .qf identity`;
+    const text = `Check out my .qf identity on @dotqfns`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
     window.open(url, '_blank');
   };
@@ -324,8 +392,14 @@ export default function MyNamesPage() {
           )}
 
           {address && !loading && names.length > 0 && (
-            <div className="space-y-4">
-              {names.map((item, index) => (
+            <>
+              {renewError && (
+                <div className="mb-4 p-4 bg-[#E5484D]/10 border border-[#E5484D]/30 rounded-xl text-[#E5484D]">
+                  {renewError}
+                </div>
+              )}
+              <div className="space-y-4">
+                {names.map((item, index) => (
                 <div
                   key={item.name}
                   className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6 md:p-8 transition-all duration-150 ease-in-out opacity-0 animate-fade-in"
@@ -355,7 +429,7 @@ export default function MyNamesPage() {
                         <button
                           onClick={() => handleSetPrimary(item.name)}
                           disabled={settingPrimary === item.name}
-                          className="px-3 py-1.5 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A62315] transition-all duration-150 disabled:opacity-50 cursor-pointer"
+                          className="px-3 py-2 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A62315] transition-all duration-150 disabled:opacity-50 cursor-pointer min-h-[44px] flex items-center justify-center"
                         >
                           {settingPrimary === item.name ? 'Setting...' : 'Primary'}
                         </button>
@@ -364,20 +438,20 @@ export default function MyNamesPage() {
                         <button
                           onClick={() => handleRenew(item.name)}
                           disabled={renewingName === item.name}
-                          className="px-3 py-1.5 text-xs rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-all duration-150 disabled:opacity-50 cursor-pointer"
+                          className="px-3 py-2 text-xs rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-all duration-150 disabled:opacity-50 cursor-pointer min-h-[44px] flex items-center justify-center"
                         >
                           {renewingName === item.name ? 'Renewing...' : 'Renew'}
                         </button>
                       )}
                       <button
                         onClick={() => openShareModal(item.name)}
-                        className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-150 cursor-pointer"
+                        className="px-3 py-2 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179] hover:bg-[#00D17915] transition-all duration-150 cursor-pointer min-h-[44px] flex items-center justify-center"
                       >
                         Share
                       </button>
                       <button
                         onClick={() => toggleProfile(item.name)}
-                        className="px-3 py-1.5 text-xs rounded-lg bg-[#1E1E1E] text-white hover:bg-[#2a2a2a] transition-all duration-150 cursor-pointer"
+                        className="px-3 py-2 text-xs rounded-lg bg-[#1E1E1E] text-white hover:bg-[#2a2a2a] transition-all duration-150 cursor-pointer min-h-[44px] flex items-center justify-center"
                       >
                         {expandedProfile === item.name ? 'Close' : 'Edit'}
                       </button>
@@ -387,7 +461,7 @@ export default function MyNamesPage() {
                           setTransferRecipient('');
                           setTransferError(null);
                         }}
-                        className="px-3 py-1.5 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179]/50 transition-all duration-150 cursor-pointer"
+                        className="px-3 py-2 text-xs rounded-lg border border-[#1E1E1E] text-[#8A8A8A] hover:text-white hover:border-[#00D179]/50 transition-all duration-150 cursor-pointer min-h-[44px] flex items-center justify-center"
                       >
                         Transfer
                       </button>
@@ -396,6 +470,11 @@ export default function MyNamesPage() {
 
                   {expandedProfile === item.name && (
                     <div className="mt-5 pt-5 border-t border-[#1E1E1E] space-y-3 transition-all duration-150 ease-in-out animate-fade-in">
+                      {profileUpdateError && (
+                        <div className="p-3 bg-[#E5484D]/10 border border-[#E5484D]/30 rounded-lg text-[#E5484D] text-sm">
+                          {profileUpdateError}
+                        </div>
+                      )}
                       {TEXT_KEYS.map((key) => (
                         <div key={key} className="flex items-center gap-3">
                           <label className="w-20 text-sm text-[#8A8A8A] capitalize shrink-0">
@@ -413,7 +492,7 @@ export default function MyNamesPage() {
                                 },
                               }))
                             }
-                            placeholder={`Enter ${key}`}
+                            placeholder={PLACEHOLDERS[key]}
                             className="flex-1 bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#00D179] transition-colors duration-200"
                           />
                           <button
@@ -422,7 +501,7 @@ export default function MyNamesPage() {
                               savingField === `${item.name}-${key}` ||
                               (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
                             }
-                            className="px-3 py-2 text-xs rounded-lg bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-30 transition-colors duration-200 cursor-pointer"
+                            className="px-3 py-2 text-xs rounded-lg bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-30 transition-colors duration-200 cursor-pointer min-h-[44px] flex items-center justify-center"
                           >
                             {savingField === `${item.name}-${key}` ? '...' : 'Save'}
                           </button>
@@ -432,7 +511,8 @@ export default function MyNamesPage() {
                   )}
                 </div>
               ))}
-            </div>
+              </div>
+            </>
           )}
         </div>
       </main>

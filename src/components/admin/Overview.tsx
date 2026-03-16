@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAdminStore } from '../../stores/adminStore';
-import { formatQF, formatUSD } from '../../utils/qns';
+import { formatQF } from '../../utils/qns';
 import { Users, Bookmark, Wallet, Flame, Tag, Clock } from 'lucide-react';
 
 interface StatCardProps {
@@ -73,7 +73,7 @@ export default function Overview() {
         <StatCard
           label="Contract Balance"
           value={contractBalance !== null ? formatQF(contractBalance) : '-'}
-          subValue={contractBalance !== null ? formatUSD(contractBalance) : undefined}
+          subValue={contractBalance !== null ? 'QF tokens' : undefined}
           icon={Wallet}
         />
         <StatCard
@@ -109,7 +109,7 @@ export default function Overview() {
               {price3Char !== null ? formatQF(price3Char) : '-'} <span className="text-[#00D179]">QF</span>
             </p>
             <p className="text-[#8A8A8A] text-xs mt-1">
-              {price3Char !== null ? formatUSD(price3Char) : ''}
+              {price3Char !== null ? 'QF tokens' : ''}
             </p>
           </div>
           
@@ -119,7 +119,7 @@ export default function Overview() {
               {price4Char !== null ? formatQF(price4Char) : '-'} <span className="text-[#00D179]">QF</span>
             </p>
             <p className="text-[#8A8A8A] text-xs mt-1">
-              {price4Char !== null ? formatUSD(price4Char) : ''}
+              {price4Char !== null ? 'QF tokens' : ''}
             </p>
           </div>
           
@@ -129,7 +129,7 @@ export default function Overview() {
               {price5PlusChar !== null ? formatQF(price5PlusChar) : '-'} <span className="text-[#00D179]">QF</span>
             </p>
             <p className="text-[#8A8A8A] text-xs mt-1">
-              {price5PlusChar !== null ? formatUSD(price5PlusChar) : ''}
+              {price5PlusChar !== null ? 'QF tokens' : ''}
             </p>
           </div>
         </div>

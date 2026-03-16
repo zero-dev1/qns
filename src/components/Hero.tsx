@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Check, Shield, X, Twitter } from 'lucide-react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { ArrowRight, Check, Shield, X, Twitter, Copy } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
 import {
   validateNameLocal,
@@ -9,9 +9,11 @@ import {
   truncateAddress,
   getPrice,
   formatQF,
-  formatUSD,
   registerName,
+  getQFBalance,
 } from '../utils/qns';
+import { useToast } from '../contexts/ToastContext';
+import { useCopy } from '../hooks/useCopy';
 
 export type SearchResult = {
   status: 'available' | 'taken' | 'reserved' | 'invalid' | 'idle';
@@ -33,7 +35,10 @@ const durations = [
 
 export default function Hero() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { address, connect, refreshName } = useWalletStore();
+  const { showToast } = useToast();
+  const { copy } = useCopy();
 
   // Search state
   const [input, setInput] = useState('');
@@ -55,6 +60,16 @@ export default function Hero() {
   const [regPrice, setRegPrice] = useState<bigint | null>(null);
   const [regPriceLoading, setRegPriceLoading] = useState(false);
   
+  // Burn address copy state
+  const [burnAddressCopied, setBurnAddressCopied] = useState(false);
+  const burnAddress = '0x000000000000000000000000000000000000dEaD';
+  
+  // Wallet balance state
+  const [userBalance, setUserBalance] = useState<bigint | null>(null);
+  
+  // First visit tooltip state
+  const [showTooltip, setShowTooltip] = useState(false);
+  
   // Fetch registration price when selectedName or duration changes
   useEffect(() => {
     if (!selectedName) {
@@ -67,6 +82,40 @@ export default function Hero() {
       .catch(() => setRegPrice(null))
       .finally(() => setRegPriceLoading(false));
   }, [selectedName, duration.years, duration.permanent]);
+
+  // Fetch user balance when wallet connects
+  useEffect(() => {
+    if (address) {
+      getQFBalance(address).then(setUserBalance).catch(() => setUserBalance(null));
+    } else {
+      setUserBalance(null);
+    }
+  }, [address]);
+
+  // Check for search query param on mount and trigger search
+  useEffect(() => {
+    const searchParam = searchParams.get('search');
+    if (searchParam) {
+      const cleanName = searchParam.toLowerCase().replace(/\.qf$/, '').trim();
+      setInput(cleanName);
+      // Trigger search after a short delay to ensure state is updated
+      setTimeout(() => search(cleanName), 100);
+    }
+  }, []);
+  useEffect(() => {
+    const hasVisited = localStorage.getItem('qns-has-visited');
+    if (!hasVisited) {
+      setShowTooltip(true);
+      localStorage.setItem('qns-has-visited', 'true');
+      
+      // Hide tooltip after 5 seconds or when user starts typing
+      const timer = setTimeout(() => {
+        setShowTooltip(false);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Search logic
   const search = useCallback(async (value: string) => {
@@ -122,6 +171,14 @@ export default function Hero() {
     }
   }, []);
 
+  // Handle input change and hide tooltip
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (showTooltip) {
+      setShowTooltip(false);
+    }
+  };
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const name = input.toLowerCase().replace(/\.qf$/, '').trim();
@@ -168,6 +225,7 @@ export default function Hero() {
     try {
       await registerName(selectedName, duration.years, duration.permanent, address);
       setTxState('success');
+      showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
       await refreshName();
     } catch (err: any) {
       const errorMessage = (err?.message || err?.cause?.message || '').toLowerCase();
@@ -182,7 +240,7 @@ export default function Hero() {
           message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.`
         });
       } else {
-        setTxError({ type: 'generic', message: 'Transaction failed. Please try again.' });
+        setTxError({ type: 'generic', message: 'Transaction rejected' });
       }
       setTxState('failed');
       
@@ -225,7 +283,7 @@ export default function Hero() {
 
   const handleShareOnX = () => {
     if (!selectedName) return;
-    const text = `I just claimed my .qf name on @theqfnetwork 🟢 #QNS`;
+    const text = `Check out my .qf identity on @dotqfns`;
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
   };
@@ -233,16 +291,15 @@ export default function Hero() {
   const priceDisplay = () => {
     if (!selectedName || regPrice === null) return regPriceLoading ? 'Loading price...' : '';
     const qf = formatQF(regPrice);
-    const usd = formatUSD(regPrice);
     if (duration.permanent) {
-      return `${qf} QF (${usd}) — own forever`;
+      return `${qf} QF — own forever`;
     }
     if (duration.years === 1) {
-      return `Total: ${qf} QF (${usd})`;
+      return `Total: ${qf} QF`;
     }
     // For multi-year, estimate annual based on 1 year price
     const annualPrice = regPrice / BigInt(duration.years);
-    return `${formatQF(annualPrice)} QF × ${duration.years} years = ${qf} QF (${usd})`;
+    return `${formatQF(annualPrice)} QF × ${duration.years} years = ${qf} QF`;
   };
 
   return (
@@ -260,41 +317,53 @@ export default function Hero() {
           {!selectedName && (
             <>
               <form onSubmit={(e) => { e.preventDefault(); if (result.status === 'available') handleSelectName(result.name); }}>
-                <div
-                  className={`flex items-center bg-[#141414] border rounded-xl transition-all duration-200 ${
-                    input ? 'border-[#00D179]' : 'border-[#1E1E1E]'
-                  } focus-within:border-[#00D179]`}
-                >
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Search for a name"
-                    className="flex-1 bg-transparent outline-none text-white font-satoshi px-5 py-4 text-lg transition-all duration-150"
-                  />
-                  <span className="text-[#00D179] font-medium font-satoshi text-lg pr-1">.qf</span>
-                  <button
-                    type="submit"
-                    disabled={searching}
-                    className={`transition-all duration-200 mr-4 cursor-pointer disabled:cursor-not-allowed ${
-                      result.status === 'available' ? 'text-[#00D179]' :
-                      result.status === 'reserved' ? 'text-amber-500' :
-                      result.status === 'taken' ? 'text-[#E5484D]' :
-                      'text-[#00D179] hover:text-[#00B868]'
-                    }`}
+                <div className="relative">
+                  <div
+                    className={`flex items-center bg-[#141414] border rounded-xl transition-all duration-200 ${
+                      input ? 'border-[#00D179]' : 'border-[#1E1E1E]'
+                    } focus-within:border-[#00D179]`}
                   >
-                    {searching ? (
-                      <span className="inline-block w-5 h-5 border-2 border-[#00D179]/30 border-t-[#00D179] rounded-full animate-spin" />
-                    ) : result.status === 'available' ? (
-                      <Check size={24} strokeWidth={2.5} />
-                    ) : result.status === 'reserved' ? (
-                      <Shield size={24} strokeWidth={2.5} />
-                    ) : result.status === 'taken' ? (
-                      <X size={24} strokeWidth={2.5} />
-                    ) : (
-                      <ArrowRight size={24} strokeWidth={2.5} />
-                    )}
-                  </button>
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => handleInputChange(e.target.value)}
+                      placeholder="Search for a name"
+                      className="flex-1 bg-transparent outline-none text-white font-satoshi px-5 py-4 text-lg transition-all duration-150"
+                    />
+                    <span className="text-[#00D179] font-medium font-satoshi text-lg pr-1">.qf</span>
+                    <button
+                      type="submit"
+                      disabled={searching}
+                      className={`transition-all duration-200 mr-4 cursor-pointer disabled:cursor-not-allowed ${
+                        result.status === 'available' ? 'text-[#00D179]' :
+                        result.status === 'reserved' ? 'text-amber-500' :
+                        result.status === 'taken' ? 'text-[#E5484D]' :
+                        'text-[#00D179] hover:text-[#00B868]'
+                      }`}
+                    >
+                      {searching ? (
+                        <span className="inline-block w-5 h-5 border-2 border-[#00D179]/30 border-t-[#00D179] rounded-full animate-spin" />
+                      ) : result.status === 'available' ? (
+                        <Check size={24} strokeWidth={2.5} />
+                      ) : result.status === 'reserved' ? (
+                        <Shield size={24} strokeWidth={2.5} />
+                      ) : result.status === 'taken' ? (
+                        <X size={24} strokeWidth={2.5} />
+                      ) : (
+                        <ArrowRight size={24} strokeWidth={2.5} />
+                      )}
+                    </button>
+                  </div>
+                  
+                  {/* First Visit Tooltip */}
+                  {showTooltip && (
+                    <div className="absolute -bottom-12 left-0 right-0 mx-auto w-max animate-fade-in">
+                      <div className="bg-[#1E1E1E] text-[#8A8A8A] text-sm px-3 py-2 rounded-lg border border-[#2a2a2a] shadow-lg">
+                        <span className="animate-pulse">✨ Try searching for your name</span>
+                        <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-[#1E1E1E] border-l border-t border-[#2a2a2a] rotate-45"></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </form>
 
@@ -327,9 +396,9 @@ export default function Hero() {
                   )}
 
                   {result.status === 'available' && (
-                    <div className="px-4 py-3 bg-[#00D179] rounded-xl space-y-3 transition-all duration-150 ease-in-out">
+                    <div className="px-4 py-3 bg-[#00D179] rounded-xl space-y-3 transition-all duration-150 ease-in-out animate-pulse-subtle">
                       <div className="flex items-center gap-2">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-black">
                           <path d="M20 6L9 17l-5-5" />
                         </svg>
                         <span className="text-black font-medium">
@@ -339,7 +408,7 @@ export default function Hero() {
                       </div>
                       <div className="text-sm text-black/70">
                         {searchPrice !== null
-                          ? `${formatQF(searchPrice)} QF / year (${formatUSD(searchPrice)})`
+                          ? `${formatQF(searchPrice)} QF / year`
                           : 'Loading price...'}
                       </div>
                       <button
@@ -363,7 +432,15 @@ export default function Hero() {
                         <span className="text-[#8A8A8A] text-sm">is taken</span>
                       </div>
                       {result.owner && (
-                        <p className="text-xs text-[#555555] mt-1">Owned by {truncateAddress(result.owner)}</p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <p className="text-xs text-[#555555]">Owned by {truncateAddress(result.owner)}</p>
+                          <Link
+                            to={`/name/${result.name}`}
+                            className="text-xs text-[#00D179] hover:text-[#00B868] transition-colors"
+                          >
+                            Visit profile →
+                          </Link>
+                        </div>
                       )}
                     </div>
                   )}
@@ -390,6 +467,23 @@ export default function Hero() {
           {/* Registration Panel */}
           {selectedName && (
             <div className="mt-0 bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6 transition-all duration-150 ease-in-out animate-fade-in">
+              {/* Empty Wallet State */}
+              {address && userBalance === 0n && (
+                <div className="mb-4 p-3 bg-[#F5A623]/10 border border-[#F5A623]/30 rounded-lg text-[#F5A623] text-sm animate-fade-in">
+                  <p>
+                    You'll need QF tokens to register a name. Bridge your tokens at{' '}
+                    <a 
+                      href="https://bridge.qf.network" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="underline hover:text-[#F5A623]/80 transition-colors"
+                    >
+                      bridge.qf.network
+                    </a>
+                  </p>
+                </div>
+              )}
+
               {/* Error Toast */}
               {txError && (
                 <div className="mb-4 px-4 py-3 rounded-xl bg-[#E5484D]/10 border border-[#E5484D] text-white text-sm font-medium animate-fade-in">
@@ -459,12 +553,15 @@ export default function Hero() {
               {/* Success State */}
               {txState === 'success' && (
                 <div className="text-center py-8 transition-all duration-150 ease-in-out animate-fade-in">
-                  <svg className="mx-auto mb-4" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#00D179" strokeWidth="2" strokeLinecap="round">
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                  <p className="font-clash font-medium text-2xl text-[#00D179] mb-2">
-                    {selectedName}<span className="text-[#00D179]">.qf</span> is yours!
-                  </p>
+                  <div className="mb-4">
+                    <svg className="mx-auto mb-4 animate-bounce" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#00D179" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    <p className="font-clash font-medium text-2xl text-[#00D179] mb-2">
+                      Welcome to QF Network, {selectedName}<span className="text-[#00D179]">.qf</span>!
+                    </p>
+                    <p className="text-[#8A8A8A] text-sm">Your identity is now part of the network</p>
+                  </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6 mb-4">
                     <button
@@ -498,7 +595,7 @@ export default function Hero() {
                     <circle cx="12" cy="12" r="10" />
                     <path d="M15 9l-6 6M9 9l6 6" />
                   </svg>
-                  <p className="text-[#E5484D] font-medium mb-2">Transaction failed. Try again.</p>
+                  <p className="text-[#E5484D] font-medium mb-2">Transaction rejected</p>
                   <button
                     onClick={handleRetry}
                     className="mt-2 px-6 py-2.5 bg-[#E5484D] hover:bg-[#c93d41] text-white rounded-lg font-medium transition-colors cursor-pointer"
@@ -520,6 +617,51 @@ export default function Hero() {
         <p className="mt-5 text-sm text-[#555555] font-satoshi">
           Be among the first to claim your <span className="text-[#00D179]">.qf</span> name
         </p>
+
+        {/* Burn Mechanic Section */}
+        <div className="mt-12 max-w-[520px] mx-auto">
+          <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-[#E5484D]/10">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="M8 11h8"/>
+                  <path d="M8 15h6"/>
+                </svg>
+              </div>
+              <h3 className="font-clash text-lg font-semibold text-white">Deflationary by Design</h3>
+            </div>
+            
+            <p className="text-[#8A8A8A] text-sm mb-4 leading-relaxed">
+              Every <span className="text-[#00D179]">.qf</span> registration burns <span className="text-[#E5484D] font-medium">5%</span> of the fee permanently. 
+              Reducing QF supply with every name claimed.
+            </p>
+            
+            <div className="bg-[#0A0A0A] rounded-xl p-3 border border-[#1E1E1A]">
+              <p className="text-[#555555] text-xs mb-1 text-center">Burn Address</p>
+              <button
+                onClick={() => {
+                  copy(burnAddress, false); // Don't show toast for this since we have visual feedback
+                  setBurnAddressCopied(true);
+                  setTimeout(() => setBurnAddressCopied(false), 2000);
+                }}
+                className="flex items-center justify-center gap-2 group transition-all duration-200 hover:bg-[#1a1a1a] rounded-lg p-1 -m-1 w-full"
+              >
+                <code className="text-[#00D179] font-mono text-sm text-center">
+                  0x0000...dEaD
+                </code>
+                {burnAddressCopied ? (
+                  <Check size={14} className="text-[#00D179] flex-shrink-0" />
+                ) : (
+                  <Copy size={14} className="text-[#8A8A8A] group-hover:text-[#00D179] flex-shrink-0 transition-colors" />
+                )}
+              </button>
+              {burnAddressCopied && (
+                <p className="text-[#00D179] text-xs mt-1 animate-fade-in text-center">Copied!</p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`
@@ -547,6 +689,17 @@ export default function Hero() {
         .animate-shimmer {
           background-size: 200% 100%;
           animation: shimmer 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse-subtle {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(0, 209, 121, 0.4);
+          }
+          50% {
+            box-shadow: 0 0 0 8px rgba(0, 209, 121, 0);
+          }
+        }
+        .animate-pulse-subtle {
+          animation: pulse-subtle 2s ease-in-out infinite;
         }
       `}</style>
     </section>

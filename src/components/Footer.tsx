@@ -1,10 +1,10 @@
 import { useWalletStore } from '../stores/walletStore';
 import { useAdminStore } from '../stores/adminStore';
 import { Link } from 'react-router-dom';
+import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 
 const links: ({ label: string; href: string } | { label: string; to: string })[] = [
   { label: 'QF Network', href: 'https://qfnetwork.xyz' },
-  { label: 'QFLink', href: 'https://qflink.app' },
   { label: 'Twitter', href: 'https://x.com/dotqfns' },
   { label: 'Docs', to: '/docs' },
 ];
@@ -12,11 +12,17 @@ const links: ({ label: string; href: string } | { label: string; to: string })[]
 export default function Footer() {
   const { address } = useWalletStore();
   const { adminAddress } = useAdminStore();
+  const { elementRef: footerRef, isVisible: footerVisible } = useIntersectionObserver();
   
   const isAdmin = address && adminAddress && address.toLowerCase() === adminAddress.toLowerCase();
 
   return (
-    <footer className="border-t border-[#1E1E1E] mt-10">
+    <footer 
+      ref={footerRef}
+      className={`border-t border-[#1E1E1E] mt-10 scroll-fade-in ${
+        footerVisible ? 'visible' : ''
+      }`}
+    >
       <div className="max-w-[1120px] mx-auto px-6 py-10">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-3">
@@ -65,6 +71,18 @@ export default function Footer() {
           QNS is community-built infrastructure for the QF Network ecosystem.
         </p>
       </div>
+      
+      <style>{`
+        .scroll-fade-in {
+          opacity: 0;
+          transform: translateY(20px);
+          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .scroll-fade-in.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      `}</style>
     </footer>
   );
 }

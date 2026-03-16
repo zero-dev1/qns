@@ -4,12 +4,14 @@ import Hero from './components/Hero';
 import HowItWorks from './components/HowItWorks';
 import Ecosystem from './components/Ecosystem';
 import Pricing from './components/Pricing';
-import RegistrationFlow from './components/RegistrationFlow';
+import CTA from './components/CTA';
 import Footer from './components/Footer';
 import MyNamesPage from './pages/MyNames';
 import ProfilePage from './pages/Profile';
 import DocsPage from './pages/Docs';
 import AdminLayout from './components/admin/AdminLayout';
+import { ToastProvider } from './contexts/ToastContext';
+import PageTransition from './components/PageTransition';
 
 function LandingPage() {
   return (
@@ -19,7 +21,7 @@ function LandingPage() {
       <HowItWorks />
       <Ecosystem />
       <Pricing />
-      <RegistrationFlow />
+      <CTA />
       <Footer />
     </div>
   );
@@ -27,15 +29,19 @@ function LandingPage() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/my-names" element={<MyNamesPage />} />
-        <Route path="/name/:name" element={<ProfilePage />} />
-        <Route path="/admin" element={<AdminLayout />} />
-        <Route path="/docs" element={<DocsPage />} />
-      </Routes>
-    </BrowserRouter>
+    <ToastProvider>
+      <BrowserRouter>
+        <PageTransition>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/my-names" element={<MyNamesPage />} />
+            <Route path="/name/:name" element={<ProfilePage />} />
+            <Route path="/admin" element={<AdminLayout />} />
+            <Route path="/docs" element={<DocsPage />} />
+          </Routes>
+        </PageTransition>
+      </BrowserRouter>
+    </ToastProvider>
   );
 }
 

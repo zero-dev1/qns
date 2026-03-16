@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
-import { getPrice, formatQF, formatUSD, registerName } from '../utils/qns';
+import { getPrice, formatQF, registerName } from '../utils/qns';
 import { Twitter } from 'lucide-react';
 import SearchBar from './SearchBar';
 
@@ -22,6 +22,7 @@ export default function RegistrationFlow() {
   const [txState, setTxState] = useState<TxState>('idle');
   const [price, setPrice] = useState<bigint | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const activeName = name;
   const duration = durations[selectedDuration];
@@ -47,22 +48,42 @@ export default function RegistrationFlow() {
       return;
     }
     setTxState('pending');
+    setErrorMessage(null);
     try {
       await registerName(activeName, duration.years, duration.permanent, address);
       setTxState('success');
       await refreshName();
-    } catch {
+    } catch (err: any) {
+      console.error('Registration failed:', err);
       setTxState('failed');
+      
+      // Parse error for specific user-friendly messages
+      let userMessage = 'Transaction rejected';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('insufficient funds') || message.includes('insufficient balance')) {
+          userMessage = 'Insufficient QF balance';
+        } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+          userMessage = 'Transaction rejected';
+        } else if (message.includes('name already taken') || message.includes('already registered') || message.includes('not available')) {
+          userMessage = 'Name already taken';
+        }
+      }
+      
+      setErrorMessage(userMessage);
     }
   };
 
   const handleRetry = () => {
     setTxState('idle');
+    setErrorMessage(null);
   };
 
   const handleNewSearch = () => {
     setName(null);
     setTxState('idle');
+    setErrorMessage(null);
   };
 
   const handleSetupProfile = () => {
@@ -73,7 +94,7 @@ export default function RegistrationFlow() {
 
   const handleShareOnX = () => {
     if (!activeName) return;
-    const text = `I just claimed my .qf name on @theqfnetwork 🟢 #QNS`;
+    const text = `Check out my .qf identity on @dotqfns`;
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${activeName}`)}`;
     window.open(url, '_blank');
   };
@@ -81,14 +102,13 @@ export default function RegistrationFlow() {
   const priceDisplay = () => {
     if (!activeName || price === null) return priceLoading ? 'Loading price...' : '';
     const qf = formatQF(price);
-    const usd = formatUSD(price);
     if (duration.permanent) {
-      return `${qf} QF (${usd}) — own forever`;
+      return `${qf} QF — own forever`;
     }
     if (duration.years === 1) {
-      return `Total: ${qf} QF (${usd})`;
+      return `Total: ${qf} QF`;
     }
-    return `${formatQF(price / BigInt(duration.years))} QF × ${duration.years} years = ${qf} QF (${usd})`;
+    return `${formatQF(price / BigInt(duration.years))} QF × ${duration.years} years = ${qf} QF`;
   };
 
   return (
@@ -195,7 +215,9 @@ export default function RegistrationFlow() {
               <circle cx="12" cy="12" r="10" />
               <path d="M15 9l-6 6M9 9l6 6" />
             </svg>
-            <p className="text-[#E5484D] font-medium mb-2">Transaction failed. Try again.</p>
+            <p className="text-[#E5484D] font-medium mb-2">
+              {errorMessage || 'Transaction rejected'}
+            </p>
             <button
               onClick={handleRetry}
               className="mt-2 px-6 py-2.5 bg-[#E5484D] hover:bg-[#c93d41] text-white rounded-lg font-medium transition-colors cursor-pointer"

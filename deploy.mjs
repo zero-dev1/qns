@@ -252,7 +252,8 @@ const RESERVED_NAMES = [
   "zhusu", "eliz", "murad", "kaleo", "crediblecrypto", "cryptotony",
   "bitboy", "larkdavis", "cryptobanter", "rektcapital", "cryptobirb",
   "altcoingordon", "cryptowizard", "nebraskagooner", "degenpoet",
-  "inversebrah", "gainzy", "cryptoyoda", "cryptomanran",
+  "inversebrah", "gainzy", "cryptoyoda", "cryptomanran", "satoshi",
+  "incomeshark", "shark", "whale", "bull",
 
   // ===== GEOGRAPHIC & POLITICAL =====
   "usa", "uae", "dubai", "london", "newyork", "tokyo", "singapore",
@@ -284,7 +285,7 @@ const RESERVED_NAMES = [
 
   // ===== BRANDS & PLATFORMS (prevent impersonation) =====
   "binance", "coinbase", "kraken", "metamask", "uniswap", "opensea",
-  "aave", "curve", "maker", "lido", "chainlink", "compound",
+  "aave", "curve", "maker", "lido", "chainlink", "compound", "dydx",
   "ledger", "trezor", "phantom", "rabby", "rainbow",
   "google", "apple", "amazon", "microsoft", "meta", "tesla",
   "twitter", "discord", "telegram", "reddit", "youtube", "tiktok",
@@ -302,7 +303,13 @@ const RESERVED_NAMES = [
   "home", "root", "test", "demo", "info", "contact", "terms",
   "privacy", "search", "register", "renew", "manage", "settings",
   "app", "web", "welcome", "help", "support", "status", "blog",
-  "news", "media", "press", "team", "about", "careers", "jobs"
+  "news", "media", "press", "team", "about", "careers", "jobs",
+
+  // ===== ADDITIONAL RESERVED NAMES =====
+  "overdose", "cryptogideon", "cryptojopp", "doomly", "user", "boolean",
+  "prince", "ahku", "revo", "pblius", "denis", "alisher", "krzysztof",
+  "aleksandra", "lygin", "kit", "52f", "key", "diskword", "ahnu",
+  "quorum", "provd", "qns", "deployer"
 ];
 
 // Deduplicate reserved names

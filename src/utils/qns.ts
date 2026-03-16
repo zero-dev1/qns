@@ -162,7 +162,6 @@ export function calculatePrice(
   return base * BigInt(years);
 }
 
-const QF_USD_RATE = 0.01;
 
 export async function getPrice(name: string, years: number, permanent: boolean): Promise<bigint> {
   return getContractPrice(name, years, permanent);
@@ -174,12 +173,6 @@ export function formatQF(wei: bigint): string {
   return qf.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-export function formatUSD(wei: bigint): string {
-  const qf = parseFloat(formatEther(wei));
-  const usd = qf * QF_USD_RATE;
-  if (usd >= 1) return `~$${usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-  return `~$${usd.toFixed(2)}`;
-}
 
 export function truncateAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;

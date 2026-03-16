@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://dotqf.xyz/sitemap.xml
