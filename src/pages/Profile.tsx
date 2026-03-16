@@ -20,6 +20,7 @@ import {
 import { useWalletStore } from '../stores/walletStore';
 import { parseEther } from 'viem';
 import { useCopy } from '../hooks/useCopy';
+import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { TEAM_NAMES } from '../utils/badges';
 
 // Static reserved names list from adminStore
@@ -319,6 +320,7 @@ export default function ProfilePage() {
     if (!profile) return;
     const url = `https://dotqf.xyz/name/${profile.name}`;
     copy(url, false); // Don't show toast for this since we have visual feedback
+    hapticTap();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -390,6 +392,7 @@ export default function ProfilePage() {
 
       setTxHash(hash);
       setGiftSuccess(true);
+      hapticSuccess();
     } catch (err: any) {
       console.error('Gift transaction failed:', err);
       
@@ -406,6 +409,7 @@ export default function ProfilePage() {
       }
       
       setGiftError(userMessage);
+      hapticError();
     } finally {
       setIsSending(false);
     }
@@ -638,6 +642,7 @@ export default function ProfilePage() {
                 <button
                   onClick={() => {
                     copy(profile.address, false); // Don't show toast for this since we have visual feedback
+                    hapticTap();
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}

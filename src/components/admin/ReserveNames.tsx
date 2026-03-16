@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWalletStore } from '../../stores/walletStore';
 import { useAdminStore } from '../../stores/adminStore';
 import { validateNameLocal } from '../../utils/qns';
+import { hapticSuccess, hapticError } from '../../utils/haptics';
 import { Bookmark, Plus, Trash2, UserPlus, Search, Loader2 } from 'lucide-react';
 
 export default function ReserveNames() {
@@ -168,6 +169,7 @@ export default function ReserveNames() {
     try {
       await assignReservedName(assignName, assignAddress as `0x${string}`, address);
       showSuccess(`Assigned "${assignName}" to ${assignAddress.slice(0, 6)}...${assignAddress.slice(-4)}`);
+      hapticSuccess();
       setAssignModalOpen(false);
       setAssignName('');
       setAssignAddress('');
@@ -187,6 +189,7 @@ export default function ReserveNames() {
       }
       
       showError(err.message || userMessage);
+      hapticError();
     } finally {
       setIsAssigning(false);
     }

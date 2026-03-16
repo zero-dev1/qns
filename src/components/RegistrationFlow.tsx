@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { getPrice, formatQF, registerName } from '../utils/qns';
+import { hapticSuccess, hapticError } from '../utils/haptics';
 import { Twitter } from 'lucide-react';
 import SearchBar from './SearchBar';
 
@@ -52,10 +53,12 @@ export default function RegistrationFlow() {
     try {
       await registerName(activeName, duration.years, duration.permanent, address);
       setTxState('success');
+      hapticSuccess();
       await refreshName();
     } catch (err: any) {
       console.error('Registration failed:', err);
       setTxState('failed');
+      hapticError();
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Transaction rejected';

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { hapticTap } from '../utils/haptics';
 
 export function useCopy() {
   const [copied, setCopied] = useState(false);
@@ -9,6 +10,7 @@ export function useCopy() {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      hapticTap();
       
       if (showToastMessage) {
         showToast('Copied!', 'success');

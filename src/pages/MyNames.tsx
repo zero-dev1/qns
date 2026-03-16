@@ -22,6 +22,7 @@ import {
 } from '../utils/qns';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
+import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 
 interface OwnedName {
   name: string;
@@ -172,6 +173,7 @@ export default function MyNamesPage() {
         [name]: { ...prev[name], [key]: value },
       }));
       showToast('Profile updated successfully', 'success');
+      hapticSuccess();
     } catch (err: any) {
       console.error('Profile update failed:', err);
       
@@ -187,6 +189,7 @@ export default function MyNamesPage() {
       
       setProfileUpdateError(`Failed to update ${key}: ${userMessage}`);
       showToast('Failed to save, please try again', 'error');
+      hapticError();
     } finally {
       setSavingField(null);
     }
@@ -274,6 +277,7 @@ export default function MyNamesPage() {
     if (!shareModalName) return;
     const url = `https://dotqf.xyz/name/${shareModalName}`;
     copy(url, false); // Don't show toast for this since we have visual feedback
+    hapticTap();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

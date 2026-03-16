@@ -12,6 +12,7 @@ import {
   registerName,
   getQFBalance,
 } from '../utils/qns';
+import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 
@@ -137,6 +138,7 @@ export default function Hero() {
       const isAvailable = await checkAvailability(name);
       if (isAvailable) {
         setResult({ status: 'available', name });
+        hapticTap();
         // Fetch price asynchronously
         try {
           const priceWei = await getPrice(name, 1, false);
@@ -148,8 +150,10 @@ export default function Hero() {
         const reg = await getRegistration(name);
         if (reg) {
           setResult({ status: 'taken', name, owner: reg.owner });
+          hapticTap();
         } else {
           setResult({ status: 'reserved', name });
+          hapticTap();
         }
       }
     } catch (err: any) {
@@ -225,6 +229,7 @@ export default function Hero() {
     try {
       await registerName(selectedName, duration.years, duration.permanent, address);
       setTxState('success');
+      hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
       await refreshName();
     } catch (err: any) {
@@ -243,6 +248,7 @@ export default function Hero() {
         setTxError({ type: 'generic', message: 'Transaction rejected' });
       }
       setTxState('failed');
+      hapticError();
       
       // Auto-dismiss error after 8 seconds
       if (errorDismissTimerRef.current) {
@@ -642,6 +648,7 @@ export default function Hero() {
               <button
                 onClick={() => {
                   copy(burnAddress, false); // Don't show toast for this since we have visual feedback
+                  hapticTap();
                   setBurnAddressCopied(true);
                   setTimeout(() => setBurnAddressCopied(false), 2000);
                 }}

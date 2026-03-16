@@ -3,6 +3,7 @@ import { ArrowRight, Check, Shield, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { validateNameLocal, checkAvailability, getRegistration, truncateAddress, getPrice } from '../utils/qns';
 import { formatEther } from 'viem';
+import { hapticTap } from '../utils/haptics';
 
 export type SearchResult = {
   status: 'available' | 'taken' | 'reserved' | 'invalid' | 'idle';
@@ -43,6 +44,7 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
       if (isAvailable) {
         setPriceLoading(true);
         setResult({ status: 'available', name });
+        hapticTap();
         // Fetch live price from contract
         try {
           console.log('[SearchBar] about to call getPrice, name:', name);
@@ -61,8 +63,10 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
         const reg = await getRegistration(name);
         if (reg) {
           setResult({ status: 'taken', name, owner: reg.owner });
+          hapticTap();
         } else {
           setResult({ status: 'reserved', name });
+          hapticTap();
         }
       }
     } catch (err: any) {
