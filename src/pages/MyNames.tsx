@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -10,7 +10,6 @@ import {
   Copy,
   Star,
   X,
-  Pencil,
   Github,
   Globe,
   Send,
@@ -21,7 +20,6 @@ import {
   renewName,
   transferNameOnChain,
   getTextRecord,
-  setTextRecord,
   setMultipleTextRecords,
   resolveForward,
   getNamesOwnedByAddress,
@@ -434,10 +432,6 @@ export default function MyNamesPage() {
     } finally {
       setTransferring(false);
     }
-  };
-
-  const openShareModal = (name: string) => {
-    setShareModalName(name);
   };
 
   const handleCopyLink = async () => {
