@@ -3,11 +3,11 @@ import { useWalletStore } from '../../stores/walletStore';
 import { useAdminStore } from '../../stores/adminStore';
 import { validateNameLocal } from '../../utils/qns';
 import { hapticSuccess, hapticError } from '../../utils/haptics';
-import { Bookmark, Plus, Trash2, UserPlus, Search, Loader2 } from 'lucide-react';
+import { Bookmark, Plus, Trash2, UserPlus, Search, Loader2, Check } from 'lucide-react';
 
 export default function ReserveNames() {
   const { address } = useWalletStore();
-  const { reservedNames, isLoadingReserved, loadReservedNames, reserveName, unreserveName, assignReservedName } = useAdminStore();
+  const { reservedNames, isLoadingReserved, assignedNames, loadReservedNames, loadAssignedStatus, reserveName, unreserveName, assignReservedName } = useAdminStore();
   
   const [singleName, setSingleName] = useState('');
   const [bulkNames, setBulkNames] = useState('');
@@ -23,7 +23,8 @@ export default function ReserveNames() {
 
   useEffect(() => {
     loadReservedNames();
-  }, [loadReservedNames]);
+    loadAssignedStatus();
+  }, [loadReservedNames, loadAssignedStatus]);
 
   const showError = (msg: string) => {
     setError(msg);
@@ -168,6 +169,7 @@ export default function ReserveNames() {
     setIsAssigning(true);
     try {
       await assignReservedName(assignName, assignAddress as `0x${string}`, address);
+      await loadAssignedStatus();
       showSuccess(`Assigned "${assignName}" to ${assignAddress.slice(0, 6)}...${assignAddress.slice(-4)}`);
       hapticSuccess();
       setAssignModalOpen(false);
@@ -320,13 +322,20 @@ export default function ReserveNames() {
                   {name}<span className="text-[#00D179]">.qf</span>
                 </span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openAssignModal(name)}
-                    className="p-2 text-[#00D179] hover:bg-[#00D179]/10 rounded-lg transition-colors"
-                    title="Assign to address"
-                  >
-                    <UserPlus size={16} />
-                  </button>
+                  {assignedNames.has(name) ? (
+                    <div className="flex items-center gap-1.5 px-2 py-1">
+                      <Check size={16} className="text-[#00D179]" />
+                      <span className="text-[#8A8A8A] text-sm">Assigned</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => openAssignModal(name)}
+                      className="p-2 text-[#00D179] hover:bg-[#00D179]/10 rounded-lg transition-colors"
+                      title="Assign to address"
+                    >
+                      <UserPlus size={16} />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleUnreserve(name)}
                     className="p-2 text-[#E5484D] hover:bg-[#E5484D]/10 rounded-lg transition-colors"

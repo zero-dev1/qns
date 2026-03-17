@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, FileCode, Globe, ArrowRightLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   QNS_REGISTRY_ADDRESS,
   QNS_REGISTRAR_ADDRESS,
@@ -235,6 +235,10 @@ function Section({
 }
 
 export default function DocsPage() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
       {/* Navbar */}

@@ -37,6 +37,43 @@ export const useWalletStore = create<WalletState>()(
             if (name) {
               set({ qnsName: name, displayName: name });
             }
+
+            // Switch to QF Network
+            const chainId = parseInt(import.meta.env.VITE_CHAIN_ID || '42');
+            const chainIdHex = '0x' + chainId.toString(16);
+
+            try {
+              await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: chainIdHex }],
+              });
+            } catch (switchError: any) {
+              // Chain not found, try to add it
+              if (switchError.code === 4902) {
+                const rpcUrl = import.meta.env.VITE_RPC_URL || 'http://localhost:8545';
+                const explorerUrl = import.meta.env.VITE_BLOCK_EXPLORER_URL;
+
+                const addChainParams: any = {
+                  chainId: chainIdHex,
+                  chainName: 'QF Network',
+                  rpcUrls: [rpcUrl],
+                  nativeCurrency: {
+                    name: 'QF',
+                    symbol: 'QF',
+                    decimals: 18,
+                  },
+                };
+
+                if (explorerUrl) {
+                  addChainParams.blockExplorerUrls = [explorerUrl];
+                }
+
+                await window.ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [addChainParams],
+                });
+              }
+            }
           }
         } catch {
           // user rejected

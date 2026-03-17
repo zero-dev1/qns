@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import HowItWorks from './components/HowItWorks';
@@ -31,6 +32,7 @@ function App() {
   return (
     <ToastProvider>
       <BrowserRouter>
+        <ScrollToTop />
         <PageTransition>
           <Routes>
             <Route path="/" element={<LandingPage />} />

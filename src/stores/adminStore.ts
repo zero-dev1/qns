@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { getPublicClient, getWalletClient, namehash, labelHash } from '../utils/qns';
 import {
+  QNS_REGISTRY_ADDRESS,
+  QNS_REGISTRY_ABI,
   QNS_REGISTRAR_ADDRESS,
   QNS_REGISTRAR_ABI,
   QNS_RESOLVER_ADDRESS,
@@ -33,6 +35,8 @@ interface AdminState {
   // Reserved names
   reservedNames: string[];
   isLoadingReserved: boolean;
+  assignedNames: Set<string>;
+  isLoadingAssigned: boolean;
   
   // Registration lookup
   lookupName: string;
@@ -56,6 +60,7 @@ interface AdminState {
   
   // Reserve names actions
   loadReservedNames: () => Promise<void>;
+  loadAssignedStatus: () => Promise<void>;
   reserveName: (name: string, account: Address) => Promise<`0x${string}`>;
   unreserveName: (name: string, account: Address) => Promise<`0x${string}`>;
   assignReservedName: (name: string, to: Address, account: Address) => Promise<`0x${string}`>;
@@ -103,6 +108,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   
   reservedNames: [],
   isLoadingReserved: false,
+  assignedNames: new Set(),
+  isLoadingAssigned: false,
   
   lookupName: '',
   lookupResult: null,
@@ -208,6 +215,42 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   loadReservedNames: async () => {
     set({ isLoadingReserved: true, reservedNames: [...new Set(RESERVED_NAMES_LIST)], reservedNamesCount: [...new Set(RESERVED_NAMES_LIST)].length });
     set({ isLoadingReserved: false });
+  },
+
+  // Load assigned status for reserved names
+  loadAssignedStatus: async () => {
+    set({ isLoadingAssigned: true });
+    try {
+      const client = getPublicClient();
+      const { reservedNames } = get();
+      const assigned = new Set<string>();
+
+      // Check ownership for each reserved name
+      await Promise.all(
+        reservedNames.map(async (name) => {
+          try {
+            const node = namehash(`${name}.qf`);
+            const owner = await client.readContract({
+              address: QNS_REGISTRY_ADDRESS,
+              abi: QNS_REGISTRY_ABI,
+              functionName: 'owner',
+              args: [node],
+            });
+            if (owner !== '0x0000000000000000000000000000000000000000') {
+              assigned.add(name);
+            }
+          } catch {
+            // Ignore errors for individual names
+          }
+        })
+      );
+
+      set({ assignedNames: assigned });
+    } catch (err) {
+      console.error('Error loading assigned status:', err);
+    } finally {
+      set({ isLoadingAssigned: false });
+    }
   },
   
   // Reserve a name
