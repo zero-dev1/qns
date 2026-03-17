@@ -86,6 +86,15 @@ contract QNSResolver {
         emit TextChanged(node, key, value);
     }
 
+    function setMultipleTexts(bytes32 node, string[] calldata keys, string[] calldata values) external {
+        require(isAuthorized(node), "QNSResolver: not authorized");
+        require(keys.length == values.length, "QNSResolver: keys and values length mismatch");
+        for (uint256 i = 0; i < keys.length; i++) {
+            texts[node][keys[i]] = values[i];
+            emit TextChanged(node, keys[i], values[i]);
+        }
+    }
+
     function text(bytes32 node, string memory key) public view returns (string memory) {
         return texts[node][key];
     }

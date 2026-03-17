@@ -123,18 +123,20 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
             input ? 'border-[#00D179]' : 'border-[#1E1E1E]'
           } focus-within:border-[#00D179]`}
         >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Search for a name"
-            className={`flex-1 bg-transparent outline-none text-white font-satoshi transition-all duration-150 ${
-              compact ? 'px-4 py-3 text-base' : 'px-5 py-4 text-lg'
-            }`}
-          />
-          <span className={`text-[#00D179] font-medium font-satoshi ${compact ? 'text-base' : 'text-lg'} pr-1`}>
-            .qf
-          </span>
+          <div className="flex items-center flex-1 min-w-0 relative">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Search for a name"
+              className={`search-input w-full min-w-0 bg-transparent outline-none text-white font-satoshi truncate transition-all duration-150 ${
+                compact ? 'px-4 py-3 pr-16 text-base' : 'px-5 py-4 pr-20 text-lg'
+              }`}
+            />
+            <span className={`qf-suffix absolute right-12 text-[#00D179] font-medium font-satoshi whitespace-nowrap pointer-events-none ${compact ? 'text-base' : 'text-lg'}`}>
+              .qf
+            </span>
+          </div>
           <button
             type="submit"
             disabled={searching}
@@ -288,6 +290,14 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
         .animate-shimmer {
           background-size: 200% 100%;
           animation: shimmer 1.5s ease-in-out infinite;
+        }
+        @media (max-width: 320px) {
+          .qf-suffix {
+            font-size: 0.875rem !important;
+          }
+          .search-input {
+            font-size: 0.875rem !important;
+          }
         }
       `}</style>
     </div>

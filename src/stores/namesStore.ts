@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getNamesOwnedByAddress } from '../utils/qns';
 
 export interface OwnedName {
   name: string;
@@ -14,13 +15,34 @@ interface NamesState {
   setOwnedNames: (names: OwnedName[]) => void;
   setSelectedName: (name: string | null) => void;
   setIsLoadingNames: (loading: boolean) => void;
+  refreshNames: (address: `0x${string}`) => Promise<void>;
+  _lastRefreshTime: number;
 }
 
-export const useNamesStore = create<NamesState>((set) => ({
+export const useNamesStore = create<NamesState>((set, get) => ({
   ownedNames: [],
   selectedName: null,
   isLoadingNames: false,
+  _lastRefreshTime: 0,
   setOwnedNames: (names) => set({ ownedNames: names }),
   setSelectedName: (name) => set({ selectedName: name }),
   setIsLoadingNames: (loading) => set({ isLoadingNames: loading }),
+  refreshNames: async (address: `0x${string}`) => {
+    if (!address) return;
+    // Prevent multiple simultaneous refreshes
+    const now = Date.now();
+    if (now - get()._lastRefreshTime < 500 && get().isLoadingNames) {
+      return;
+    }
+    set({ isLoadingNames: true, _lastRefreshTime: now });
+    try {
+      const names = await getNamesOwnedByAddress(address);
+      // Create new array to ensure React detects the change
+      set({ ownedNames: [...names] });
+    } catch {
+      set({ ownedNames: [] });
+    } finally {
+      set({ isLoadingNames: false });
+    }
+  },
 }));

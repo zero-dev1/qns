@@ -309,7 +309,16 @@ const RESERVED_NAMES = [
   "overdose", "cryptogideon", "cryptojopp", "doomly", "user", "boolean",
   "prince", "ahku", "revo", "pblius", "denis", "alisher", "krzysztof",
   "aleksandra", "lygin", "kit", "52f", "key", "diskword", "ahnu",
-  "quorum", "provd", "qns", "deployer"
+  "quorum", "provd", "qns", "deployer",
+
+  // ===== EXCHANGE & PLATFORM NAMES =====
+  "dappstore", "bybit", "okx", "kucoin", "mexc", "nils",
+
+  // ===== ADDITIONAL PROTOCOL NAMES =====
+  "dapplab", "qfnetwork", "qfvote", "qfpay", "qfswap", "manifesto",
+  "foundation", "staking", "spin", "ecosystem", "council", "grants",
+  "fund", "reserve", "core", "dev", "mail", "security", "audit",
+  "vote", "token", "coin", "claim", "rewards", "launchpad", "incubator"
 ];
 
 // Deduplicate reserved names

@@ -358,6 +358,25 @@ export async function setTextRecord(
   });
 }
 
+export async function setMultipleTextRecords(
+  name: string,
+  keys: string[],
+  values: string[],
+  account: `0x${string}`
+): Promise<`0x${string}`> {
+  const walletClient = getWalletClient();
+  if (!walletClient) throw new Error('No wallet connected');
+  const node = namehash(`${name}.qf`);
+  return walletClient.writeContract({
+    address: QNS_RESOLVER_ADDRESS,
+    abi: QNS_RESOLVER_ABI,
+    functionName: 'setMultipleTexts',
+    args: [node, keys, values],
+    account,
+    chain: localChain,
+  });
+}
+
 export async function setPrimaryName(
   name: string,
   account: `0x${string}`

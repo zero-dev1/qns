@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
+import { useNamesStore } from '../stores/namesStore';
 import { getPrice, formatQF, registerName } from '../utils/qns';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { Twitter } from 'lucide-react';
@@ -17,6 +18,7 @@ const durations = [
 
 export default function RegistrationFlow() {
   const { address, connect, refreshName } = useWalletStore();
+  const { refreshNames } = useNamesStore();
   const navigate = useNavigate();
   const [name, setName] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(0);
@@ -55,6 +57,10 @@ export default function RegistrationFlow() {
       setTxState('success');
       hapticSuccess();
       await refreshName();
+      // Refresh owned names in store so wallet dropdown shows the new name
+      if (address) {
+        await refreshNames(address);
+      }
     } catch (err: any) {
       console.error('Registration failed:', err);
       setTxState('failed');
@@ -145,13 +151,13 @@ export default function RegistrationFlow() {
                 <button
                   key={d.label}
                   onClick={() => setSelectedDuration(i)}
-                  className={`py-2.5 text-sm font-medium rounded-lg transition-all duration-150 ease-in-out cursor-pointer ${
+                  className={`py-2.5 font-medium rounded-lg transition-all duration-150 ease-in-out cursor-pointer whitespace-nowrap ${
                     selectedDuration === i
                       ? 'bg-[#00D179] text-black'
                       : 'text-[#8A8A8A] hover:text-white'
-                  }`}
+                  } ${d.permanent ? 'text-[13px]' : 'text-sm'}`}
                 >
-                  {d.label}
+                  {d.permanent ? 'Forever' : d.label}
                 </button>
               ))}
             </div>

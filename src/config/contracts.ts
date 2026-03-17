@@ -381,6 +381,17 @@ export const QNS_RESOLVER_ABI = [
   },
   {
     type: 'function',
+    name: 'setMultipleTexts',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: 'keys', type: 'string[]' },
+      { name: 'values', type: 'string[]' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     name: 'setAddr',
     inputs: [
       { name: 'node', type: 'bytes32' },

@@ -1,28 +1,33 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
+import { useNamesStore } from '../stores/namesStore';
 import { Copy, LogOut, Wallet } from 'lucide-react';
-import { getQFBalance, formatQF, getNamesOwnedByAddress } from '../utils/qns';
+import { getQFBalance, formatQF } from '../utils/qns';
 import { useCopy } from '../hooks/useCopy';
 
 export default function Navbar() {
   const { address, displayName, qnsName, connecting, connect, disconnect } = useWalletStore();
+  const ownedNames = useNamesStore((state) => state.ownedNames);
+  const refreshNames = useNamesStore((state) => state.refreshNames);
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
-  const [ownedNames, setOwnedNames] = useState<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { copy } = useCopy();
 
-  // Fetch balance and names when dropdown opens
+  // Stable callback for refreshNames to avoid useEffect re-runs
+  const doRefreshNames = useCallback((addr: `0x${string}`) => {
+    refreshNames(addr);
+  }, [refreshNames]);
+
+  // Fetch balance and names when dropdown opens or address changes
   useEffect(() => {
     if (dropdownOpen && address) {
       getQFBalance(address).then(setBalance);
-      getNamesOwnedByAddress(address).then((names) => {
-        setOwnedNames(names.map((n) => n.name));
-      });
+      doRefreshNames(address);
     }
-  }, [dropdownOpen, address]);
+  }, [dropdownOpen, address, doRefreshNames]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -51,8 +56,10 @@ export default function Navbar() {
     setDropdownOpen(false);
   };
 
-  const displayedNames = ownedNames.slice(0, 3);
-  const hasMoreNames = ownedNames.length > 3;
+  // Memoize name list derivation to prevent unnecessary re-renders
+  const ownedNameStrings = ownedNames.map((n) => n.name);
+  const displayedNames = ownedNameStrings.slice(0, 3);
+  const hasMoreNames = ownedNameStrings.length > 3;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-md border-b border-[#1E1E1E]">
@@ -88,7 +95,7 @@ export default function Navbar() {
               </button>
 
               {dropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-[#141414] border border-[#1E1E1E] rounded-[12px] shadow-2xl transition-all duration-150 ease-in-out overflow-hidden origin-top animate-dropdown-in">
+                <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-32px)] bg-[#141414] border border-[#1E1E1E] rounded-[12px] shadow-2xl transition-all duration-150 ease-in-out overflow-hidden origin-top animate-dropdown-in">
                   {/* Header - Display Name with Clash Display */}
                   <div className="px-4 py-4 border-b border-[#1E1E1E]">
                     <p className="text-[#8A8A8A] text-xs mb-1">Your Name</p>
@@ -106,13 +113,13 @@ export default function Navbar() {
                   {/* Wallet Address with Copy */}
                   <div className="px-4 py-3 border-b border-[#1E1E1E]">
                     <p className="text-[#8A8A8A] text-xs mb-1">Wallet Address</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-white text-sm font-mono bg-[#0A0A0A] px-2 py-1.5 rounded-lg flex-1 truncate">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <code className="text-white text-sm font-mono bg-[#0A0A0A] px-2 py-1.5 rounded-lg flex-1 break-all">
                         {address}
                       </code>
                       <button
                         onClick={copyAddress}
-                        className="p-1.5 text-[#8A8A8A] hover:text-[#00D179] transition-colors cursor-pointer"
+                        className="p-1.5 text-[#8A8A8A] hover:text-[#00D179] transition-colors cursor-pointer shrink-0"
                         title="Copy address"
                       >
                         <Copy size={16} />

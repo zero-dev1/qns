@@ -21,7 +21,7 @@ import { useWalletStore } from '../stores/walletStore';
 import { parseEther } from 'viem';
 import { useCopy } from '../hooks/useCopy';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
-import { TEAM_NAMES } from '../utils/badges';
+import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 
 // Static reserved names list from adminStore
 const RESERVED_NAMES_LIST = [
@@ -560,8 +560,8 @@ export default function ProfilePage() {
             className="rounded-[16px] p-8 relative overflow-hidden border border-[#00D179] bg-[#0A0A0A]"
             style={{ width: '600px', maxWidth: '100%' }}
           >
-            {/* Share and Gift icon buttons - top right */}
-            <div className="card-buttons absolute top-4 right-4 flex items-center gap-2 z-20">
+            {/* Share and Gift icon buttons - top right (desktop only) */}
+            <div className="card-buttons absolute top-4 right-4 hidden min-[480px]:flex items-center gap-2 z-20">
               <button
                 onClick={openGiftModal}
                 className="p-3 rounded-lg text-[#8A8A8A] hover:text-[#00D179] hover:bg-[#1E1E1E] transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -579,6 +579,24 @@ export default function ProfilePage() {
             </div>
 
             <div className="relative z-10">
+              {/* Mobile: Icons row above name, right-aligned */}
+              <div className="flex min-[480px]:hidden justify-end gap-2 mb-4">
+                <button
+                  onClick={openGiftModal}
+                  className="p-3 rounded-lg text-[#8A8A8A] hover:text-[#00D179] hover:bg-[#1E1E1E] transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  title="Gift QF"
+                >
+                  <Gift size={18} />
+                </button>
+                <button
+                  onClick={handleShareCard}
+                  className="p-3 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  title="Share Card"
+                >
+                  <Share2 size={18} />
+                </button>
+              </div>
+
               {/* Name Header */}
               <div className="text-center mb-6">
                 <h1 className="font-clash font-bold text-4xl text-white flex items-center justify-center gap-3">
@@ -679,6 +697,14 @@ export default function ProfilePage() {
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
                       Team
+                    </span>
+                  )}
+                  {DAPP_LAB_NAMES.includes(profile.name.toLowerCase()) && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#00EFE7] bg-[#00EFE7]/15 px-3 py-1.5 rounded-full">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      dApp Lab
                     </span>
                   )}
                 </div>

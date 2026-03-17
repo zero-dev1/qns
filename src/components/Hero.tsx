@@ -517,13 +517,13 @@ export default function Hero() {
                       <button
                         key={d.label}
                         onClick={() => setSelectedDuration(i)}
-                        className={`py-2.5 text-sm font-medium rounded-lg transition-all duration-150 ease-in-out cursor-pointer ${
+                        className={`py-2.5 font-medium rounded-lg transition-all duration-150 ease-in-out cursor-pointer whitespace-nowrap ${
                           selectedDuration === i
                             ? 'bg-[#00D179] text-black'
                             : 'text-[#8A8A8A] hover:text-white'
-                        }`}
+                        } ${d.permanent ? 'text-[13px]' : 'text-sm'}`}
                       >
-                        {d.label}
+                        {d.permanent ? 'Forever' : d.label}
                       </button>
                     ))}
                   </div>
