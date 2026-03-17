@@ -6,8 +6,6 @@ import {
   ArrowLeft,
   Twitter,
   Loader2,
-  Check,
-  Copy,
   Star,
   X,
   Github,
@@ -28,7 +26,6 @@ import {
 } from '../utils/qns';
 import { TEAM_NAMES } from '../utils/badges';
 import { useToast } from '../contexts/ToastContext';
-import { useCopy } from '../hooks/useCopy';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 
 interface OwnedName {
@@ -79,14 +76,6 @@ const RefreshIcon = () => (
     <path d="M23 4v6h-6" />
     <path d="M1 20v-6h6" />
     <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-  </svg>
-);
-
-const ShareIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-    <path d="M15 3h6v6" />
-    <path d="M10 14L21 3" />
   </svg>
 );
 
@@ -157,7 +146,7 @@ export default function MyNamesPage() {
   const { address, connect, refreshName } = useWalletStore();
   const { refreshNames } = useNamesStore();
   const { showToast } = useToast();
-  const { copy } = useCopy();
+
   const [searchParams] = useSearchParams();
   const expandName = searchParams.get('expand');
 
@@ -179,9 +168,7 @@ export default function MyNamesPage() {
   const [editModalName, setEditModalName] = useState<string | null>(null);
   const [isEditModalClosing, setIsEditModalClosing] = useState(false);
 
-  // Share modal state
-  const [shareModalName, setShareModalName] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+
 
   const loadNames = useCallback(async () => {
     if (!address) return;
@@ -367,13 +354,7 @@ export default function MyNamesPage() {
     }
   };
 
-  const handleShare = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const url = `https://dotqf.xyz/name/${name}`;
-    copy(url, false);
-    hapticTap();
-    showToast('Link copied to clipboard', 'success');
-  };
+
 
   const handleTransferClick = (name: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -434,22 +415,7 @@ export default function MyNamesPage() {
     }
   };
 
-  const handleCopyLink = async () => {
-    if (!shareModalName) return;
-    const url = `https://dotqf.xyz/name/${shareModalName}`;
-    copy(url, false);
-    hapticTap();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
-  const handleShareX = () => {
-    if (!shareModalName) return;
-    const profileUrl = `https://dotqf.xyz/name/${shareModalName}`;
-    const text = `Check out my .qf identity on @dotqfns`;
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
-    window.open(url, '_blank');
-  };
 
   const isTeamMember = (name: string) => TEAM_NAMES.includes(name.toLowerCase());
 
@@ -667,17 +633,6 @@ export default function MyNamesPage() {
                             </button>
                           )}
 
-                          {/* Share - default style */}
-                          <button
-                            onClick={(e) => handleShare(item.name, e)}
-                            className="flex flex-col items-center gap-1 group cursor-pointer"
-                          >
-                            <div className="w-9 h-9 rounded-full border border-[#2A2A2A] text-[#8A8A8A] flex items-center justify-center transition-all duration-200 group-hover:border-[#00D179] group-hover:text-white">
-                              <ShareIcon />
-                            </div>
-                            <span className="text-[10px] text-[#8A8A8A]">Share</span>
-                          </button>
-
                           {/* Edit - emerald style, opens modal */}
                           <button
                             onClick={(e) => handleEditClick(item.name, e)}
@@ -791,17 +746,6 @@ export default function MyNamesPage() {
                   <span className="text-[10px] text-[#8A8A8A]">Renew</span>
                 </button>
               )}
-
-              {/* Share - default style */}
-              <button
-                onClick={(e) => handleShare(editModalName, e)}
-                className="flex flex-col items-center gap-1 group cursor-pointer"
-              >
-                <div className="w-9 h-9 rounded-full border border-[#2A2A2A] text-[#8A8A8A] flex items-center justify-center transition-all duration-200 group-hover:border-[#00D179] group-hover:text-white">
-                  <ShareIcon />
-                </div>
-                <span className="text-[10px] text-[#8A8A8A]">Share</span>
-              </button>
 
               {/* Edit - emerald active style */}
               <button
@@ -918,42 +862,6 @@ export default function MyNamesPage() {
                 className="text-sm text-[#8A8A8A] hover:text-white transition-colors cursor-pointer"
               >
                 Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share Modal */}
-      {shareModalName && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-sm w-full animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-clash font-medium text-xl text-white">
-                {shareModalName}<span className="text-[#00D179]">.qf</span>
-              </h3>
-              <button
-                onClick={() => setShareModalName(null)}
-                className="p-2 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-[#1E1E1E] transition-all duration-200"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium transition-colors duration-200 cursor-pointer"
-              >
-                {copied ? <Check size={18} /> : <Copy size={18} />}
-                {copied ? 'Copied!' : 'Copy Link'}
-              </button>
-              <button
-                onClick={handleShareX}
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200 cursor-pointer"
-              >
-                <Twitter size={18} />
-                Share on X
               </button>
             </div>
           </div>

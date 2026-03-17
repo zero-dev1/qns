@@ -37,8 +37,15 @@ export const useNamesStore = create<NamesState>((set, get) => ({
     set({ isLoadingNames: true, _lastRefreshTime: now });
     try {
       const names = await getNamesOwnedByAddress(address);
+      // Add isPermanent property based on expiry value
+      // Permanent names have expires = 0 or max uint256 (2^256 - 1)
+      const maxUint256 = 2n ** 256n - 1n;
+      const namesWithPermanent = names.map(name => ({
+        ...name,
+        isPermanent: name.expires === 0n || name.expires === maxUint256,
+      }));
       // Create new array to ensure React detects the change
-      set({ ownedNames: [...names] });
+      set({ ownedNames: namesWithPermanent });
     } catch {
       set({ ownedNames: [] });
     } finally {
