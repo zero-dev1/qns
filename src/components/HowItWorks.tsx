@@ -11,7 +11,7 @@ const steps = [
     num: '02',
     heading: 'Use it everywhere',
     description:
-      'Send messages on QFLink, trade on NucleusX, compete on QFClash — all with yourname.qf instead of a hex address.',
+      'Your .qf name works across every dApp built on QF Network. One name, one identity, no more hex addresses.',
   },
   {
     num: '03',
