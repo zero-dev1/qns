@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Analytics } from '@vercel/analytics/react';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -43,7 +42,6 @@ function App() {
             <Route path="/docs" element={<DocsPage />} />
           </Routes>
         </PageTransition>
-        <Analytics />
       </BrowserRouter>
     </ToastProvider>
   );
