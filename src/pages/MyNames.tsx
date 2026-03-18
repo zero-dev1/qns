@@ -371,10 +371,8 @@ export default function MyNamesPage() {
 
   const handleShare = (name: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `https://dotqf.xyz/name/${name}`;
-    copy(url, false);
+    setShareModalName(name);
     hapticTap();
-    showToast('Link copied to clipboard', 'success');
   };
 
   const handleTransferClick = (name: string, e: React.MouseEvent) => {
@@ -416,6 +414,9 @@ export default function MyNamesPage() {
       await loadNames();
       // Refresh names in store so wallet dropdown reflects the transfer
       await refreshNames(address);
+      await refreshName();
+      const currentPrimary = await resolveReverse(address);
+      setPrimaryNameState(currentPrimary);
     } catch (err: any) {
       console.error('Transfer failed:', err);
       

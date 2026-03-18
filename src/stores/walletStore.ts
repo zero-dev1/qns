@@ -112,6 +112,13 @@ export const useWalletStore = create<WalletState>()(
         qnsName: state.qnsName,
         displayName: state.displayName,
       }),
+      onRehydrateStorage: () => {
+        return (state) => {
+          if (state?.address) {
+            state.refreshName();
+          }
+        };
+      },
     }
   )
 );

@@ -384,24 +384,22 @@ export async function setPrimaryName(
   const walletClient = getWalletClient();
   if (!walletClient) throw new Error('No wallet connected');
 
-  // Compute reverse node: namehash of "{address lowercase without 0x}.reverse"
-  const cleanAddress = account.toLowerCase().slice(2);
-  const reverseName = `${cleanAddress}.reverse`;
-  const reverseNode = namehash(reverseName);
+  // Compute the forward node for this name: namehash("name.qf")
+  const nameNode = namehash(`${name}.qf`);
 
-  console.log('[QNS] setPrimaryName() calling setName with:');
+  console.log('[QNS] setPrimaryName() calling setReverse with:');
   console.log('  account:', account);
-  console.log('  reverseName:', reverseName);
-  console.log('  reverseNode:', reverseNode);
-  console.log('  name (to set):', name);
+  console.log('  name:', name);
+  console.log('  nameNode:', nameNode);
 
-  // The reverse node should already exist (created during first registration)
-  // Just update the name on the reverse node
+  // setReverse(addr, node) updates reverseNodes[addr] = node
+  // reverseResolve then reads names[node] which was set during registration
+  // Access: msg.sender == addr (the user calling for themselves) — authorized
   const hash = await walletClient.writeContract({
     address: QNS_RESOLVER_ADDRESS,
     abi: QNS_RESOLVER_ABI,
-    functionName: 'setName',
-    args: [reverseNode, name],
+    functionName: 'setReverse',
+    args: [account, nameNode],
     account,
     chain: localChain,
   });

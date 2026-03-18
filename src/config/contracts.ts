@@ -410,4 +410,14 @@ export const QNS_RESOLVER_ABI = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
+  {
+    type: 'function',
+    name: 'setReverse',
+    inputs: [
+      { name: '_addr', type: 'address' },
+      { name: 'node', type: 'bytes32' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
 ] as const;
