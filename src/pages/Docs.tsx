@@ -10,8 +10,8 @@ import {
 const RESOLVER_ABI = [
   {
     type: 'function',
-    name: 'resolve',
-    inputs: [{ name: 'name', type: 'string' }],
+    name: 'addr',
+    inputs: [{ name: 'node', type: 'bytes32' }],
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
   },
@@ -24,14 +24,14 @@ const RESOLVER_ABI = [
   },
 ];
 
-const VIEM_EXAMPLE = `import { createPublicClient, http } from 'viem';
+const VIEM_EXAMPLE = `import { createPublicClient, http, keccak256, encodePacked, toHex } from 'viem';
 import { quantumFusion } from './config';
 
 const RESOLVER_ABI = [
   {
-    name: 'resolve',
+    name: 'addr',
     type: 'function',
-    inputs: [{ name: 'name', type: 'string' }],
+    inputs: [{ name: 'node', type: 'bytes32' }],
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
   },
@@ -51,13 +51,26 @@ const client = createPublicClient({
   transport: http(),
 });
 
+// Namehash: converts "alice.qf" to a bytes32 node
+function namehash(name: string): \`0x\${string}\` {
+  if (!name) return '0x' + '00'.repeat(32) as \`0x\${string}\`;
+  const labels = name.split('.').reverse();
+  let node: \`0x\${string}\` = '0x' + '00'.repeat(32) as \`0x\${string}\`;
+  for (const label of labels) {
+    const labelHash = keccak256(toHex(label));
+    node = keccak256(encodePacked(['bytes32', 'bytes32'], [node, labelHash]));
+  }
+  return node;
+}
+
 // Forward resolution: name → address
 async function resolveName(name: string) {
+  const node = namehash(name);
   const address = await client.readContract({
     address: RESOLVER_ADDRESS,
     abi: RESOLVER_ABI,
-    functionName: 'resolve',
-    args: [name],
+    functionName: 'addr',
+    args: [node],
   });
   return address;
 }
@@ -70,7 +83,7 @@ async function reverseResolve(address: \`0x\${string}\`) {
     functionName: 'reverseResolve',
     args: [address],
   });
-  return name;
+  return name; // Returns "alice.qf" or ""
 }
 
 // Usage
@@ -80,7 +93,7 @@ const name = await reverseResolve('0x1234...');`;
 const ETHERS_EXAMPLE = `import { ethers } from 'ethers';
 
 const RESOLVER_ABI = [
-  'function resolve(string name) view returns (address)',
+  'function addr(bytes32 node) view returns (address)',
   'function reverseResolve(address _addr) view returns (string)',
 ];
 
@@ -96,16 +109,29 @@ const resolver = new ethers.Contract(
   provider
 );
 
+// Namehash: converts "alice.qf" to a bytes32 node
+function namehash(name) {
+  if (!name) return ethers.ZeroHash;
+  const labels = name.split('.').reverse();
+  let node = ethers.ZeroHash;
+  for (const label of labels) {
+    const labelHash = ethers.keccak256(ethers.toUtf8Bytes(label));
+    node = ethers.keccak256(
+      ethers.solidityPacked(['bytes32', 'bytes32'], [node, labelHash])
+    );
+  }
+  return node;
+}
+
 // Forward resolution: name → address
 async function resolveName(name) {
-  const address = await resolver.resolve(name);
-  return address;
+  const node = namehash(name);
+  return await resolver.addr(node);
 }
 
 // Reverse resolution: address → name
 async function reverseResolve(address) {
-  const name = await resolver.reverseResolve(address);
-  return name;
+  return await resolver.reverseResolve(address);
 }
 
 // Usage
@@ -116,7 +142,7 @@ const SOLIDITY_EXAMPLE = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 interface IQNSResolver {
-    function resolve(string calldata name) 
+    function addr(bytes32 node) 
         external view returns (address);
     function reverseResolve(address _addr) 
         external view returns (string memory);
@@ -129,9 +155,18 @@ contract MyContract {
         qnsResolver = IQNSResolver(_resolver);
     }
     
-    function getAddress(string calldata qfName) 
+    // Compute namehash for a .qf name
+    function _namehash(string calldata label) 
+        internal pure returns (bytes32) {
+        // qfNode = keccak256(abi.encodePacked(bytes32(0), keccak256("qf")))
+        bytes32 qfNode = 0x[COMPUTED_AT_DEPLOY];
+        bytes32 labelHash = keccak256(bytes(label));
+        return keccak256(abi.encodePacked(qfNode, labelHash));
+    }
+    
+    function getAddress(bytes32 node) 
         external view returns (address) {
-        return qnsResolver.resolve(qfName);
+        return qnsResolver.addr(node);
     }
     
     function getName(address wallet) 
@@ -139,10 +174,10 @@ contract MyContract {
         return qnsResolver.reverseResolve(wallet);
     }
     
-    // Example: Send payment to a QNS name
-    function sendToName(string calldata name) 
+    // Example: Send payment to a QNS name node
+    function sendToNode(bytes32 node) 
         external payable {
-        address recipient = qnsResolver.resolve(name);
+        address recipient = qnsResolver.addr(node);
         require(recipient != address(0), "Name not found");
         (bool success, ) = recipient.call{value: msg.value}("");
         require(success, "Transfer failed");
@@ -346,7 +381,7 @@ export default function DocsPage() {
               <Section id="abi" title="Resolver ABI" icon={FileCode}>
                 <p className="text-[#8A8A8A] mb-4">
                   The QNS Resolver provides two core functions for name resolution. 
-                  Use <code className="text-[#00D179]">resolve()</code> for forward lookups 
+                  Use <code className="text-[#00D179]">addr()</code> for forward lookups 
                   and <code className="text-[#00D179]">reverseResolve()</code> for reverse lookups.
                 </p>
                 <div className="relative group bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-5">
@@ -371,7 +406,7 @@ export default function DocsPage() {
                     <li>
                       <strong className="text-white">Forward Resolution:</strong> Call{' '}
                       <code className="text-[#00D179] bg-[#141414] px-1.5 py-0.5 rounded text-sm">
-                        resolve(&quot;alice.qf&quot;)
+                        addr(namehash(&quot;alice.qf&quot;))
                       </code>{' '}
                       to get the associated address. Returns{' '}
                       <code className="text-[#E5484D]">0x0000...</code> if not found.

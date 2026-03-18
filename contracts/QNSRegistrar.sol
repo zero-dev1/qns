@@ -270,7 +270,6 @@ contract QNSRegistrar {
 
         registrations[labelHash].owner = newOwner;
         
-        // Move name from old owner to new owner
         _removeNameFromOwner(msg.sender, lowered);
         _addNameToOwner(newOwner, lowered);
 
@@ -278,8 +277,15 @@ contract QNSRegistrar {
 
         registry.setSubnodeOwner(qfNode, labelHash, address(this));
         resolver.setAddr(nameNode, newOwner);
-        resolver.clearReverse(msg.sender);
-        resolver.setReverse(newOwner, nameNode);
+        
+        // Only clear sender's reverse if this name was their primary
+        bytes32 senderCurrentNode = resolver.nameHash(msg.sender);
+        if (senderCurrentNode == nameNode) {
+            resolver.clearReverse(msg.sender);
+        }
+        
+        // Do NOT auto-set reverse for receiver — they choose their own primary
+        
         registry.setOwner(nameNode, newOwner);
 
         emit NameTransferred(lowered, msg.sender, newOwner);

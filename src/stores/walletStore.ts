@@ -74,6 +74,25 @@ export const useWalletStore = create<WalletState>()(
                 });
               }
             }
+
+            // Listen for account changes
+            window.ethereum!.on('accountsChanged', (accounts: unknown) => {
+              const accts = accounts as string[];
+              if (accts.length === 0) {
+                set({ address: null, qnsName: null, displayName: null });
+              } else {
+                const newAddr = accts[0] as `0x${string}`;
+                set({ address: newAddr, displayName: truncateAddress(newAddr), qnsName: null });
+                resolveReverse(newAddr).then((name) => {
+                  if (name) set({ qnsName: name, displayName: name });
+                });
+              }
+            });
+
+            // Reload on chain change to reset all state
+            window.ethereum!.on('chainChanged', () => {
+              window.location.reload();
+            });
           }
         } catch {
           // user rejected
