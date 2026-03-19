@@ -1,5 +1,5 @@
 import { keccak256, encodePacked, type Hex } from 'viem';
-import { getApi } from './wallet';
+import { getTypedApi } from './papiClient';
 import { callContract, writeContract, sendTransfer } from './contractCall';
 import {
   QNS_REGISTRAR_ADDRESS,
@@ -550,8 +550,8 @@ export async function getNamesOwnedByAddress(address: string): Promise<{
 
 export async function getQFBalance(address: string): Promise<bigint> {
   try {
-    const api = await getApi();
-    const accountInfo = await api.query.system.account(address) as any;
+    const api = getTypedApi();
+    const accountInfo = await api.query.System.Account.getValue(address);
     return accountInfo?.data?.free ? BigInt(accountInfo.data.free.toString()) : 0n;
   } catch (error: any) {
     console.warn('[QNS] Failed to get balance:', error.message || error);

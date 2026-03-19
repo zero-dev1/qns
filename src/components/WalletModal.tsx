@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useWalletStore } from '../stores/walletStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { WALLET_MODE } from '../utils/wallet';
+
 
 // Simple icon components for wallet logos
 const TalismanIcon = () => (
@@ -18,15 +18,10 @@ const SubWalletIcon = () => (
   </svg>
 );
 
-const MetaMaskIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22 12L18 8L12 4L6 8L2 12L6 16L12 20L18 16L22 12Z" stroke="currentColor" strokeWidth="2" fill="none"/>
-    <circle cx="12" cy="12" r="3" fill="currentColor"/>
-  </svg>
-);
+
 
 interface WalletOption {
-  id: 'talisman' | 'subwallet' | 'metamask';
+  id: 'talisman' | 'subwallet';
   name: string;
   icon: React.ReactNode;
 }
@@ -45,22 +40,10 @@ export default function WalletModal() {
 
   // Get wallet options based on WALLET_MODE
   const getWalletOptions = (): WalletOption[] => {
-    const options: WalletOption[] = [];
-    
-    if (WALLET_MODE === 'substrate' || WALLET_MODE === 'both') {
-      options.push(
-        { id: 'talisman', name: 'Talisman', icon: <TalismanIcon /> },
-        { id: 'subwallet', name: 'SubWallet', icon: <SubWalletIcon /> }
-      );
-    }
-    
-    if (WALLET_MODE === 'evm' || WALLET_MODE === 'both') {
-      options.push(
-        { id: 'metamask', name: 'MetaMask', icon: <MetaMaskIcon /> }
-      );
-    }
-    
-    return options;
+    return [
+      { id: 'talisman', name: 'Talisman', icon: <TalismanIcon /> },
+      { id: 'subwallet', name: 'SubWallet', icon: <SubWalletIcon /> }
+    ];
   };
 
   // Close modal when clicking outside
@@ -78,7 +61,7 @@ export default function WalletModal() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showWalletModal, setShowWalletModal]);
 
-  const handleWalletSelect = async (walletType: 'talisman' | 'subwallet' | 'metamask') => {
+  const handleWalletSelect = async (walletType: 'talisman' | 'subwallet') => {
     try {
       // Clear any previous errors
       clearWalletError();
