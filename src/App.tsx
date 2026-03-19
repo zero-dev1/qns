@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -13,18 +13,66 @@ import DocsPage from './pages/Docs';
 import AdminLayout from './components/admin/AdminLayout';
 import { ToastProvider } from './contexts/ToastContext';
 import PageTransition from './components/PageTransition';
+import WalletModal from './components/WalletModal';
 
 function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
+    <>
       <Navbar />
-      <Hero />
-      <HowItWorks />
-      <Ecosystem />
-      <Pricing />
-      <CTA />
-      <Footer />
-    </div>
+      <main>
+        <Hero />
+        <HowItWorks />
+        <Ecosystem />
+        <Pricing />
+        <CTA />
+        <Footer />
+      </main>
+    </>
+  );
+}
+
+function AnimatedRoutes() {
+  const location = useLocation();
+
+  return (
+    <Routes location={location}>
+      <Route
+        path="/"
+        element={<LandingPage />}
+      />
+      <Route
+        path="/my-names"
+        element={
+          <PageTransition pathKey={location.pathname}>
+            <MyNamesPage />
+          </PageTransition>
+        }
+      />
+      <Route
+        path="/name/:name"
+        element={
+          <PageTransition pathKey={location.pathname}>
+            <ProfilePage />
+          </PageTransition>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <PageTransition pathKey={location.pathname}>
+            <AdminLayout />
+          </PageTransition>
+        }
+      />
+      <Route
+        path="/docs"
+        element={
+          <PageTransition pathKey={location.pathname}>
+            <DocsPage />
+          </PageTransition>
+        }
+      />
+    </Routes>
   );
 }
 
@@ -33,15 +81,8 @@ function App() {
     <ToastProvider>
       <BrowserRouter>
         <ScrollToTop />
-        <PageTransition>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/my-names" element={<MyNamesPage />} />
-            <Route path="/name/:name" element={<ProfilePage />} />
-            <Route path="/admin" element={<AdminLayout />} />
-            <Route path="/docs" element={<DocsPage />} />
-          </Routes>
-        </PageTransition>
+        <AnimatedRoutes />
+        <WalletModal />
       </BrowserRouter>
     </ToastProvider>
   );

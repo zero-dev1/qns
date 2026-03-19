@@ -1,49 +1,137 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { resolveReverse, truncateAddress } from '../utils/qns';
+import { ensureAccountMapped } from '../utils/accountMapping';
+import { 
+  WALLET_MODE, 
+  connectSubstrateWallet, 
+  connectEVMWallet, 
+  type WalletConnection 
+} from '../utils/wallet';
 
 interface WalletState {
-  address: `0x${string}` | null;
+  // Common fields
+  address: `0x${string}` | null;      // EVM address (derived for substrate, native for evm)
+  ss58Address: string | null;          // Substrate SS58 address (null for evm)
   qnsName: string | null;
   displayName: string | null;
   connecting: boolean;
+  walletConnection: WalletConnection | null;
+  
+  // Wallet selection modal
+  showWalletModal: boolean;
+  
+  // Error handling
+  walletError: string | null;
+  
+  // Getters
+  getBalanceAddress: () => string | null;  // Returns SS58 for substrate, null for EVM (uses address)
+  
+  // Actions
   connect: () => Promise<void>;
+  connectWallet: (walletType: 'talisman' | 'subwallet' | 'metamask') => Promise<void>;
   disconnect: () => void;
   refreshName: () => Promise<void>;
+  setShowWalletModal: (show: boolean) => void;
+  clearWalletError: () => void;
 }
 
 export const useWalletStore = create<WalletState>()(
   persist(
     (set, get) => ({
       address: null,
+      ss58Address: null,
       qnsName: null,
       displayName: null,
       connecting: false,
+      walletConnection: null,
+      showWalletModal: false,
+      walletError: null,
+
+      // Returns the address to use for balance queries
+      // For substrate wallets: returns SS58 address (for api.query.system.account)
+      // For EVM wallets: returns null (balance fetched via eth-rpc)
+      getBalanceAddress: () => {
+        const state = get();
+        return state.ss58Address; // null for EVM wallets, SS58 for substrate
+      },
 
       connect: async () => {
-        if (!window.ethereum) {
-          alert('Please install a Web3 wallet');
-          return;
+        // Show the wallet selection modal based on WALLET_MODE
+        if (WALLET_MODE === 'substrate') {
+          set({ showWalletModal: true });
+        } else if (WALLET_MODE === 'evm') {
+          // Direct MetaMask connection for EVM mode
+          await get().connectWallet('metamask');
+        } else {
+          // 'both' mode - show modal with all options
+          set({ showWalletModal: true });
         }
-        set({ connecting: true });
+      },
+
+      connectWallet: async (walletType: 'talisman' | 'subwallet' | 'metamask') => {
+        set({ connecting: true, walletError: null });
+        
         try {
-          const accounts = (await window.ethereum.request({
-            method: 'eth_requestAccounts',
-          })) as string[];
-          if (accounts.length > 0) {
-            const addr = accounts[0] as `0x${string}`;
-            set({ address: addr, displayName: truncateAddress(addr) });
-            const name = await resolveReverse(addr);
+          let connection: WalletConnection;
+          
+          if (walletType === 'talisman') {
+            connection = await connectSubstrateWallet('talisman');
+          } else if (walletType === 'subwallet') {
+            connection = await connectSubstrateWallet('subwallet-js');
+          } else {
+            // MetaMask / EVM
+            connection = await connectEVMWallet();
+          }
+          
+          // Store the connection
+          set({ walletConnection: connection });
+          
+          if (connection.type === 'substrate') {
+            // For substrate wallets, we have both addresses
+            const evmAddr = connection.evmAddress as `0x${string}`;
+            const ss58Addr = connection.address;
+            
+            set({ 
+              address: evmAddr, 
+              ss58Address: ss58Addr,
+              displayName: truncateAddress(ss58Addr) // Show truncated SS58 in navbar
+            });
+            
+            // Try to resolve QNS name for the EVM address
+            // This is now awaited - the modal will stay open until name resolution completes
+            const name = await resolveReverse(evmAddr);
             if (name) {
               set({ qnsName: name, displayName: name });
             }
-
+            
+            // Fire and forget — don't block connection on this
+            // If it fails, writeContract will retry before the first transaction
+            ensureAccountMapped(ss58Addr).catch(err => {
+              console.warn('[QF] Background account mapping failed, will retry before first tx:', err.message);
+            });
+          } else {
+            // For EVM wallets
+            const evmAddr = connection.address as `0x${string}`;
+            set({ 
+              address: evmAddr, 
+              ss58Address: null,
+              displayName: truncateAddress(evmAddr) 
+            });
+            
+            // Try to resolve QNS name for the EVM address
+            // This is now awaited - the modal will stay open until name resolution completes
+            const name = await resolveReverse(evmAddr);
+            if (name) {
+              set({ qnsName: name, displayName: name });
+            }
+            
             // Switch to QF Network
             const chainId = parseInt(import.meta.env.VITE_CHAIN_ID || '42');
             const chainIdHex = '0x' + chainId.toString(16);
 
             try {
-              await window.ethereum.request({
+              await window.ethereum!.request({
                 method: 'wallet_switchEthereumChain',
                 params: [{ chainId: chainIdHex }],
               });
@@ -68,21 +156,21 @@ export const useWalletStore = create<WalletState>()(
                   addChainParams.blockExplorerUrls = [explorerUrl];
                 }
 
-                await window.ethereum.request({
+                await window.ethereum!.request({
                   method: 'wallet_addEthereumChain',
                   params: [addChainParams],
                 });
               }
             }
 
-            // Listen for account changes
+            // Listen for account changes (only for EVM wallets)
             window.ethereum!.on('accountsChanged', (accounts: unknown) => {
               const accts = accounts as string[];
               if (accts.length === 0) {
-                set({ address: null, qnsName: null, displayName: null });
+                set({ address: null, ss58Address: null, qnsName: null, displayName: null, walletConnection: null });
               } else {
                 const newAddr = accts[0] as `0x${string}`;
-                set({ address: newAddr, displayName: truncateAddress(newAddr), qnsName: null });
+                set({ address: newAddr, ss58Address: null, displayName: truncateAddress(newAddr), qnsName: null, walletConnection: null });
                 resolveReverse(newAddr).then((name) => {
                   if (name) set({ qnsName: name, displayName: name });
                 });
@@ -94,15 +182,41 @@ export const useWalletStore = create<WalletState>()(
               window.location.reload();
             });
           }
-        } catch {
-          // user rejected
+          
+          // Only close modal on successful connection (not on error)
+          // This ensures the full flow completes before UI updates
+          set({ showWalletModal: false });
+        } catch (error: any) {
+          console.error('Wallet connection failed:', error);
+          set({ 
+            walletError: error.message || 'Failed to connect wallet',
+            // Keep modal open to show error - do NOT set showWalletModal: false here
+          });
         } finally {
           set({ connecting: false });
         }
       },
 
       disconnect: () => {
-        set({ address: null, qnsName: null, displayName: null });
+        const { walletConnection } = get();
+        
+        // Call the disconnect function on the wallet connection if it exists
+        if (walletConnection) {
+          walletConnection.disconnect();
+        }
+        
+        // Clear all state
+        set({ 
+          address: null, 
+          ss58Address: null,
+          qnsName: null, 
+          displayName: null, 
+          walletConnection: null,
+          showWalletModal: false
+        });
+        
+        // If it was a substrate connection, we may want to clean up the API
+        // But we keep it alive for potential reconnections
       },
 
       refreshName: async () => {
@@ -112,22 +226,39 @@ export const useWalletStore = create<WalletState>()(
         if (name) {
           set({ qnsName: name, displayName: name });
         } else {
-          set({ qnsName: null, displayName: truncateAddress(address) });
+          const { ss58Address } = get();
+          // Show SS58 if available, otherwise show truncated EVM address
+          set({ 
+            qnsName: null, 
+            displayName: ss58Address ? truncateAddress(ss58Address) : truncateAddress(address) 
+          });
         }
+      },
+      
+      setShowWalletModal: (show: boolean) => {
+        set({ showWalletModal: show });
+        if (!show) {
+          set({ walletError: null }); // Clear error when closing modal
+        }
+      },
+      
+      clearWalletError: () => {
+        set({ walletError: null });
       },
     }),
     {
       name: 'qns-wallet-storage',
-      version: 1, // Bump version to clear old data with .qf suffix
+      version: 2, // Bump version for substrate support
       migrate: (persistedState, version) => {
         // Clear persisted state on version change to force fresh fetch
-        if (version !== 1) {
+        if (version !== 2) {
           return undefined as unknown as WalletState;
         }
         return persistedState as WalletState;
       },
       partialize: (state) => ({
         address: state.address,
+        ss58Address: state.ss58Address,
         qnsName: state.qnsName,
         displayName: state.displayName,
       }),

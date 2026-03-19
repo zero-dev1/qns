@@ -1,30 +1,22 @@
-import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 
-export default function PageTransition({ children }: { children: React.ReactNode }) {
-  const [isVisible, setIsVisible] = useState(false);
-  const location = useLocation();
+interface PageTransitionProps {
+  children: React.ReactNode;
+  pathKey: string;
+}
 
-  useEffect(() => {
-    setIsVisible(false);
-    const timer = setTimeout(() => setIsVisible(true), 50);
-    return () => clearTimeout(timer);
-  }, [location.pathname]);
-
+export default function PageTransition({ children, pathKey }: PageTransitionProps) {
   return (
-    <>
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fade-in {
-          animation: fadeIn 200ms ease-in-out;
-        }
-      `}</style>
-      <div className={`animate-fade-in ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={pathKey}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
         {children}
-      </div>
-    </>
+      </motion.div>
+    </AnimatePresence>
   );
 }

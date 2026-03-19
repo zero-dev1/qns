@@ -2,19 +2,30 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
-import { Copy, LogOut, Wallet } from 'lucide-react';
-import { getQFBalance, formatQF } from '../utils/qns';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Copy, LogOut, Wallet, X, Info } from 'lucide-react';
+import { getSubstrateQFBalance, formatQF } from '../utils/qns';
 import { useCopy } from '../hooks/useCopy';
+import { truncateAddress } from '../utils/address';
 
 export default function Navbar() {
-  const { address, displayName, qnsName, connecting, connect, disconnect } = useWalletStore();
+  const { 
+    address, 
+    ss58Address,
+    displayName, 
+    qnsName, 
+    connecting, 
+    connect, 
+    disconnect
+  } = useWalletStore();
   const ownedNames = useNamesStore((state) => state.ownedNames);
   const refreshNames = useNamesStore((state) => state.refreshNames);
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [showAccountInfo, setShowAccountInfo] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { copy } = useCopy();
+  const { copy, copied } = useCopy();
 
   // Stable callback for refreshNames to avoid useEffect re-runs
   const doRefreshNames = useCallback((addr: `0x${string}`) => {
@@ -24,10 +35,18 @@ export default function Navbar() {
   // Fetch balance and names when dropdown opens or address changes
   useEffect(() => {
     if (dropdownOpen && address) {
-      getQFBalance(address).then(setBalance);
+      // For substrate wallets, fetch substrate balance
+      if (ss58Address) {
+        getSubstrateQFBalance(ss58Address).then(setBalance);
+      } else {
+        // For EVM wallets, fetch EVM balance
+        import('../utils/qns').then(({ getQFBalance }) => {
+          getQFBalance(address).then(setBalance);
+        });
+      }
       doRefreshNames(address);
     }
-  }, [dropdownOpen, address, doRefreshNames]);
+  }, [dropdownOpen, address, ss58Address, doRefreshNames]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -45,172 +64,298 @@ export default function Navbar() {
     setDropdownOpen(false);
   }, [location.pathname]);
 
-  const copyAddress = () => {
-    if (address) {
-      copy(address);
+  const copyAddress = (addr: string | null) => {
+    if (addr) {
+      copy(addr, false);
     }
   };
 
   const handleDisconnect = () => {
     disconnect();
     setDropdownOpen(false);
+    setShowAccountInfo(false);
   };
 
-  // Memoize name list derivation to prevent unnecessary re-renders
+  // Memoize name list derivation to prevent unnecessary re-reers
   const ownedNameStrings = ownedNames.map((n) => n.name);
   const displayedNames = ownedNameStrings.slice(0, 3);
   const hasMoreNames = ownedNameStrings.length > 3;
 
-  return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-md border-b border-[#1E1E1E]">
-      <div className="max-w-[1120px] mx-auto px-6 h-16 flex items-center justify-between">
-        <Link
-          to="/"
-          className="font-clash font-semibold text-xl text-white tracking-tight hover:opacity-80 transition-opacity"
-        >
-          QNS<span className="text-[#00D179]">.</span>
-        </Link>
+  // Close dropdown and show account info
+  const handleShowAccountInfo = () => {
+    setDropdownOpen(false);
+    setShowAccountInfo(true);
+  };
 
-        <div className="flex items-center gap-6">
+  return (
+    <>
+      <nav className="sticky top-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-md">
+        <div className="max-w-[1120px] mx-auto px-6 h-16 flex items-center justify-between">
           <Link
-            to="/my-names"
-            className="hidden sm:block text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
+            to="/"
+            className="font-clash font-semibold text-xl text-white tracking-tight hover:opacity-80 transition-opacity"
           >
-            My Names
+            QNS<span className="text-[#00D179]">.</span>
           </Link>
 
-          {address ? (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="px-4 py-2 rounded-xl border border-[#00D179] text-white text-sm font-medium hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
-              >
-                {qnsName ? (
-                  <span>
-                    {qnsName}<span className="text-[#00D179]">.qf</span>
-                  </span>
-                ) : (
-                  displayName
-                )}
-              </button>
+          <div className="flex items-center gap-6">
+            <Link
+              to="/my-names"
+              className="hidden sm:block text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
+            >
+              My Names
+            </Link>
 
-              {dropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-32px)] bg-[#141414] border border-[#1E1E1E] rounded-[12px] shadow-2xl transition-all duration-150 ease-in-out overflow-hidden origin-top animate-dropdown-in">
-                  {/* Header - Display Name with Clash Display */}
-                  <div className="px-4 py-4 border-b border-[#1E1E1E]">
-                    <p className="text-[#8A8A8A] text-xs mb-1">Your Name</p>
-                    <p className="font-clash font-semibold text-xl text-white">
-                      {qnsName ? (
-                        <span>
-                          {qnsName}<span className="text-[#00D179]">.qf</span>
-                        </span>
-                      ) : (
-                        <span className="text-[#8A8A8A] text-base font-satoshi font-normal">No primary name set</span>
-                      )}
-                    </p>
-                  </div>
+            {address ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="px-4 py-2 rounded-xl border border-[#00D179] text-white text-sm font-medium hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
+                >
+                  {qnsName ? (
+                    <span>
+                      {qnsName}<span className="text-[#00D179]">.qf</span>
+                    </span>
+                  ) : (
+                    displayName
+                  )}
+                </button>
 
-                  {/* Wallet Address with Copy */}
-                  <div className="px-4 py-3 border-b border-[#1E1E1E]">
-                    <p className="text-[#8A8A8A] text-xs mb-1">Wallet Address</p>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <code className="text-white text-sm font-mono bg-[#0A0A0A] px-2 py-1.5 rounded-lg flex-1 break-all">
-                        {address}
-                      </code>
-                      <button
-                        onClick={copyAddress}
-                        className="p-1.5 text-[#8A8A8A] hover:text-[#00D179] transition-colors cursor-pointer shrink-0"
-                        title="Copy address"
-                      >
-                        <Copy size={16} />
-                      </button>
-                    </div>
-                  </div>
+                <AnimatePresence>
+                  {dropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                      className="absolute right-0 top-full mt-2 w-[calc(100vw-32px)] max-w-[360px] overflow-hidden rounded-2xl border border-white/10 bg-[#111111] shadow-2xl shadow-black/50 backdrop-blur-xl"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-[#00D179]/15 via-[#00D179]/5 to-transparent" />
 
-                  {/* QF Balance */}
-                  <div className="px-4 py-3 border-b border-[#1E1E1E]">
-                    <p className="text-[#8A8A8A] text-xs mb-1">Balance</p>
-                    <p className="text-white font-medium">
-                      {balance !== null ? (
-                        <span className="flex items-center gap-2">
-                          <Wallet size={16} className="text-[#00D179]" />
-                          {formatQF(balance)} QF
-                        </span>
-                      ) : (
-                        <span className="text-[#8A8A8A]">Loading...</span>
-                      )}
-                    </p>
-                  </div>
+                      <div className="relative px-4 pb-4 pt-5">
+                        <p className="mb-1 text-xs text-[#8A8A8A]">Your Name</p>
+                        <div className="font-clash text-xl font-bold text-white">
+                          {qnsName ? (
+                            <span>
+                              {qnsName}<span className="text-[#00D179]">.qf</span>
+                            </span>
+                          ) : (
+                            <span className="font-satoshi text-base font-normal text-[#8A8A8A]">No primary name set</span>
+                          )}
+                        </div>
+                      </div>
 
-                  {/* Owned Names List - Max 3 with View All */}
-                  {ownedNames.length > 0 && (
-                    <div className="px-4 py-3 border-b border-[#1E1E1E]">
-                      <p className="text-[#8A8A8A] text-xs mb-2">
-                        Your Names ({ownedNames.length})
-                      </p>
-                      <div className="space-y-1">
-                        {displayedNames.map((name) => (
-                          <Link
-                            key={name}
-                            to={`/my-names?expand=${name}`}
-                            className="block text-white text-sm py-1.5 px-2 rounded-lg bg-[#0A0A0A] hover:bg-[#1E1E1E] transition-colors"
-                            onClick={() => setDropdownOpen(false)}
+                      <div className="border-t border-white/5 px-4 py-4">
+                        <p className="mb-2 text-xs text-[#8A8A8A]">Wallet Address</p>
+                        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                          <code className="min-w-0 flex-1 truncate text-sm font-mono text-gray-400">
+                            {ss58Address || address}
+                          </code>
+                          <button
+                            onClick={() => copyAddress(ss58Address || address)}
+                            className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer"
+                            title="Copy address"
                           >
-                            {name}<span className="text-[#00D179]">.qf</span>
-                          </Link>
-                        ))}
-                        {hasMoreNames && (
-                          <Link
-                            to="/my-names"
-                            className="block text-sm text-[#00D179] hover:text-[#00B868] py-1.5 px-2 transition-colors"
-                            onClick={() => setDropdownOpen(false)}
-                          >
-                            View all →
-                          </Link>
+                            <Copy size={14} />
+                            {copied ? 'Copied!' : 'Copy'}
+                          </button>
+                        </div>
+                        {ss58Address && (
+                          <p className="mt-2 text-xs text-[#8A8A8A]">
+                            EVM: {truncateAddress(address || '')}
+                          </p>
                         )}
                       </div>
-                    </div>
-                  )}
 
-                  {/* Disconnect Button */}
-                  <div className="p-3">
+                      <div className="border-t border-white/5 px-4 py-4">
+                        <p className="mb-2 text-xs text-[#8A8A8A]">Balance</p>
+                        {balance !== null ? (
+                          <div className="flex items-center gap-2 text-white">
+                            <Wallet size={16} className="text-[#00D179]" />
+                            <span className="text-lg font-semibold">{formatQF(balance)}</span>
+                            <span className="text-sm text-gray-500">QF</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-[#8A8A8A]">Loading...</span>
+                        )}
+                      </div>
+
+                      {ss58Address && (
+                        <div className="border-t border-white/5 px-4 py-3">
+                          <button
+                            onClick={handleShowAccountInfo}
+                            className="flex w-full items-center gap-2 text-sm text-[#00D179] hover:text-[#00B868] transition-colors cursor-pointer"
+                          >
+                            <Info size={16} />
+                            <span>View Account Details</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {ownedNames.length > 0 && (
+                        <div className="border-t border-white/5 px-4 py-4">
+                          <p className="mb-3 text-xs text-[#8A8A8A]">Your Names ({ownedNames.length})</p>
+                          <div className="space-y-2">
+                            {displayedNames.map((name) => {
+                              const isPrimaryName = qnsName === name;
+
+                              return (
+                                <Link
+                                  key={name}
+                                  to={`/my-names?expand=${name}`}
+                                  className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-2.5 text-sm text-[#00D179] transition-colors hover:bg-white/10 cursor-pointer"
+                                  onClick={() => setDropdownOpen(false)}
+                                >
+                                  <span>
+                                    {name}<span className="text-[#00D179]">.qf</span>
+                                  </span>
+                                  {isPrimaryName && <span className="h-2 w-2 rounded-full bg-[#00D179]" />}
+                                </Link>
+                              );
+                            })}
+                            {hasMoreNames && (
+                              <Link
+                                to="/my-names"
+                                className="block rounded-xl bg-white/5 px-4 py-2.5 text-sm text-[#00D179] transition-colors hover:bg-white/10"
+                                onClick={() => setDropdownOpen(false)}
+                              >
+                                View all →
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="border-t border-white/5 p-4">
+                        <button
+                          onClick={handleDisconnect}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/10 py-3 text-red-400 transition-colors hover:bg-red-500/20 cursor-pointer"
+                        >
+                          <LogOut size={16} />
+                          Disconnect
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <button
+                onClick={connect}
+                disabled={connecting}
+                className="px-4 py-2 rounded-xl border border-[#00D179] text-white text-sm font-medium hover:bg-[#00D17915] transition-all duration-200 disabled:opacity-50 cursor-pointer"
+              >
+                {connecting ? 'Connecting...' : 'Connect Wallet'}
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* Account Info Modal */}
+      <AnimatePresence>
+        {showAccountInfo && ss58Address && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowAccountInfo(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-[400px] overflow-hidden rounded-2xl border border-white/10 bg-[#111111] shadow-2xl shadow-black/50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="relative px-6 py-5 border-b border-white/5">
+                <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-[#00D179]/10 via-[#00D179]/5 to-transparent" />
+                <div className="relative flex items-center justify-between">
+                  <div>
+                    <h2 className="font-clash text-xl font-semibold text-white">Account Details</h2>
+                    <p className="mt-1 text-sm text-[#8A8A8A]">Your QF Network addresses</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAccountInfo(false)}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-[#8A8A8A] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Address Info */}
+              <div className="p-6 space-y-6">
+                {/* Substrate Address */}
+                <div>
+                  <p className="mb-2 text-xs text-[#8A8A8A]">Your QF Address (Substrate)</p>
+                  <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                    <code className="min-w-0 flex-1 break-all text-sm font-mono text-gray-400">
+                      {ss58Address}
+                    </code>
                     <button
-                      onClick={handleDisconnect}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#E5484D]/10 hover:bg-[#E5484D]/20 text-[#E5484D] font-medium transition-colors cursor-pointer"
+                      onClick={() => copyAddress(ss58Address)}
+                      className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer border border-white/10"
+                      title="Copy Substrate address"
                     >
-                      <LogOut size={16} />
-                      Disconnect
+                      <Copy size={14} />
+                      {copied ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={connect}
-              disabled={connecting}
-              className="px-4 py-2 rounded-xl border border-[#00D179] text-white text-sm font-medium hover:bg-[#00D17915] transition-all duration-200 disabled:opacity-50 cursor-pointer"
-            >
-              {connecting ? 'Connecting...' : 'Connect Wallet'}
-            </button>
-          )}
-        </div>
-      </div>
-      <style>{`
-        @keyframes dropdown-in {
-          from {
-            opacity: 0;
-            transform: translateY(-4px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        .animate-dropdown-in {
-          animation: dropdown-in 0.15s ease-out forwards;
-        }
-      `}</style>
-    </nav>
+
+                {/* EVM Address */}
+                {address && (
+                  <div>
+                    <p className="mb-2 text-xs text-[#8A8A8A]">Your Derived EVM Address</p>
+                    <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                      <code className="min-w-0 flex-1 break-all text-sm font-mono text-gray-400">
+                        {address}
+                      </code>
+                      <button
+                        onClick={() => copyAddress(address)}
+                        className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer border border-white/10"
+                        title="Copy EVM address"
+                      >
+                        <Copy size={14} />
+                        {copied ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Info Note */}
+                <div className="rounded-xl bg-[#00D179]/5 border border-[#00D179]/20 p-4">
+                  <div className="flex items-start gap-3">
+                    <Info size={18} className="text-[#00D179] shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-300">
+                        <span className="text-[#00D179] font-medium">Important:</span> Save your EVM address — you'll need it when MetaMask support launches.
+                      </p>
+                      <p className="text-xs text-[#8A8A8A] mt-2">
+                        Your Substrate address is your primary address. The EVM address is derived from it and can receive tokens from Ethereum-compatible wallets.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-white/5 bg-white/[0.01]">
+                <button
+                  onClick={() => setShowAccountInfo(false)}
+                  className="w-full py-2.5 rounded-xl bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

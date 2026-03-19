@@ -5,7 +5,7 @@ import { parseEther, formatEther } from 'viem';
 import { DollarSign, Save, Flame, Loader2, Tag } from 'lucide-react';
 
 export default function Pricing() {
-  const { address } = useWalletStore();
+  const { address, ss58Address } = useWalletStore();
   const { price3Char, price4Char, price5PlusChar, permanentMultiplier, burnPercent, loadOverviewData, updatePrices, updatePermanentMultiplier, updateBurnPercent } = useAdminStore();
 
   const [price3Input, setPrice3Input] = useState('');
@@ -54,7 +54,8 @@ export default function Pricing() {
       setIsUpdatingPrices(true);
       setError(null);
       
-      await updatePrices({ char3: p3, char4: p4, char5Plus: p5 }, address);
+      const signerAddress = ss58Address || address;
+      await updatePrices({ char3: p3, char4: p4, char5Plus: p5 }, signerAddress);
       showSuccess('Prices updated successfully');
     } catch (err: any) {
       console.error('Price update failed:', err);
@@ -90,7 +91,8 @@ export default function Pricing() {
     setError(null);
     
     try {
-      await updatePermanentMultiplier(mult, address);
+      const signerAddress = ss58Address || address;
+      await updatePermanentMultiplier(mult, signerAddress);
       showSuccess('Permanent multiplier updated');
     } catch (err: any) {
       console.error('Multiplier update failed:', err);
@@ -126,7 +128,8 @@ export default function Pricing() {
     setError(null);
     
     try {
-      await updateBurnPercent(percent, address);
+      const signerAddress = ss58Address || address;
+      await updateBurnPercent(percent, signerAddress);
       showSuccess('Burn percentage updated');
     } catch (err: any) {
       console.error('Burn percent update failed:', err);

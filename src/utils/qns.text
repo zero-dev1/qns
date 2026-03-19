@@ -81,9 +81,7 @@ export function getPublicClient() {
       return result;
     },
     getBalance: async ({ address }: { address: `0x${string}` }): Promise<bigint> => {
-      // Use getContractBalance which queries via eth_getBalance
-      // This is the correct way to get pallet-revive contract ETH balances
-      return getContractBalance(address);
+      return getQFBalance(address);
     },
   };
 }
@@ -371,10 +369,7 @@ export async function registerName(
   let fee: bigint;
   try {
     fee = await getPrice(name, years, permanent);
-    console.log('[QNS] Step A complete:');
-    console.log('  fee (raw bigint):', fee?.toString());
-    console.log('  fee (wei/10^18):', (Number(fee) / 1e18).toString(), 'QF');
-    console.log('  fee (toHex):', '0x' + fee?.toString(16));
+    console.log('[QNS] Step A complete: fee =', fee?.toString());
   } catch (feeErr: any) {
     console.error('[QNS] Step A FAILED: getPrice threw:', feeErr?.message);
     throw feeErr;
@@ -390,17 +385,13 @@ export async function registerName(
   });
   
   try {
-    // Ensure fee is a proper bigint before passing
-    const feeBigInt = BigInt(fee?.toString() || '0');
-    console.log('[QNS] Step B: fee as bigint:', feeBigInt.toString(), '(', (Number(feeBigInt) / 1e18).toString(), 'QF)');
-    
     const result = await writeContract(
       QNS_REGISTRAR_ADDRESS,
       REGISTRAR_ABI,
       'register',
       [name, years, permanent],
       account,
-      feeBigInt
+      fee
     );
     console.log('[QNS] Step B complete: writeContract returned:', result);
     return result;
@@ -490,8 +481,7 @@ export async function setMultipleTextRecords(
 
 export async function setPrimaryName(
   name: string,
-  evmAddress: string,
-  signerAddress: string
+  account: string
 ): Promise<string> {
   const nameNode = namehash(`${name}.qf`);
   
@@ -499,8 +489,8 @@ export async function setPrimaryName(
     QNS_RESOLVER_ADDRESS,
     RESOLVER_ABI,
     'setReverse',
-    [evmAddress, nameNode],
-    signerAddress,
+    [account, nameNode],
+    account,
     0n
   );
 }
@@ -549,47 +539,8 @@ export async function getQFBalance(address: string): Promise<bigint> {
   }
 }
 
-// Get contract balance via ETH RPC (eth_getBalance)
-// This is the correct way to get a pallet-revive contract's ETH balance
-export async function getContractBalance(address: string): Promise<bigint> {
-  try {
-    const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL || '/eth-rpc';
-    
-    const response = await fetch(ETH_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'eth_getBalance',
-        params: [address, 'latest'],
-      }),
-    });
-    
-    const json = await response.json();
-    if (json.error) {
-      throw new Error(json.error.message || JSON.stringify(json.error));
-    }
-    
-    // eth_getBalance returns hex string
-    const balanceHex = json.result;
-    const balance = BigInt(balanceHex);
-    console.log('[QNS] getContractBalance via eth_getBalance:', address, '=', balance.toString(), 'wei');
-    return balance;
-  } catch (error: any) {
-    console.warn('[QNS] Failed to get contract balance via eth_getBalance:', error.message || error);
-    // Fallback to Substrate query (might be 0 for contracts)
-    return getQFBalance(address);
-  }
-}
-
 export async function getSubstrateQFBalance(ss58Address: string): Promise<bigint> {
   return getQFBalance(ss58Address);
-}
-
-export async function hasMinimumBalance(ss58Address: string, minBalance: bigint = 1000000000000000n): Promise<boolean> {
-  const balance = await getQFBalance(ss58Address);
-  return balance > minBalance;
 }
 
 export async function reserveName(name: string, account: string): Promise<string> {

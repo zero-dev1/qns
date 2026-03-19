@@ -1,0 +1,142 @@
+{
+  "source": {
+    "hash": "",
+    "language": "Solidity",
+    "compiler": "0.8.19"
+  },
+  "contract": {
+    "name": "QNSResolver",
+    "version": "1.0.0",
+    "authors": ["QNS"]
+  },
+  "spec": {
+    "constructors": [],
+    "docs": [],
+    "events": [],
+    "messages": [
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } }
+        ],
+        "docs": ["Get address for a node"],
+        "label": "addr",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["AccountId"], "type": 1 },
+        "selector": "0x7e5e2d46"
+      },
+      {
+        "args": [
+          { "label": "_addr", "type": { "displayName": ["AccountId"], "type": 1 } }
+        ],
+        "docs": ["Reverse resolve an address to a name"],
+        "label": "reverseResolve",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["String"], "type": 2 },
+        "selector": "0x931d64e0"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } }
+        ],
+        "docs": ["Get name for a node"],
+        "label": "name",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["String"], "type": 2 },
+        "selector": "0x5fd4fa83"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "key", "type": { "displayName": ["String"], "type": 2 } }
+        ],
+        "docs": ["Get text record for a node"],
+        "label": "text",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["String"], "type": 2 },
+        "selector": "0x901e9769"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "key", "type": { "displayName": ["String"], "type": 2 } },
+          { "label": "value", "type": { "displayName": ["String"], "type": 2 } }
+        ],
+        "docs": ["Set text record for a node"],
+        "label": "setText",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x6e48e630"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "keys", "type": { "displayName": ["Vec"], "type": 3 } },
+          { "label": "values", "type": { "displayName": ["Vec"], "type": 3 } }
+        ],
+        "docs": ["Set multiple text records for a node"],
+        "label": "setMultipleTexts",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x8c4e5c6e"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "addr", "type": { "displayName": ["AccountId"], "type": 1 } }
+        ],
+        "docs": ["Set address for a node"],
+        "label": "setAddr",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0xd5fa2b00"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "_name", "type": { "displayName": ["String"], "type": 2 } }
+        ],
+        "docs": ["Set name for a node"],
+        "label": "setName",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0xc47f0027"
+      },
+      {
+        "args": [
+          { "label": "_addr", "type": { "displayName": ["AccountId"], "type": 1 } },
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } }
+        ],
+        "docs": ["Set reverse resolution for an address"],
+        "label": "setReverse",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x9b21e0f5"
+      }
+    ]
+  },
+  "types": [
+    { "id": 0, "type": { "def": { "primitive": "bytes32" } } },
+    { "id": 1, "type": { "def": { "primitive": "address" } } },
+    { "id": 2, "type": { "def": { "primitive": "str" } } },
+    {
+      "id": 3,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 2
+          }
+        }
+      }
+    }
+  ],
+  "version": "4"
+}

@@ -90,7 +90,7 @@ async function reverseResolve(address: \`0x\${string}\`) {
 const addr = await resolveName('alice.qf');
 const name = await reverseResolve('0x1234...');`;
 
-const ETHERS_EXAMPLE = `import { ethers } from 'ethers';
+const ETHERS_EXAMPLE = `import { callContract } from '../utils/contractCall';
 
 const RESOLVER_ABI = [
   'function addr(bytes32 node) view returns (address)',
@@ -98,16 +98,6 @@ const RESOLVER_ABI = [
 ];
 
 const RESOLVER_ADDRESS = '${QNS_RESOLVER_ADDRESS}';
-
-const provider = new ethers.JsonRpcProvider(
-  'https://rpc.quantumfusion.network'
-);
-
-const resolver = new ethers.Contract(
-  RESOLVER_ADDRESS,
-  RESOLVER_ABI,
-  provider
-);
 
 // Namehash: converts "alice.qf" to a bytes32 node
 function namehash(name) {

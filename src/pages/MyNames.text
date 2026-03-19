@@ -32,7 +32,6 @@ import {
   setPrimaryName,
   resolveReverse,
 } from '../utils/qns';
-import { ss58ToEvmAddress } from '../utils/address';
 import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
@@ -571,8 +570,7 @@ export default function MyNamesPage() {
       
       // Call setMultipleTexts if there are changes
       if (keys.length > 0) {
-        const signerAddress = ss58Address || address;
-        await setMultipleTextRecords(name, keys, values, signerAddress);
+        await setMultipleTextRecords(name, keys, values, address);
       }
       
       // Update saved text records
@@ -598,14 +596,12 @@ export default function MyNamesPage() {
     if (!address) return;
     setSettingPrimary(name);
     const signerAddress = ss58Address || address;
-    const evmAddress = address;
     try {
-      await setPrimaryName(name, evmAddress, signerAddress);
+      await setPrimaryName(name, signerAddress);
       setPrimaryNameState(name);
       await refreshName();
     } catch (err: any) {
       console.error('Set primary failed:', err);
-      showToast(err.message || 'Failed to set primary name', 'error');
     } finally {
       setSettingPrimary(null);
     }
@@ -620,7 +616,6 @@ export default function MyNamesPage() {
     try {
       await renewName(name, 1, signerAddress);
       await loadNames();
-      showToast(`Renewed ${name}.qf successfully`, 'success');
     } catch (err: any) {
       console.error('Renewal failed:', err);
       
@@ -636,7 +631,6 @@ export default function MyNamesPage() {
       }
       
       setRenewError(`Failed to renew ${name}: ${userMessage}`);
-      showToast(err.message || `Failed to renew ${name}`, 'error');
     } finally {
       setRenewingName(null);
     }
@@ -668,7 +662,6 @@ export default function MyNamesPage() {
     let recipient = transferRecipient.trim();
     try {
       if (recipient.endsWith('.qf')) {
-        // Resolve .qf name to EVM address
         const resolved = await resolveForward(recipient);
         if (!resolved) {
           setTransferError('Name not found.');
@@ -676,19 +669,8 @@ export default function MyNamesPage() {
           return;
         }
         recipient = resolved;
-      } else if (/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
-        // Valid EVM address — use as-is
-      } else if (/^5[a-zA-Z0-9]{47}$/.test(recipient) || /^[a-zA-Z0-9]{46,48}$/.test(recipient)) {
-        // Looks like an SS58 Substrate address — convert to EVM
-        try {
-          recipient = ss58ToEvmAddress(recipient);
-        } catch {
-          setTransferError('Invalid Substrate address.');
-          setTransferring(false);
-          return;
-        }
-      } else {
-        setTransferError('Enter a .qf name, 0x address, or Substrate address.');
+      } else if (!/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
+        setTransferError('Enter a valid .qf name or wallet address.');
         setTransferring(false);
         return;
       }
@@ -714,13 +696,10 @@ export default function MyNamesPage() {
           userMessage = 'Transaction rejected';
         } else if (message.includes('unauthorized') || message.includes('not owner')) {
           userMessage = 'You are not the owner of this name';
-        } else if (message.includes('insufficient') || message.includes('balance')) {
-          userMessage = 'Insufficient QF balance';
         }
       }
       
       setTransferError(userMessage);
-      showToast(err.message || 'Transfer failed', 'error');
     } finally {
       setTransferring(false);
     }
@@ -1154,7 +1133,7 @@ export default function MyNamesPage() {
                     type="text"
                     value={transferRecipient}
                     onChange={(e) => setTransferRecipient(e.target.value)}
-                    placeholder="name.qf, 0x..., or Substrate address"
+                    placeholder="0x... or name.qf"
                     className="mb-4 w-full rounded-xl border border-white/5 bg-[#090909] px-4 py-3 text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 font-mono"
                   />
 

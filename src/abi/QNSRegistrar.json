@@ -1,0 +1,380 @@
+{
+  "source": {
+    "hash": "",
+    "language": "Solidity",
+    "compiler": "0.8.19"
+  },
+  "contract": {
+    "name": "QNSRegistrar",
+    "version": "1.0.0",
+    "authors": ["QNS"]
+  },
+  "spec": {
+    "constructors": [],
+    "docs": [],
+    "events": [
+      {
+        "args": [
+          { "indexed": false, "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "indexed": true, "label": "labelHash", "type": { "displayName": ["Hash"], "type": 1 } },
+          { "indexed": true, "label": "owner", "type": { "displayName": ["AccountId"], "type": 2 } },
+          { "indexed": false, "label": "expires", "type": { "displayName": ["u64"], "type": 3 } },
+          { "indexed": false, "label": "fee", "type": { "displayName": ["Balance"], "type": 4 } }
+        ],
+        "docs": [],
+        "label": "NameRegistered"
+      },
+      {
+        "args": [
+          { "indexed": false, "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "indexed": true, "label": "labelHash", "type": { "displayName": ["Hash"], "type": 1 } },
+          { "indexed": false, "label": "newExpiry", "type": { "displayName": ["u64"], "type": 3 } },
+          { "indexed": false, "label": "fee", "type": { "displayName": ["Balance"], "type": 4 } }
+        ],
+        "docs": [],
+        "label": "NameRenewed"
+      },
+      {
+        "args": [
+          { "indexed": false, "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "indexed": true, "label": "from", "type": { "displayName": ["AccountId"], "type": 2 } },
+          { "indexed": true, "label": "to", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": [],
+        "label": "NameTransferred"
+      }
+    ],
+    "messages": [
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "label": "durationInYears", "type": { "displayName": ["u64"], "type": 3 } },
+          { "label": "permanent", "type": { "displayName": ["bool"], "type": 5 } }
+        ],
+        "docs": ["Register a new name"],
+        "label": "register",
+        "mutates": true,
+        "payable": true,
+        "returnType": null,
+        "selector": "0xb732cde4"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "label": "durationYears", "type": { "displayName": ["u64"], "type": 3 } }
+        ],
+        "docs": ["Renew an existing name"],
+        "label": "renew",
+        "mutates": true,
+        "payable": true,
+        "returnType": null,
+        "selector": "0x753b6ad7"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } }
+        ],
+        "docs": ["Check if a name is available"],
+        "label": "available",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["bool"], "type": 5 },
+        "selector": "0xf3b53a36"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "label": "newOwner", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Transfer a name to a new owner"],
+        "label": "transferName",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x8451cb53"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } }
+        ],
+        "docs": ["Get registration info for a name"],
+        "label": "registrations",
+        "mutates": false,
+        "payable": false,
+        "returnType": {
+          "displayName": ["Registration"],
+          "type": 6
+        },
+        "selector": "0x2fd417f4"
+      },
+      {
+        "args": [
+          { "label": "owner", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Get all names owned by an address"],
+        "label": "getNamesByOwner",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["Vec"], "type": 7 },
+        "selector": "0xc75cb65e"
+      },
+      {
+        "args": [],
+        "docs": ["Get price for 3 character names"],
+        "label": "price3Char",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["Balance"], "type": 4 },
+        "selector": "0x8e5e28c7"
+      },
+      {
+        "args": [],
+        "docs": ["Get price for 4 character names"],
+        "label": "price4Char",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["Balance"], "type": 4 },
+        "selector": "0x9c9d8b3a"
+      },
+      {
+        "args": [],
+        "docs": ["Get price for 5+ character names"],
+        "label": "price5PlusChar",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["Balance"], "type": 4 },
+        "selector": "0x2e4fd8f2"
+      },
+      {
+        "args": [],
+        "docs": ["Get permanent registration multiplier"],
+        "label": "permanentMultiplier",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["u64"], "type": 3 },
+        "selector": "0x8d69a73e"
+      },
+      {
+        "args": [],
+        "docs": ["Get admin address"],
+        "label": "admin",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["AccountId"], "type": 2 },
+        "selector": "0xcf49c1f3"
+      },
+      {
+        "args": [],
+        "docs": ["Get treasury address"],
+        "label": "treasury",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["AccountId"], "type": 2 },
+        "selector": "0x37a9a09c"
+      },
+      {
+        "args": [],
+        "docs": ["Get burn address"],
+        "label": "burnAddress",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["AccountId"], "type": 2 },
+        "selector": "0x89bbdb9c"
+      },
+      {
+        "args": [],
+        "docs": ["Get burn percentage"],
+        "label": "burnPercent",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["u64"], "type": 3 },
+        "selector": "0xe35a6f15"
+      },
+      {
+        "args": [],
+        "docs": ["Get total registrations count"],
+        "label": "totalRegistrations",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["u64"], "type": 3 },
+        "selector": "0x1bca7c45"
+      },
+      {
+        "args": [],
+        "docs": ["Get all reserved names"],
+        "label": "getReservedNames",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["Vec"], "type": 7 },
+        "selector": "0x3635c1b2"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } }
+        ],
+        "docs": ["Check if a name is reserved"],
+        "label": "reserved",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["bool"], "type": 5 },
+        "selector": "0x5a673755"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } }
+        ],
+        "docs": ["Reserve a name (admin only)"],
+        "label": "reserveName",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x7f755e4f"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } }
+        ],
+        "docs": ["Unreserve a name (admin only)"],
+        "label": "unreserveName",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0xf473e67a"
+      },
+      {
+        "args": [
+          { "label": "name", "type": { "displayName": ["String"], "type": 0 } },
+          { "label": "to", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Assign a reserved name (admin only)"],
+        "label": "assignReservedName",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x8f6e7df4"
+      },
+      {
+        "args": [
+          { "label": "new3", "type": { "displayName": ["Balance"], "type": 4 } },
+          { "label": "new4", "type": { "displayName": ["Balance"], "type": 4 } },
+          { "label": "new5Plus", "type": { "displayName": ["Balance"], "type": 4 } }
+        ],
+        "docs": ["Set pricing (admin only)"],
+        "label": "setPrice",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x74c8b07e"
+      },
+      {
+        "args": [
+          { "label": "newMult", "type": { "displayName": ["u64"], "type": 3 } }
+        ],
+        "docs": ["Set permanent multiplier (admin only)"],
+        "label": "setPermanentMultiplier",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x9d01d47b"
+      },
+      {
+        "args": [
+          { "label": "newPercent", "type": { "displayName": ["u64"], "type": 3 } }
+        ],
+        "docs": ["Set burn percentage (admin only)"],
+        "label": "setBurnPercent",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0xb7b0420d"
+      },
+      {
+        "args": [
+          { "label": "newTreasury", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Set treasury address (admin only)"],
+        "label": "setTreasury",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0xf0e6d92a"
+      },
+      {
+        "args": [
+          { "label": "newBurn", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Set burn address (admin only)"],
+        "label": "setBurnAddress",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x83043e44"
+      },
+      {
+        "args": [
+          { "label": "newResolver", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Set default resolver (admin only)"],
+        "label": "setDefaultResolver",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x5e078c56"
+      },
+      {
+        "args": [
+          { "label": "newAdmin", "type": { "displayName": ["AccountId"], "type": 2 } }
+        ],
+        "docs": ["Set admin address (admin only)"],
+        "label": "setAdmin",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x70589152"
+      },
+      {
+        "args": [],
+        "docs": ["Withdraw funds to treasury (admin only)"],
+        "label": "withdrawToTreasury",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x2b29bb1d"
+      }
+    ]
+  },
+  "types": [
+    { "id": 0, "type": { "def": { "primitive": "str" } } },
+    { "id": 1, "type": { "def": { "primitive": "bytes32" } } },
+    { "id": 2, "type": { "def": { "primitive": "address" } } },
+    { "id": 3, "type": { "def": { "primitive": "u64" } } },
+    { "id": 4, "type": { "def": { "primitive": "u128" } } },
+    { "id": 5, "type": { "def": { "primitive": "bool" } } },
+    {
+      "id": 6,
+      "type": {
+        "def": {
+          "composite": {
+            "fields": [
+              { "name": "owner", "type": 2, "typeName": "address" },
+              { "name": "expires", "type": 3, "typeName": "uint256" },
+              { "name": "registeredAt", "type": 3, "typeName": "uint256" }
+            ]
+          }
+        },
+        "path": ["Registration"]
+      }
+    },
+    {
+      "id": 7,
+      "type": {
+        "def": {
+          "sequence": {
+            "type": 0
+          }
+        }
+      }
+    }
+  ],
+  "version": "4"
+}

@@ -7,3 +7,6 @@ contracts/combined.json
 .DS_Store
 *.log
 deployments.json
+output/
+*.polkavm
+*.bin

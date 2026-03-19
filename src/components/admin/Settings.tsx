@@ -4,7 +4,7 @@ import { useAdminStore } from '../../stores/adminStore';
 import { Shield, UserCog, Wallet, Flame, Link as LinkIcon, AlertTriangle, Loader2, Save, Settings as SettingsIcon } from 'lucide-react';
 
 export default function Settings() {
-  const { address } = useWalletStore();
+  const { address, ss58Address } = useWalletStore();
   const { adminAddress, treasuryAddress, burnAddress, loadOverviewData, transferAdmin, setTreasury, setBurnAddress, setDefaultResolver } = useAdminStore();
   
   // Transfer admin
@@ -63,7 +63,8 @@ export default function Settings() {
     setError(null);
     
     try {
-      await transferAdmin(newAdminAddress as `0x${string}`, address);
+      const signerAddress = ss58Address || address;
+      await transferAdmin(newAdminAddress as `0x${string}`, signerAddress);
       showSuccess('Admin transferred successfully');
       setNewAdminAddress('');
       setAdminConfirmText('');
@@ -87,7 +88,8 @@ export default function Settings() {
     setError(null);
     
     try {
-      await setTreasury(newTreasury as `0x${string}`, address);
+      const signerAddress = ss58Address || address;
+      await setTreasury(newTreasury as `0x${string}`, signerAddress);
       showSuccess('Treasury address updated');
       setNewTreasury('');
     } catch (err: any) {
@@ -109,7 +111,8 @@ export default function Settings() {
     setError(null);
     
     try {
-      await setBurnAddress(newBurnAddress as `0x${string}`, address);
+      const signerAddress = ss58Address || address;
+      await setBurnAddress(newBurnAddress as `0x${string}`, signerAddress);
       showSuccess('Burn address updated');
       setNewBurnAddress('');
     } catch (err: any) {
@@ -131,7 +134,8 @@ export default function Settings() {
     setError(null);
     
     try {
-      await setDefaultResolver(newResolver as `0x${string}`, address);
+      const signerAddress = ss58Address || address;
+      await setDefaultResolver(newResolver as `0x${string}`, signerAddress);
       showSuccess('Default resolver updated');
       setNewResolver('');
     } catch (err: any) {

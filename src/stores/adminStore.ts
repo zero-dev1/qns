@@ -61,27 +61,27 @@ interface AdminState {
   // Reserve names actions
   loadReservedNames: () => Promise<void>;
   loadAssignedStatus: () => Promise<void>;
-  reserveName: (name: string, account: Address) => Promise<`0x${string}`>;
-  unreserveName: (name: string, account: Address) => Promise<`0x${string}`>;
-  assignReservedName: (name: string, to: Address, account: Address) => Promise<`0x${string}`>;
+  reserveName: (name: string, account: string) => Promise<`0x${string}`>;
+  unreserveName: (name: string, account: string) => Promise<`0x${string}`>;
+  assignReservedName: (name: string, to: Address, account: string) => Promise<`0x${string}`>;
   
   // Registration lookup
   setLookupName: (name: string) => void;
   lookupRegistration: (name: string) => Promise<void>;
   
   // Pricing actions
-  updatePrices: (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: Address) => Promise<`0x${string}`>;
-  updatePermanentMultiplier: (multiplier: bigint, account: Address) => Promise<`0x${string}`>;
-  updateBurnPercent: (percent: bigint, account: Address) => Promise<`0x${string}`>;
+  updatePrices: (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: string) => Promise<`0x${string}`>;
+  updatePermanentMultiplier: (multiplier: bigint, account: string) => Promise<`0x${string}`>;
+  updateBurnPercent: (percent: bigint, account: string) => Promise<`0x${string}`>;
   
   // Treasury actions
-  withdrawToTreasury: (account: Address) => Promise<`0x${string}`>;
+  withdrawToTreasury: (account: string) => Promise<`0x${string}`>;
   
   // Settings actions
-  transferAdmin: (newAdmin: Address, account: Address) => Promise<`0x${string}`>;
-  setTreasury: (newTreasury: Address, account: Address) => Promise<`0x${string}`>;
-  setBurnAddress: (newBurn: Address, account: Address) => Promise<`0x${string}`>;
-  setDefaultResolver: (newResolver: Address, account: Address) => Promise<`0x${string}`>;
+  transferAdmin: (newAdmin: Address, account: string) => Promise<`0x${string}`>;
+  setTreasury: (newTreasury: Address, account: string) => Promise<`0x${string}`>;
+  setBurnAddress: (newBurn: Address, account: string) => Promise<`0x${string}`>;
+  setDefaultResolver: (newResolver: Address, account: string) => Promise<`0x${string}`>;
 }
 
 // Static list of reserved names from deploy script
@@ -124,7 +124,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         address: QNS_REGISTRAR_ADDRESS,
         abi: QNS_REGISTRAR_ABI,
         functionName: 'admin',
-      });
+      }) as `0x${string}`;
       set({ adminAddress: admin });
     } catch (err) {
       console.error('Error checking admin:', err);
@@ -155,43 +155,43 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'totalRegistrations',
-        }),
+        }) as Promise<bigint>,
         client.getBalance({ address: QNS_REGISTRAR_ADDRESS }),
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'treasury',
-        }),
+        }) as Promise<`0x${string}`>,
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'burnAddress',
-        }),
+        }) as Promise<`0x${string}`>,
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'burnPercent',
-        }),
+        }) as Promise<bigint>,
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'price3Char',
-        }),
+        }) as Promise<bigint>,
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'price4Char',
-        }),
+        }) as Promise<bigint>,
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'price5PlusChar',
-        }),
+        }) as Promise<bigint>,
         client.readContract({
           address: QNS_REGISTRAR_ADDRESS,
           abi: QNS_REGISTRAR_ABI,
           functionName: 'permanentMultiplier',
-        }),
+        }) as Promise<bigint>,
       ]);
       
       set({
@@ -254,7 +254,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
   
   // Reserve a name
-  reserveName: async (name: string, account: Address) => {
+  reserveName: async (name: string, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -272,7 +272,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
   
   // Unreserve a name
-  unreserveName: async (name: string, account: Address) => {
+  unreserveName: async (name: string, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -289,7 +289,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
   
   // Assign reserved name
-  assignReservedName: async (name: string, to: Address, account: Address) => {
+  assignReservedName: async (name: string, to: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -319,7 +319,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         abi: QNS_REGISTRAR_ABI,
         functionName: 'registrations',
         args: [lh],
-      });
+      }) as [string, bigint, bigint];
       
       if (reg[0] === '0x0000000000000000000000000000000000000000') {
         set({ lookupResult: null, isLookingUp: false });
@@ -336,9 +336,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           abi: QNS_RESOLVER_ABI,
           functionName: 'addr',
           args: [node],
-        });
+        }) as string;
         if (addr !== '0x0000000000000000000000000000000000000000') {
-          resolvedAddress = addr;
+          resolvedAddress = addr as Address;
         }
       } catch {
         // ignore
@@ -354,7 +354,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             abi: QNS_RESOLVER_ABI,
             functionName: 'text',
             args: [node, key],
-          });
+          }) as string;
           if (value) textRecords[key] = value;
         } catch {
           // ignore
@@ -364,7 +364,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       set({
         lookupResult: {
           name: name.toLowerCase(),
-          owner: reg[0],
+          owner: reg[0] as `0x${string}`,
           expires: reg[1],
           registeredAt: reg[2],
           isPermanent: reg[1] === 0n,
@@ -380,7 +380,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
   
   // Pricing updates
-  updatePrices: async (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: Address) => {
+  updatePrices: async (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -396,7 +396,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     return hash;
   },
   
-  updatePermanentMultiplier: async (multiplier: bigint, account: Address) => {
+  updatePermanentMultiplier: async (multiplier: bigint, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -412,7 +412,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     return hash;
   },
   
-  updateBurnPercent: async (percent: bigint, account: Address) => {
+  updateBurnPercent: async (percent: bigint, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -429,7 +429,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
   
   // Treasury
-  withdrawToTreasury: async (account: Address) => {
+  withdrawToTreasury: async (account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -446,7 +446,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
   
   // Settings
-  transferAdmin: async (newAdmin: Address, account: Address) => {
+  transferAdmin: async (newAdmin: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -458,11 +458,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().checkAdmin(account);
+    // Note: checkAdmin expects EVM address format - skipped here as account may be SS58
     return hash;
   },
   
-  setTreasury: async (newTreasury: Address, account: Address) => {
+  setTreasury: async (newTreasury: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -478,7 +478,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     return hash;
   },
   
-  setBurnAddress: async (newBurn: Address, account: Address) => {
+  setBurnAddress: async (newBurn: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
@@ -494,7 +494,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     return hash;
   },
   
-  setDefaultResolver: async (newResolver: Address, account: Address) => {
+  setDefaultResolver: async (newResolver: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     

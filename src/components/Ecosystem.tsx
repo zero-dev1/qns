@@ -1,60 +1,87 @@
-import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { motion } from 'framer-motion';
+import { Banknote, Database, UserRound, Users, Wrench } from 'lucide-react';
+
+const pillars = [
+  { title: 'Identity', icon: UserRound, active: true },
+  { title: 'Money', icon: Banknote, active: false },
+  { title: 'Work', icon: Wrench, active: false },
+  { title: 'Community', icon: Users, active: false },
+  { title: 'Data', icon: Database, active: false },
+];
 
 export default function Ecosystem() {
-  const { elementRef: ecosystemRef, isVisible: ecosystemVisible } = useIntersectionObserver();
-
   return (
-    <section 
-      ref={ecosystemRef}
-      className={`py-[100px] px-6 scroll-fade-in ${
-        ecosystemVisible ? 'visible' : ''
-      }`}
-    >
-      <div className="max-w-[1120px] mx-auto">
-        <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-4 text-center">
+    <section className="py-24">
+      <div className="mx-auto max-w-[1120px]">
+        <motion.p
+          className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
           MANIFESTO
-        </p>
-        <h2 className="font-clash font-medium text-[32px] text-white mb-3 text-center">
-          The First Pillar
-        </h2>
-        <p className="font-satoshi text-lg text-[#8A8A8A] max-w-[680px] mx-auto mb-10 text-center leading-relaxed">
-          The QF manifesto outlines five non-negotiable pillars of digital life: Identity, Money, Work, Community, and Data. QNS is the first. Your name, your credentials, your continuity. Register once, carry it everywhere the ecosystem goes.
-        </p>
+        </motion.p>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 max-w-[900px] mx-auto">
-          {['Identity', 'Money', 'Work', 'Community', 'Data'].map((pillar, index) => (
-            <div
-              key={pillar}
-              className={`text-center p-6 rounded-xl border transition-all duration-300 ${
-                index === 0 
-                  ? 'border-[#00D1794D] bg-[#00D17908]' 
-                  : 'border-[#333333] bg-[#111111]'
-              }`}
+        <motion.h2
+          className="font-clash text-center text-4xl font-bold text-white md:text-5xl"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
+          The First Pillar
+        </motion.h2>
+
+        <div className="scrollbar-hide mx-auto mt-16 flex w-full max-w-full justify-start gap-4 overflow-x-auto overflow-y-hidden px-6 md:justify-center" style={{ WebkitOverflowScrolling: 'touch' }}>
+          {pillars.map((pillar, index) => (
+            <motion.div
+              key={pillar.title}
+              className="flex flex-col items-center"
+              initial={{ opacity: 0, y: 40, scaleY: 0.8 }}
+              whileInView={{ opacity: 1, y: 0, scaleY: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.08 }}
+              style={{ transformOrigin: 'bottom' }}
             >
-              <div className={`text-lg font-clash font-medium mb-2 text-center ${
-                index === 0 ? 'text-[#00D179]' : 'text-[#555555]'
-              }`}>
-                {pillar}
+              <div
+                className={`flex h-64 w-24 flex-col items-center justify-end rounded-2xl pb-6 transition-all duration-300 md:h-80 md:w-32 ${
+                  pillar.active
+                    ? 'border border-[#00D179]/30 bg-gradient-to-b from-[#00D179]/20 via-[#00D179]/10 to-[#00D179]/5'
+                    : 'border border-white/10 bg-transparent hover:border-white/20'
+                }`}
+              >
+                <pillar.icon
+                  size={20}
+                  className={pillar.active ? 'text-[#00D179]' : 'text-gray-600'}
+                />
               </div>
-              <div className={`text-sm font-satoshi ${
-                index === 0 ? 'text-white' : 'text-[#666666]'
-              }`}>
-                {index === 0 ? 'Now' : `Pillar ${index + 1}`}
-              </div>
-            </div>
+
+              <p className={`mt-3 text-sm ${pillar.active ? 'font-semibold text-[#00D179]' : 'font-medium text-gray-500'}`}>
+                {pillar.title}
+              </p>
+            </motion.div>
           ))}
         </div>
+
+        <motion.p
+          className="mx-auto mt-12 max-w-lg px-6 text-center text-gray-400"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          QNS is the first pillar. Your name, your credentials, your continuity. Register once, carry it everywhere the ecosystem goes.
+        </motion.p>
       </div>
-      
+
       <style>{`
-        .scroll-fade-in {
-          opacity: 0;
-          transform: translateY(20px);
-          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
         }
-        .scroll-fade-in.visible {
-          opacity: 1;
-          transform: translateY(0);
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
     </section>

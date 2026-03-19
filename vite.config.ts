@@ -6,10 +6,10 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     proxy: {
-      '/rpc': {
-        target: 'http://localhost:8545',
+      '/eth-rpc': {
+        target: 'http://127.0.0.1:8545',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/rpc/, ''),
+        rewrite: (path) => path.replace(/^\/eth-rpc/, ''),
       },
     },
   },

@@ -6,7 +6,7 @@ import { hapticSuccess, hapticError } from '../../utils/haptics';
 import { Bookmark, Plus, Trash2, UserPlus, Search, Loader2, Check } from 'lucide-react';
 
 export default function ReserveNames() {
-  const { address } = useWalletStore();
+  const { address, ss58Address } = useWalletStore();
   const { reservedNames, isLoadingReserved, assignedNames, loadReservedNames, loadAssignedStatus, reserveName, unreserveName, assignReservedName } = useAdminStore();
   
   const [singleName, setSingleName] = useState('');
@@ -48,7 +48,8 @@ export default function ReserveNames() {
     setIsReserving(true);
     setError(null);
     try {
-      await reserveName(singleName.toLowerCase(), address);
+      const signerAddress = ss58Address || address;
+      await reserveName(singleName.toLowerCase(), signerAddress);
       showSuccess(`Reserved "${singleName.toLowerCase()}"`);
       setSingleName('');
     } catch (err: any) {
@@ -101,9 +102,10 @@ export default function ReserveNames() {
     setError(null);
 
     try {
+      const signerAddress = ss58Address || address;
       for (let i = 0; i < names.length; i++) {
         setReservingProgress({ current: i + 1, total: names.length });
-        await reserveName(names[i], address);
+        await reserveName(names[i], signerAddress);
       }
       showSuccess(`Reserved ${names.length} names`);
       setBulkNames('');
@@ -137,7 +139,8 @@ export default function ReserveNames() {
     }
 
     try {
-      await unreserveName(name, address);
+      const signerAddress = ss58Address || address;
+      await unreserveName(name, signerAddress);
       showSuccess(`Unreserved "${name}"`);
     } catch (err: any) {
       console.error('Unreserve failed:', err);
@@ -168,7 +171,8 @@ export default function ReserveNames() {
 
     setIsAssigning(true);
     try {
-      await assignReservedName(assignName, assignAddress as `0x${string}`, address);
+      const signerAddress = ss58Address || address;
+      await assignReservedName(assignName, assignAddress as `0x${string}`, signerAddress);
       await loadAssignedStatus();
       showSuccess(`Assigned "${assignName}" to ${assignAddress.slice(0, 6)}...${assignAddress.slice(-4)}`);
       hapticSuccess();

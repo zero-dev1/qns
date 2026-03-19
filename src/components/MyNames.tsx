@@ -9,6 +9,7 @@ import {
   resolveForward,
   getNamesOwnedByAddress,
 } from '../utils/qns';
+import { detectAddressFormat, getAddressFormatLabel, ss58ToEvmAddress } from '../utils/address';
 
 interface OwnedName {
   name: string;
@@ -29,7 +30,7 @@ const PLACEHOLDERS: Record<typeof TEXT_KEYS[number], string> = {
 };
 
 export default function MyNames() {
-  const { address, connect } = useWalletStore();
+  const { address, ss58Address, connect } = useWalletStore();
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null);
@@ -99,8 +100,9 @@ export default function MyNames() {
     if (!address) return;
     const value = editValues[name]?.[key] ?? '';
     setSavingField(`${name}-${key}`);
+    const signerAddress = ss58Address || address;
     try {
-      await setTextRecord(name, key, value, address);
+      await setTextRecord(name, key, value, signerAddress);
       setTextRecords((prev) => ({
         ...prev,
         [name]: { ...prev[name], [key]: value },
@@ -115,8 +117,9 @@ export default function MyNames() {
   const handleRenew = async (name: string) => {
     if (!address) return;
     setRenewingName(name);
+    const signerAddress = ss58Address || address;
     try {
-      await renewName(name, 1, address);
+      await renewName(name, 1, signerAddress);
       await loadNames();
     } catch {
       // tx failed
@@ -140,13 +143,23 @@ export default function MyNames() {
           return;
         }
         recipient = resolved;
-      } else if (!/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
-        setTransferError('Enter a valid .qf name or wallet address.');
-        setTransferring(false);
-        return;
+      } else {
+        // Check if valid address (SS58 or EVM)
+        const format = detectAddressFormat(recipient);
+        if (format === 'invalid') {
+          setTransferError('Enter a valid .qf name, SS58 address (5...), or EVM address (0x...).');
+          setTransferring(false);
+          return;
+        }
+        // Convert SS58 address to EVM address for the contract
+        if (format === 'ss58') {
+          recipient = ss58ToEvmAddress(recipient);
+        }
+        // EVM addresses are used as-is
       }
 
-      await transferNameOnChain(transferModal, recipient as `0x${string}`, address);
+      const signerAddress = ss58Address || address;
+      await transferNameOnChain(transferModal, recipient as `0x${string}`, signerAddress);
       setTransferModal(null);
       setTransferRecipient('');
       await loadNames();
@@ -155,6 +168,16 @@ export default function MyNames() {
     } finally {
       setTransferring(false);
     }
+  };
+
+  // Get address format label for the transfer input
+  const getTransferAddressLabel = (): string | null => {
+    const trimmed = transferRecipient.trim();
+    if (!trimmed) return null;
+    if (trimmed.endsWith('.qf')) return 'QNS name detected';
+    const format = detectAddressFormat(trimmed);
+    if (format !== 'invalid') return getAddressFormatLabel(format);
+    return null;
   };
 
   const getStatusBadge = (item: OwnedName) => {
@@ -362,15 +385,23 @@ export default function MyNames() {
               </h3>
               <p className="text-sm text-[#8A8A8A] mb-4">Transfer to another wallet</p>
 
-              <input
-                type="text"
-                value={transferRecipient}
-                onChange={(e) => setTransferRecipient(e.target.value)}
-                placeholder="0x... or name.qf"
-                className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-[#00D179] transition-colors duration-200 font-mono mb-3"
-              />
+              <div className="mb-2">
+                <input
+                  type="text"
+                  value={transferRecipient}
+                  onChange={(e) => setTransferRecipient(e.target.value)}
+                  placeholder="5... (Substrate), 0x... (EVM), or name.qf"
+                  className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-[#00D179] transition-colors duration-200 font-mono"
+                />
+                {getTransferAddressLabel() && (
+                  <p className="text-xs text-[#00D179] mt-2 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00D179]"></span>
+                    {getTransferAddressLabel()}
+                  </p>
+                )}
+              </div>
 
-              <p className="text-xs text-[#F5A623] mb-4">
+              <p className="text-xs text-[#F5A623] mb-4 mt-3">
                 This action cannot be undone. The new owner will have full control of this name.
               </p>
 

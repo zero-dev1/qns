@@ -1,0 +1,83 @@
+{
+  "source": {
+    "hash": "",
+    "language": "Solidity",
+    "compiler": "0.8.19"
+  },
+  "contract": {
+    "name": "QNSRegistry",
+    "version": "1.0.0",
+    "authors": ["QNS"]
+  },
+  "spec": {
+    "constructors": [],
+    "docs": [],
+    "events": [],
+    "messages": [
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } }
+        ],
+        "docs": ["Get owner of a node"],
+        "label": "owner",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["AccountId"], "type": 1 },
+        "selector": "0x9d118770"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } }
+        ],
+        "docs": ["Get resolver for a node"],
+        "label": "resolver",
+        "mutates": false,
+        "payable": false,
+        "returnType": { "displayName": ["AccountId"], "type": 1 },
+        "selector": "0x13e74aef"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "newOwner", "type": { "displayName": ["AccountId"], "type": 1 } }
+        ],
+        "docs": ["Set owner for a node"],
+        "label": "setOwner",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x5b0fc9c3"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "_resolver", "type": { "displayName": ["AccountId"], "type": 1 } }
+        ],
+        "docs": ["Set resolver for a node"],
+        "label": "setResolver",
+        "mutates": true,
+        "payable": false,
+        "returnType": null,
+        "selector": "0x10a7fd7a"
+      },
+      {
+        "args": [
+          { "label": "node", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "labelHash", "type": { "displayName": ["Hash"], "type": 0 } },
+          { "label": "newOwner", "type": { "displayName": ["AccountId"], "type": 1 } }
+        ],
+        "docs": ["Set subnode owner"],
+        "label": "setSubnodeOwner",
+        "mutates": true,
+        "payable": false,
+        "returnType": { "displayName": ["Hash"], "type": 0 },
+        "selector": "0x5f7335a6"
+      }
+    ]
+  },
+  "types": [
+    { "id": 0, "type": { "def": { "primitive": "bytes32" } } },
+    { "id": 1, "type": { "def": { "primitive": "address" } } }
+  ],
+  "version": "4"
+}

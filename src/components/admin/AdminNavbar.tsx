@@ -5,7 +5,7 @@ import { Copy, LogOut, Wallet, Shield } from 'lucide-react';
 import { getQFBalance, formatQF, getNamesOwnedByAddress } from '../../utils/qns';
 
 export default function AdminNavbar() {
-  const { address, displayName, qnsName, connecting, connect, disconnect } = useWalletStore();
+  const { address, ss58Address, displayName, qnsName, connecting, connect, disconnect } = useWalletStore();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
@@ -13,14 +13,18 @@ export default function AdminNavbar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch balance and names when dropdown opens
+  // For substrate wallets, use SS58 address for balance (required for api.query.system.account)
+  // For EVM wallets, use the EVM address
+  const balanceAddress = ss58Address || address;
+  
   useEffect(() => {
-    if (dropdownOpen && address) {
-      getQFBalance(address).then(setBalance);
-      getNamesOwnedByAddress(address).then((names: { name: string }[]) => {
+    if (dropdownOpen && balanceAddress) {
+      getQFBalance(balanceAddress).then(setBalance);
+      getNamesOwnedByAddress(address!).then((names: { name: string }[]) => {
         setOwnedNames(names.map((n) => n.name));
       });
     }
-  }, [dropdownOpen, address]);
+  }, [dropdownOpen, balanceAddress, address]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

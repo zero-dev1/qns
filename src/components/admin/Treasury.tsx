@@ -5,7 +5,7 @@ import { formatQF } from '../../utils/qns';
 import { Wallet, ArrowUpRight, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function Treasury() {
-  const { address } = useWalletStore();
+  const { address, ss58Address } = useWalletStore();
   const { contractBalance, treasuryAddress, loadOverviewData, withdrawToTreasury } = useAdminStore();
   
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -35,7 +35,8 @@ export default function Treasury() {
     setError(null);
     
     try {
-      await withdrawToTreasury(address);
+      const signerAddress = ss58Address || address;
+      await withdrawToTreasury(signerAddress);
       showSuccess(`Withdrew ${contractBalance ? formatQF(contractBalance) : ''} QF to treasury`);
     } catch (err: any) {
       showError(err.message || 'Failed to withdraw to treasury');

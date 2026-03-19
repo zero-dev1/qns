@@ -1,51 +1,51 @@
-import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { motion } from 'framer-motion';
 
 export default function CTA() {
-  const { elementRef: ctaRef, isVisible: ctaVisible } = useIntersectionObserver();
-
   const handleScrollToSearch = () => {
-    const heroSection = document.querySelector('section');
-    if (heroSection) {
-      heroSection.scrollIntoView({ behavior: 'smooth' });
+    const heroSearchInput = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Search for a name"]'
+    );
+
+    if (heroSearchInput) {
+      heroSearchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => {
+        heroSearchInput.focus();
+      }, 450);
     }
   };
 
   return (
-    <section
-      ref={ctaRef}
-      className={`py-[100px] px-6 bg-[#0A0A0A] scroll-fade-in ${
-        ctaVisible ? 'visible' : ''
-      }`}
-    >
-      <div className="max-w-[1120px] mx-auto text-center">
-        <p className="font-satoshi font-medium text-sm text-[#8A8A8A] uppercase tracking-[0.15em] mb-4">
+    <section className="relative py-32 text-center">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[300px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(0,209,121,0.06)_0%,transparent_70%)]" />
+
+      <motion.div
+        className="relative z-10 mx-auto max-w-[1120px] px-6"
+        initial={{ opacity: 0, scale: 0.96 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] as const }}
+      >
+        <p className="mb-4 text-sm font-medium tracking-[0.3em] text-[#00D179]">
           READY?
         </p>
-        <h2 className="font-clash font-medium text-[32px] text-white mb-3">
+
+        <h2 className="font-clash mb-6 text-5xl font-bold text-white md:text-6xl">
           Claim your .qf name
         </h2>
-        <p className="font-satoshi text-lg text-[#8A8A8A] mb-8 max-w-[480px] mx-auto">
+
+        <p className="mx-auto mb-10 max-w-md text-lg text-gray-400">
           Be among the first to build your identity on QF Network.
         </p>
-        <button
+
+        <motion.button
           onClick={handleScrollToSearch}
-          className="px-8 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-bold rounded-xl transition-all duration-200 cursor-pointer"
+          className="cursor-pointer rounded-full bg-[#00D179] px-8 py-4 text-lg font-semibold text-black transition-colors duration-200 hover:bg-[#00E88A]"
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
         >
           Search Names
-        </button>
-      </div>
-
-      <style>{`
-        .scroll-fade-in {
-          opacity: 0;
-          transform: translateY(20px);
-          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-        }
-        .scroll-fade-in.visible {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      `}</style>
+        </motion.button>
+      </motion.div>
     </section>
   );
 }

@@ -1,24 +1,32 @@
 import { useState, useEffect } from 'react';
+
+import { motion } from 'framer-motion';
 import { getContractPrices, formatQF, calculatePrice } from '../utils/qns';
-import { Loader2 } from 'lucide-react';
-import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { Loader2, AlertTriangle } from 'lucide-react';
 
 export default function Pricing() {
-  const { elementRef: sectionRef, isVisible: sectionVisible } = useIntersectionObserver();
-
   const [prices, setPrices] = useState<{
     price3Char: bigint;
     price4Char: bigint;
     price5PlusChar: bigint;
     permanentMultiplier: bigint;
+    fromContract?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    setUsingFallback(false);
     getContractPrices()
-      .then(setPrices)
-      .catch(console.error)
+      .then((result) => {
+        setPrices(result);
+        setUsingFallback(!result.fromContract);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch prices:', err);
+        setUsingFallback(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -40,6 +48,7 @@ export default function Pricing() {
     {
       label: 'Premium',
       chars: 3,
+      range: '3 characters',
       example: 'ace.qf',
       price: price3,
       highlighted: false,
@@ -47,6 +56,7 @@ export default function Pricing() {
     {
       label: 'Standard',
       chars: 4,
+      range: '4 characters',
       example: 'alex.qf',
       price: price4,
       highlighted: true,
@@ -54,6 +64,7 @@ export default function Pricing() {
     {
       label: 'Basic',
       chars: 5,
+      range: '5+ characters',
       example: 'alice.qf',
       price: price5,
       highlighted: false,
@@ -61,102 +72,144 @@ export default function Pricing() {
   ];
 
   return (
-    <section
-      ref={sectionRef}
-      className={`py-[100px] px-6 scroll-fade-in ${
-        sectionVisible ? 'visible' : ''
-      }`}
-    >
-      <div className="max-w-[1120px] mx-auto">
-        <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-4 text-center">
+    <section className="relative py-24">
+      <div className="mx-auto max-w-[1120px]">
+        <motion.p
+          className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6 }}
+        >
           PRICING
-        </p>
-        <h2 className="font-clash font-medium text-[32px] text-white mb-3 text-center">
+        </motion.p>
+        <motion.h2
+          className="font-clash mb-4 text-center text-4xl font-bold text-white md:text-5xl"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
           Simple, transparent pricing
-        </h2>
-        <p className="font-satoshi text-lg text-[#8A8A8A] mb-10 text-center">
-          All fees paid in QF. 95% funds development, 5% is burned forever.
-        </p>
+        </motion.h2>
+        <motion.p
+          className="mx-auto mb-16 max-w-lg text-center text-gray-400"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          All fees paid in QF. <span className="text-[#00D179]">95%</span> funds development, <span className="text-red-500">5%</span> is burned forever.
+        </motion.p>
+
+        {/* Network unavailable warning */}
+        {usingFallback && (
+          <motion.div
+            className="mx-auto max-w-2xl mb-8 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle size={18} />
+              <span className="text-sm font-medium">
+                Network unavailable. Showing default prices. Some features may be limited.
+              </span>
+            </div>
+          </motion.div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 size={32} className="text-[#00D179] animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {tiers.map((tier) => (
-              <div
+          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-6 md:grid-cols-3">
+            {tiers.map((tier, index) => (
+              <motion.div
                 key={tier.label}
-                className={`relative rounded-2xl border transition-all duration-300 bg-[#0A0A0A] text-center ${
+                className={`group relative overflow-hidden rounded-2xl bg-[#111] p-8 transition-all duration-300 ${
                   tier.highlighted
-                    ? 'border-[#00D179] bg-[#00D17908] scale-105'
-                    : 'border-[#1E1E1E] hover:border-[#333333]'
+                    ? 'border border-[#00D179]/30 shadow-[0_0_30px_rgba(0,209,121,0.06)] md:-translate-y-2 hover:border-[#00D179]/50'
+                    : 'border border-white/5 hover:border-[#00D179]/20'
                 }`}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.12 }}
+                whileHover={{ y: -4 }}
               >
                 {tier.highlighted && (
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-[#00D179] text-black text-xs font-bold rounded-full">
+                  <div className="pricing-shimmer absolute top-4 right-4 rounded-full bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
                     MOST POPULAR
                   </div>
                 )}
-                
-                <div className="p-8">
-                  <p className="font-clash font-semibold text-xl text-white mb-1">
-                    {tier.label}
-                  </p>
-                  
-                  <p className="text-[#8A8A8A] text-sm mb-4">
-                    {tier.chars} characters
-                  </p>
-                  
-                  <p className="text-[#00D179] text-lg mb-6">
-                    {tier.example}
-                  </p>
 
-                  {tier.price ? (
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex items-baseline justify-center gap-2">
-                          <span className="text-3xl font-bold text-white">{formatQF(tier.price.annual)}</span>
-                          <span className="text-[#00D179] font-medium">QF</span>
-                        </div>
-                        <p className="text-[#555555] text-sm mt-1">/ year</p>
+                <p className="mb-6 font-mono text-sm text-[#00D179]">{tier.example}</p>
+
+                <p className="mb-1 text-lg font-semibold text-white">{tier.label}</p>
+
+                <p className="mb-8 text-sm text-gray-500">{tier.range}</p>
+
+                {tier.price ? (
+                  <>
+                    <div>
+                      <div className="flex items-baseline">
+                        <span className="text-4xl font-bold text-white">{formatQF(tier.price.annual)}</span>
+                        <span className="ml-1 text-lg text-[#00D179]">QF</span>
                       </div>
-                      
-                      <div className="h-px bg-[#1E1E1E] w-full" />
-                      
-                      <div className="flex items-baseline justify-center gap-2">
-                        <span className="text-xl font-semibold text-white">{formatQF(tier.price.permanent)}</span>
-                        <span className="text-[#00D179] font-medium">QF</span>
-                        <span className="text-[#555555] text-sm ml-1">— own forever</span>
+                      <span className="text-sm text-gray-500">/year</span>
+                    </div>
+
+                    <div className="border-t border-white/5 my-6" />
+
+                    <div>
+                      <div className="flex items-baseline">
+                        <span className="text-xl font-bold text-white">{formatQF(tier.price.permanent)}</span>
+                        <span className="ml-1 text-sm text-[#00D179]">QF</span>
+                        <span className="ml-1 text-sm text-gray-500"> — own forever</span>
                       </div>
                     </div>
-                  ) : (
+
+                  </>
+                ) : (
+                  <>
                     <div className="space-y-3">
-                      <div className="h-7 bg-[#1E1E1E] rounded animate-pulse"></div>
-                      <div className="h-px bg-[#1E1E1E]"></div>
-                      <div className="h-5 bg-[#1E1E1E] rounded animate-pulse w-3/4 mx-auto"></div>
+                      <div className="h-10 w-32 rounded bg-[#1E1E1E] animate-pulse" />
+                      <div className="h-4 w-40 rounded bg-[#1E1E1E] animate-pulse" />
                     </div>
-                  )}
-                </div>
-              </div>
+                  </>
+                )}
+              </motion.div>
             ))}
           </div>
         )}
 
-        <p className="text-center mt-8 text-sm text-[#555555] font-satoshi">
+        <motion.p
+          className="mt-12 text-center text-sm text-gray-500"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+        >
           Multi-year registration available. Renew anytime. 30-day grace period after expiry.
-        </p>
+        </motion.p>
       </div>
 
       <style>{`
-        .scroll-fade-in {
-          opacity: 0;
-          transform: translateY(20px);
-          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
-        .scroll-fade-in.visible {
-          opacity: 1;
-          transform: translateY(0);
+
+        .pricing-shimmer::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: linear-gradient(110deg, transparent 30%, rgba(0, 209, 121, 0.15) 50%, transparent 70%);
+          background-size: 200% 100%;
+          animation: shimmer 4s infinite;
+          pointer-events: none;
         }
       `}</style>
     </section>

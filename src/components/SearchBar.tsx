@@ -79,7 +79,16 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
         errorMessage.includes('empty') ||
         err?.cause?.reason?.toLowerCase().includes('short');
       
-      if (isValidationError) {
+      // Check for network errors
+      const isNetworkError = 
+        errorMessage.includes('network unavailable') ||
+        errorMessage.includes('websocket') ||
+        errorMessage.includes('connection') ||
+        errorMessage.includes('timeout');
+      
+      if (isNetworkError) {
+        setResult({ status: 'invalid', name, error: 'Network unavailable. Please check your connection.' });
+      } else if (isValidationError) {
         setResult({ status: 'invalid', name, error: err?.cause?.reason || err?.message || 'Invalid name format' });
       } else {
         // Network or other errors - don't show as available

@@ -13,9 +13,12 @@ interface IQNSResolver {
     function setName(bytes32 node, string memory _name) external;
     function setReverse(address _addr, bytes32 node) external;
     function clearReverse(address _addr) external;
+    function nameHash(address _addr) external view returns (bytes32);
 }
 
 contract QNSRegistrar {
+
+    bool private _locked;
 
     struct Registration {
         address owner;
@@ -39,8 +42,17 @@ contract QNSRegistrar {
 
     mapping(bytes32 => Registration) public registrations;
     mapping(bytes32 => bool) public reserved;
+    
+    // Admin analytics
+    uint256 public totalRegistrations;
+    string[] public reservedNamesList;
+    
+    // Owner-to-names mapping for efficient querying
+    mapping(address => string[]) private _ownedNames;
+    mapping(address => mapping(string => uint256)) private _ownedNameIndex;
 
     bytes32 public immutable qfNode;
+    bytes32 public immutable reverseNode;
 
     event NameRegistered(
         string name,
@@ -60,10 +72,19 @@ contract QNSRegistrar {
         address indexed from,
         address indexed to
     );
+    event AdminChanged(address indexed oldAdmin, address indexed newAdmin);
+    event TreasuryChanged(address indexed oldTreasury, address indexed newTreasury);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "QNSRegistrar: not admin");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(!_locked, "QNSRegistrar: reentrant call");
+        _locked = true;
+        _;
+        _locked = false;
     }
 
     constructor(
@@ -72,6 +93,10 @@ contract QNSRegistrar {
         address treasuryAddress,
         address _burnAddress
     ) {
+        require(registryAddress != address(0), "QNSRegistrar: invalid registry");
+        require(resolverAddress != address(0), "QNSRegistrar: invalid resolver");
+        require(treasuryAddress != address(0), "QNSRegistrar: invalid treasury");
+        require(_burnAddress != address(0), "QNSRegistrar: invalid burn address");
         registry = IQNSRegistry(registryAddress);
         resolver = IQNSResolver(resolverAddress);
         treasury = treasuryAddress;
@@ -85,6 +110,7 @@ contract QNSRegistrar {
         burnPercent = 5;
 
         qfNode = keccak256(abi.encodePacked(bytes32(0), keccak256("qf")));
+        reverseNode = keccak256(abi.encodePacked(bytes32(0), keccak256("reverse")));
     }
 
     function validateName(string memory name) internal pure returns (string memory) {
@@ -136,7 +162,8 @@ contract QNSRegistrar {
         string memory name,
         uint256 durationInYears,
         bool permanent
-    ) external payable {
+    ) external payable nonReentrant {
+        require(permanent || durationInYears > 0, "QNSRegistrar: invalid duration");
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
 
@@ -162,6 +189,11 @@ contract QNSRegistrar {
             expires: expiry,
             registeredAt: block.timestamp
         });
+        
+        totalRegistrations++;
+        
+        // Add to owner's name list
+        _addNameToOwner(msg.sender, lowered);
 
         bytes32 nameNode = keccak256(abi.encodePacked(qfNode, labelHash));
 
@@ -169,8 +201,10 @@ contract QNSRegistrar {
         registry.setResolver(nameNode, address(resolver));
         resolver.setAddr(nameNode, msg.sender);
         resolver.setName(nameNode, lowered);
-        resolver.setReverse(msg.sender, nameNode);
         registry.setOwner(nameNode, msg.sender);
+
+        // Auto-claim reverse record if user doesn't have one set
+        _autoSetReverseRecord(msg.sender, lowered);
 
         _splitPayment(fee);
 
@@ -182,7 +216,8 @@ contract QNSRegistrar {
         emit NameRegistered(lowered, labelHash, msg.sender, expiry, fee);
     }
 
-    function renew(string memory name, uint256 durationYears) external payable {
+    function renew(string memory name, uint256 durationYears) external payable nonReentrant {
+        require(durationYears > 0, "QNSRegistrar: invalid duration");
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
 
@@ -234,13 +269,23 @@ contract QNSRegistrar {
         require(newOwner != address(0), "QNSRegistrar: zero address");
 
         registrations[labelHash].owner = newOwner;
+        
+        _removeNameFromOwner(msg.sender, lowered);
+        _addNameToOwner(newOwner, lowered);
 
         bytes32 nameNode = keccak256(abi.encodePacked(qfNode, labelHash));
 
         registry.setSubnodeOwner(qfNode, labelHash, address(this));
         resolver.setAddr(nameNode, newOwner);
-        resolver.clearReverse(msg.sender);
-        resolver.setReverse(newOwner, nameNode);
+        
+        // Only clear sender's reverse if this name was their primary
+        bytes32 senderCurrentNode = resolver.nameHash(msg.sender);
+        if (senderCurrentNode == nameNode) {
+            resolver.clearReverse(msg.sender);
+        }
+        
+        // Do NOT auto-set reverse for receiver — they choose their own primary
+        
         registry.setOwner(nameNode, newOwner);
 
         emit NameTransferred(lowered, msg.sender, newOwner);
@@ -254,15 +299,25 @@ contract QNSRegistrar {
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
         reserved[labelHash] = true;
+        reservedNamesList.push(lowered);
     }
 
     function unreserveName(string memory name) external onlyAdmin {
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
         reserved[labelHash] = false;
+        
+        // Remove from reservedNamesList
+        for (uint256 i = 0; i < reservedNamesList.length; i++) {
+            if (keccak256(bytes(reservedNamesList[i])) == labelHash) {
+                reservedNamesList[i] = reservedNamesList[reservedNamesList.length - 1];
+                reservedNamesList.pop();
+                break;
+            }
+        }
     }
 
-    function assignReservedName(string memory name, address to) external onlyAdmin {
+    function assignReservedName(string memory name, address to) external onlyAdmin nonReentrant {
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
         require(reserved[labelHash], "QNSRegistrar: name not reserved");
@@ -272,6 +327,11 @@ contract QNSRegistrar {
             expires: 0,
             registeredAt: block.timestamp
         });
+        
+        totalRegistrations++;
+        
+        // Add to owner's name list
+        _addNameToOwner(to, lowered);
 
         bytes32 nameNode = keccak256(abi.encodePacked(qfNode, labelHash));
 
@@ -279,8 +339,10 @@ contract QNSRegistrar {
         registry.setResolver(nameNode, address(resolver));
         resolver.setAddr(nameNode, to);
         resolver.setName(nameNode, lowered);
-        resolver.setReverse(to, nameNode);
         registry.setOwner(nameNode, to);
+
+        // Auto-claim reverse record if recipient doesn't have one set
+        _autoSetReverseRecord(to, lowered);
 
         reserved[labelHash] = false;
 
@@ -307,14 +369,17 @@ contract QNSRegistrar {
     }
 
     function setTreasury(address newTreasury) external onlyAdmin {
+        require(newTreasury != address(0), "QNSRegistrar: zero address");
+        address oldTreasury = treasury;
         treasury = newTreasury;
+        emit TreasuryChanged(oldTreasury, newTreasury);
     }
 
     function setBurnAddress(address newBurn) external onlyAdmin {
         burnAddress = newBurn;
     }
 
-    function withdrawToTreasury() external onlyAdmin {
+    function withdrawToTreasury() external onlyAdmin nonReentrant {
         uint256 balance = address(this).balance;
         require(balance > 0, "QNSRegistrar: no balance");
         (bool success, ) = payable(treasury).call{value: balance}("");
@@ -327,12 +392,95 @@ contract QNSRegistrar {
 
     function setAdmin(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "QNSRegistrar: zero address");
+        address oldAdmin = admin;
         admin = newAdmin;
+        emit AdminChanged(oldAdmin, newAdmin);
+    }
+
+    function getNamesByOwner(address owner) external view returns (string[] memory) {
+        return _ownedNames[owner];
     }
 
     // ──────────────────────────────────────────────
     // Internal Helpers
     // ──────────────────────────────────────────────
+
+    function _addNameToOwner(address owner, string memory name) internal {
+        _ownedNames[owner].push(name);
+        _ownedNameIndex[owner][name] = _ownedNames[owner].length;
+    }
+
+    function _removeNameFromOwner(address owner, string memory name) internal {
+        uint256 index = _ownedNameIndex[owner][name];
+        require(index > 0, "QNSRegistrar: name not owned");
+        
+        uint256 arrIndex = index - 1;
+        uint256 lastIndex = _ownedNames[owner].length - 1;
+        
+        if (arrIndex != lastIndex) {
+            string memory lastName = _ownedNames[owner][lastIndex];
+            _ownedNames[owner][arrIndex] = lastName;
+            _ownedNameIndex[owner][lastName] = arrIndex + 1;
+        }
+        
+        _ownedNames[owner].pop();
+        delete _ownedNameIndex[owner][name];
+    }
+
+    function getReservedNames() external view returns (string[] memory) {
+        return reservedNamesList;
+    }
+
+    // ──────────────────────────────────────────────
+    // Internal Helpers
+    // ──────────────────────────────────────────────
+
+    function _autoSetReverseRecord(address addr, string memory name) internal {
+        // Check if user already has a reverse record
+        bytes32 existingNode = resolver.nameHash(addr);
+        if (existingNode != bytes32(0)) {
+            // User already has a primary name set, don't overwrite
+            return;
+        }
+
+        // Convert address to hex string (without 0x prefix, lowercase)
+        string memory addrStr = _addrToString(addr);
+
+        // Compute the user's reverse subnode label hash
+        bytes32 addrLabelHash = keccak256(bytes(addrStr));
+
+        // Compute the user's reverse node: reverseNode + addrLabelHash
+        bytes32 userReverseNode = keccak256(abi.encodePacked(reverseNode, addrLabelHash));
+
+        // Claim the reverse subnode for this user (Registrar owns reverse node, so it can do this)
+        registry.setSubnodeOwner(reverseNode, addrLabelHash, addr);
+
+        // Set the name on the reverse node (Resolver checks msg.sender is the node owner)
+        // Note: The user (addr) needs to be the owner to call setName, so we use a different approach
+        // Since the Resolver is authorized to set names, we can use a different approach
+        // Actually, we need to check the Resolver's authorization model
+        // Looking at QNSResolver: setName requires isAuthorized(node)
+        // isAuthorized checks: msg.sender == registry.owner(node) || authorizedCallers[msg.sender]
+        // The Registrar IS an authorized caller (added in deploy.mjs)
+        // So we can directly call resolver.setName()
+
+        // Set the reverse record in the resolver (maps address => node)
+        resolver.setReverse(addr, userReverseNode);
+
+        // Set the name on the reverse node (Registrar is authorized caller)
+        resolver.setName(userReverseNode, name);
+    }
+
+    function _addrToString(address addr) internal pure returns (string memory) {
+        bytes memory alphabet = "0123456789abcdef";
+        bytes memory data = abi.encodePacked(addr);
+        bytes memory str = new bytes(40);
+        for (uint256 i = 0; i < 20; i++) {
+            str[i * 2] = alphabet[uint256(uint8(data[i] >> 4))];
+            str[1 + i * 2] = alphabet[uint256(uint8(data[i] & 0x0f))];
+        }
+        return string(str);
+    }
 
     function _isAvailable(bytes32 labelHash) internal view returns (bool) {
         Registration storage reg = registrations[labelHash];
