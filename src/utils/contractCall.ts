@@ -4,7 +4,8 @@ import { ensureAccountMapped } from './accountMapping';
 
 const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL || '/eth-rpc';
 
-async function fetchJsonRpc(method: string, params: any[]): Promise<any> {
+/** Kept for potential future use — not called by callContract */
+export async function _fetchJsonRpc(method: string, params: any[]): Promise<any> {
   const response = await fetch(ETH_RPC_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -32,37 +33,119 @@ export async function callContract<T = any>(
   const iface = new ethers.Interface(abi);
   const calldata = iface.encodeFunctionData(functionName, args);
 
-  try {
-    if (import.meta.env.DEV) console.log(`[QF] Reading ${functionName} via fetch eth_call...`);
-    const resultHex = await fetchJsonRpc('eth_call', [
-      {
-        to: contractAddress,
-        data: calldata,
-      },
-      'latest',
-    ]);
+  if (import.meta.env.DEV) console.log(`[QF] Reading ${functionName} via Substrate dry-run...`);
 
-    const decoded = iface.decodeFunctionResult(functionName, resultHex);
+  const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL;
 
-    let result;
-    if (decoded.length === 0) {
-      result = undefined;
-    } else if (decoded.length === 1) {
-      const val = decoded[0];
-      if (val && typeof val === 'object' && typeof val.toArray === 'function') {
-        result = val.toArray();
-      } else {
-        result = val;
+  if (ETH_RPC_URL) {
+    try {
+      const response = await fetch(ETH_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'eth_call',
+          params: [{ to: contractAddress, data: calldata }, 'latest'],
+        }),
+      });
+      const json = await response.json();
+      if (!json.error && json.result) {
+        const decoded = iface.decodeFunctionResult(functionName, json.result);
+        let result;
+        if (decoded.length === 0) result = undefined;
+        else if (decoded.length === 1) {
+          const val = decoded[0];
+          result = (val && typeof val === 'object' && typeof val.toArray === 'function') ? val.toArray() : val;
+        } else result = Array.from(decoded);
+        if (import.meta.env.DEV) console.log(`[QF] Read ${functionName} via eth-rpc:`, result);
+        return result as T;
       }
-    } else {
-      result = Array.from(decoded);
+      if (import.meta.env.DEV) console.log(`[QF] eth-rpc failed for ${functionName}, falling back to Substrate dry-run`);
+    } catch {
+      if (import.meta.env.DEV) console.log(`[QF] eth-rpc unreachable, falling back to Substrate dry-run`);
     }
-    if (import.meta.env.DEV) console.log(`[QF] Read ${functionName}:`, result);
-    return result as T;
-  } catch (err) {
-    console.error(`[QF] Failed to read ${functionName}:`, err);
-    throw err;
   }
+
+  const { getApi } = await import('./wallet');
+  const api = await getApi();
+
+  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+  const value = 0;
+  const gasLimit = { refTime: 50000000000n, proofSize: 500000n };
+  const storageDepositLimit = null;
+
+  let resultHex: string;
+
+  if (api.call.reviveApi && api.call.reviveApi.call) {
+    try {
+      const callResult = await (api.call.reviveApi.call as any)(
+        ZERO_ADDRESS,
+        contractAddress,
+        value,
+        gasLimit.refTime,
+        gasLimit.proofSize,
+        storageDepositLimit,
+        calldata
+      );
+      const output = (callResult as any)?.result?.Ok?.data || (callResult as any)?.result?.data || (callResult as any)?.data || callResult;
+      if (output) {
+        resultHex = typeof output === 'string' ? output : output.toHex ? output.toHex() : '0x' + Buffer.from(output).toString('hex');
+      } else {
+        throw new Error('Empty result from reviveApi.call');
+      }
+      if (import.meta.env.DEV) console.log(`[QF] Read ${functionName} via reviveApi.call`);
+    } catch (e: any) {
+      if (import.meta.env.DEV) console.log('[QF] reviveApi.call failed:', e.message);
+      throw e;
+    }
+  } else if (api.call.reviveApi && api.call.reviveApi.ethCall) {
+    try {
+      const ethCallResult = await (api.call.reviveApi.ethCall as any)(
+        ZERO_ADDRESS,
+        contractAddress,
+        calldata,
+        value,
+        gasLimit.refTime,
+        gasLimit.proofSize,
+      );
+      const output = ethCallResult?.Ok || ethCallResult?.data || ethCallResult;
+      resultHex = typeof output === 'string' ? output : output.toHex ? output.toHex() : '0x';
+      if (import.meta.env.DEV) console.log(`[QF] Read ${functionName} via reviveApi.ethCall`);
+    } catch (e: any) {
+      if (import.meta.env.DEV) console.log('[QF] reviveApi.ethCall failed:', e.message);
+      throw e;
+    }
+  } else {
+    try {
+      const encoded = api.createType('(H160, H160, U256, u64, u64, Option<U256>, Bytes)', [
+        ZERO_ADDRESS,
+        contractAddress,
+        value,
+        gasLimit.refTime,
+        gasLimit.proofSize,
+        storageDepositLimit,
+        calldata
+      ]);
+      const raw = await api.rpc.state.call('ReviveApi_call', encoded.toHex());
+      resultHex = raw.toHex();
+      if (import.meta.env.DEV) console.log(`[QF] Read ${functionName} via state.call`);
+    } catch (e: any) {
+      if (import.meta.env.DEV) console.log('[QF] state.call failed:', e.message);
+      throw new Error(`All read methods failed for ${functionName}: ${e.message}`);
+    }
+  }
+
+  const decoded = iface.decodeFunctionResult(functionName, resultHex);
+  let result;
+  if (decoded.length === 0) result = undefined;
+  else if (decoded.length === 1) {
+    const val = decoded[0];
+    result = (val && typeof val === 'object' && typeof val.toArray === 'function') ? val.toArray() : val;
+  } else result = Array.from(decoded);
+
+  if (import.meta.env.DEV) console.log(`[QF] Read ${functionName} via Substrate:`, result);
+  return result as T;
 }
 
 export async function writeContract(
