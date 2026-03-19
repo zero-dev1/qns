@@ -444,6 +444,37 @@ async function main() {
     console.warn('⚠️  Warning: Deployer balance is low (< 100 QF). Deployment may fail due to insufficient funds.');
   }
   
+  // Map deployer account (required for pallet-revive contract interactions)
+  console.log('\n🗺️  Mapping deployer account...');
+  try {
+    await new Promise((resolve, reject) => {
+      api.tx.revive.mapAccount().signAndSend(deployer, { withSignedTransaction: false }, ({ status, dispatchError }) => {
+        if (dispatchError) {
+          if (dispatchError.isModule) {
+            const decoded = api.registry.findMetaError(dispatchError.asModule);
+            if (decoded.name.includes('AlreadyMapped') || decoded.name.includes('AccountAlreadyMapped')) {
+              console.log('  ✅ Deployer already mapped');
+              resolve();
+              return;
+            }
+            reject(new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`));
+          } else {
+            const err = dispatchError.toString();
+            if (err.includes('AlreadyMapped')) { resolve(); return; }
+            reject(new Error(err));
+          }
+          return;
+        }
+        if (status.isFinalized) {
+          console.log('  ✅ Deployer account mapped successfully');
+          resolve();
+        }
+      }).catch(reject);
+    });
+  } catch (err) {
+    console.warn('⚠️  mapAccount warning:', err.message);
+  }
+  
   // Calculate gas limits
   console.log('\n🔧 Calculating gas limits...');
   

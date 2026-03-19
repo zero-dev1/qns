@@ -188,7 +188,7 @@ export async function getContractPrices(): Promise<{
   fromContract: boolean;
 }> {
   try {
-    console.log('[QNS] Fetching prices from contract at:', QNS_REGISTRAR_ADDRESS);
+    if (import.meta.env.DEV) console.log('[QNS] Fetching prices from contract at:', QNS_REGISTRAR_ADDRESS);
     
     const [r3, r4, r5, rm] = await Promise.all([
       callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'price3Char'),
@@ -197,7 +197,7 @@ export async function getContractPrices(): Promise<{
       callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'permanentMultiplier'),
     ]);
     
-    console.log('[QNS] Price query results:', {
+    if (import.meta.env.DEV) console.log('[QNS] Price query results:', {
       price3Char: r3.toString(),
       price4Char: r4.toString(),
       price5PlusChar: r5.toString(),
@@ -365,23 +365,25 @@ export async function registerName(
   permanent: boolean,
   account: string
 ): Promise<string> {
-  console.log('[QNS] registerName ENTERED:', { name, years, permanent, account });
+  if (import.meta.env.DEV) console.log('[QNS] registerName ENTERED:', { name, years, permanent, account });
   
   console.log('[QNS] Step A: Calculating fee via getPrice...');
   let fee: bigint;
   try {
     fee = await getPrice(name, years, permanent);
-    console.log('[QNS] Step A complete:');
-    console.log('  fee (raw bigint):', fee?.toString());
-    console.log('  fee (wei/10^18):', (Number(fee) / 1e18).toString(), 'QF');
-    console.log('  fee (toHex):', '0x' + fee?.toString(16));
+    if (import.meta.env.DEV) {
+      console.log('[QNS] Step A complete:');
+      console.log('  fee (raw bigint):', fee?.toString());
+      console.log('  fee (wei/10^18):', (Number(fee) / 1e18).toString(), 'QF');
+      console.log('  fee (toHex):', '0x' + fee?.toString(16));
+    }
   } catch (feeErr: any) {
     console.error('[QNS] Step A FAILED: getPrice threw:', feeErr?.message);
     throw feeErr;
   }
   
-  console.log('[QNS] Step B: Calling writeContract...');
-  console.log('[QNS] writeContract params:', {
+  if (import.meta.env.DEV) console.log('[QNS] Step B: Calling writeContract...');
+  if (import.meta.env.DEV) console.log('[QNS] writeContract params:', {
     contractAddress: QNS_REGISTRAR_ADDRESS,
     functionName: 'register',
     args: [name, years, permanent],
@@ -392,7 +394,7 @@ export async function registerName(
   try {
     // Ensure fee is a proper bigint before passing
     const feeBigInt = BigInt(fee?.toString() || '0');
-    console.log('[QNS] Step B: fee as bigint:', feeBigInt.toString(), '(', (Number(feeBigInt) / 1e18).toString(), 'QF)');
+    if (import.meta.env.DEV) console.log('[QNS] Step B: fee as bigint:', feeBigInt.toString(), '(', (Number(feeBigInt) / 1e18).toString(), 'QF)');
     
     const result = await writeContract(
       QNS_REGISTRAR_ADDRESS,
@@ -402,7 +404,7 @@ export async function registerName(
       account,
       feeBigInt
     );
-    console.log('[QNS] Step B complete: writeContract returned:', result);
+    if (import.meta.env.DEV) console.log('[QNS] Step B complete: writeContract returned:', result);
     return result;
   } catch (writeErr: any) {
     console.error('[QNS] Step B FAILED: writeContract threw:', writeErr?.message);
@@ -432,11 +434,19 @@ export async function transferNameOnChain(
   newOwner: string,
   account: string
 ): Promise<string> {
+  // Contract expects EVM address — convert SS58 if needed
+  let evmOwner = newOwner;
+  if (!newOwner.startsWith('0x')) {
+    const { deriveEVMAddress } = await import('./wallet');
+    evmOwner = deriveEVMAddress(newOwner);
+    if (import.meta.env.DEV) console.log('[QNS] Converted SS58 to EVM for transfer:', newOwner, '->', evmOwner);
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS,
     REGISTRAR_ABI,
     'transferName',
-    [name, newOwner],
+    [name, evmOwner],
     account,
     0n
   );
@@ -574,12 +584,11 @@ export async function getContractBalance(address: string): Promise<bigint> {
     // eth_getBalance returns hex string
     const balanceHex = json.result;
     const balance = BigInt(balanceHex);
-    console.log('[QNS] getContractBalance via eth_getBalance:', address, '=', balance.toString(), 'wei');
+    if (import.meta.env.DEV) console.log('[QNS] getContractBalance via eth_getBalance:', address, '=', balance.toString(), 'wei');
     return balance;
   } catch (error: any) {
-    console.warn('[QNS] Failed to get contract balance via eth_getBalance:', error.message || error);
-    // Fallback to Substrate query (might be 0 for contracts)
-    return getQFBalance(address);
+    console.warn('[QNS] eth_getBalance failed, returning 0');
+    return 0n;
   }
 }
 

@@ -33,7 +33,7 @@ export async function callContract<T = any>(
   const calldata = iface.encodeFunctionData(functionName, args);
 
   try {
-    console.log(`[QF] Reading ${functionName} via fetch eth_call...`);
+    if (import.meta.env.DEV) console.log(`[QF] Reading ${functionName} via fetch eth_call...`);
     const resultHex = await fetchJsonRpc('eth_call', [
       {
         to: contractAddress,
@@ -57,7 +57,7 @@ export async function callContract<T = any>(
     } else {
       result = Array.from(decoded);
     }
-    console.log(`[QF] Read ${functionName}:`, result);
+    if (import.meta.env.DEV) console.log(`[QF] Read ${functionName}:`, result);
     return result as T;
   } catch (err) {
     console.error(`[QF] Failed to read ${functionName}:`, err);
@@ -77,7 +77,7 @@ export async function writeContract(
   
   // DEBUG: Log incoming value parameter
   const valueBigIntIncoming = BigInt(value?.toString() || '0');
-  console.log('[QF] writeContract ENTERED:', { 
+  if (import.meta.env.DEV) console.log('[QF] writeContract ENTERED:', { 
     contractAddress, 
     functionName, 
     args, 
@@ -88,10 +88,10 @@ export async function writeContract(
   });
   
   // Ensure account is mapped before any contract interaction
-  console.log('[QF] Step 0: Ensuring account is mapped...');
+  if (import.meta.env.DEV) console.log('[QF] Step 0: Ensuring account is mapped...');
   try {
     await ensureAccountMapped(signerAddress);
-    console.log('[QF] Step 0 complete: account mapping verified');
+    if (import.meta.env.DEV) console.log('[QF] Step 0 complete: account mapping verified');
   } catch (mappingErr: any) {
     console.error('[QF] Step 0 FAILED: ensureAccountMapped threw:', mappingErr?.message);
     if (mappingErr.message?.includes('Inability to pay') || mappingErr.message?.includes('balance too low')) {
@@ -101,7 +101,7 @@ export async function writeContract(
   }
   
   // Check balance before proceeding
-  console.log('[QF] Step 0.5: Checking balance...');
+  if (import.meta.env.DEV) console.log('[QF] Step 0.5: Checking balance...');
   try {
     const api = await getApi();
     const balance = await api.query.system.account(signerAddress) as any;
@@ -109,7 +109,7 @@ export async function writeContract(
     if (free < 1000000000000000n) { // ~0.001 QF minimum for fees
       throw new Error('Insufficient QF balance. You need QF tokens to pay transaction fees.');
     }
-    console.log('[QF] Step 0.5 complete: sufficient balance');
+    if (import.meta.env.DEV) console.log('[QF] Step 0.5 complete: sufficient balance');
   } catch (balanceErr: any) {
     if (balanceErr.message?.includes('Insufficient QF balance')) {
       throw balanceErr;
@@ -117,27 +117,27 @@ export async function writeContract(
     console.warn('[QF] Step 0.5: Could not check balance, continuing...');
   }
 
-  console.log('[QF] Step 1: Getting API...');
+  if (import.meta.env.DEV) console.log('[QF] Step 1: Getting API...');
   let api;
   try {
     api = await getApi();
-    console.log('[QF] Step 1 complete: API obtained');
+    if (import.meta.env.DEV) console.log('[QF] Step 1 complete: API obtained');
   } catch (apiErr: any) {
     console.error('[QF] Step 1 FAILED: getApi threw:', apiErr?.message);
     throw apiErr;
   }
-  console.log('[QF] Step 2: Encoding function data...');
+  if (import.meta.env.DEV) console.log('[QF] Step 2: Encoding function data...');
   let iface, calldata;
   try {
     iface = new ethers.Interface(abi);
     calldata = iface.encodeFunctionData(functionName, args);
-    console.log('[QF] Step 2 complete: calldata encoded');
+    if (import.meta.env.DEV) console.log('[QF] Step 2 complete: calldata encoded');
   } catch (encodeErr: any) {
     console.error('[QF] Step 2 FAILED: encodeFunctionData threw:', encodeErr?.message);
     throw encodeErr;
   }
 
-  console.log('[QF] Step 3: Calculating gas limit...');
+  if (import.meta.env.DEV) console.log('[QF] Step 3: Calculating gas limit...');
   let gasLimit;
   try {
     const blockWeights = (api.consts.system as any).blockWeights;
@@ -151,7 +151,7 @@ export async function writeContract(
     } else {
       throw new Error('Block weights not available');
     }
-    console.log('[QF] Step 3 complete: gasLimit set');
+    if (import.meta.env.DEV) console.log('[QF] Step 3 complete: gasLimit set');
   } catch (e) {
     console.warn('[QF] Failed to get block weights, using fallback gas limit');
     gasLimit = api.registry.createType('Weight', {
@@ -160,7 +160,7 @@ export async function writeContract(
     });
   }
 
-  console.log('[QF] Step 4: Calculating storage deposit limit...');
+  if (import.meta.env.DEV) console.log('[QF] Step 4: Calculating storage deposit limit...');
   let storageDepositLimit: bigint;
   try {
     const accountInfo = await api.query.system.account(signerAddress) as any;
@@ -170,35 +170,39 @@ export async function writeContract(
     } else {
       storageDepositLimit = 1000000000000000000n;
     }
-    console.log('[QF] Step 4 complete: storageDepositLimit =', storageDepositLimit.toString());
+    if (import.meta.env.DEV) console.log('[QF] Step 4 complete: storageDepositLimit =', storageDepositLimit.toString());
   } catch (e) {
     console.warn('[QF] Failed to get balance for storage deposit, using default');
     storageDepositLimit = 1000000000000000000n;
   }
 
-  console.log('[QF] Step 5: Creating transaction...');
+  if (import.meta.env.DEV) console.log('[QF] Step 5: Creating transaction...');
   
   // DEBUG: Check chain decimals - crucial for unit conversion
   const chainDecimals = api.registry.chainDecimals?.[0] || 18;
-  console.log('[QF] Chain decimals (Substrate):', chainDecimals);
-  console.log('[QF] api.registry.chainDecimals:', api.registry.chainDecimals);
+  if (import.meta.env.DEV) {
+    console.log('[QF] Chain decimals (Substrate):', chainDecimals);
+    console.log('[QF] api.registry.chainDecimals:', api.registry.chainDecimals);
+  }
   
   // Ensure value is a proper bigint
   const valueBigInt = BigInt(value?.toString() || '0');
   
   // DEBUG: Log value in multiple formats
-  console.log('=== VALUE DEBUG ===');
-  console.log('revive.call value (raw string):', value?.toString());
-  console.log('revive.call value (raw bigint):', valueBigInt.toString());
-  console.log('revive.call value (QF, assuming 18 decimals):', (valueBigInt / BigInt(10**18)).toString());
-  console.log('revive.call value (Planck, if chain decimals =', chainDecimals, '):', (valueBigInt / BigInt(10**chainDecimals)).toString());
-  console.log('===================');
-  
-  if (valueBigInt > 0n) {
-    console.log('[QF] IMPORTANT: Attempting to send', (Number(valueBigInt) / 1e18).toString(), 'QF as msg.value');
+  if (import.meta.env.DEV) {
+    console.log('=== VALUE DEBUG ===');
+    console.log('revive.call value (raw string):', value?.toString());
+    console.log('revive.call value (raw bigint):', valueBigInt.toString());
+    console.log('revive.call value (QF, assuming 18 decimals):', (valueBigInt / BigInt(10**18)).toString());
+    console.log('revive.call value (Planck, if chain decimals =', chainDecimals, '):', (valueBigInt / BigInt(10**chainDecimals)).toString());
+    console.log('===================');
   }
   
-  console.log('[QF] revive.call params:', {
+  if (valueBigInt > 0n) {
+    if (import.meta.env.DEV) console.log('[QF] IMPORTANT: Attempting to send', (Number(valueBigInt) / 1e18).toString(), 'QF as msg.value');
+  }
+  
+  if (import.meta.env.DEV) console.log('[QF] revive.call params:', {
     dest: contractAddress,
     valueBigInt: valueBigInt.toString(),
     gasLimit: gasLimit.toJSON(),
@@ -216,36 +220,41 @@ export async function writeContract(
       storageDepositLimit,
       calldata
     );
-    console.log('[QF] Step 5 complete: transaction created');
+    if (import.meta.env.DEV) console.log('[QF] Step 5 complete: transaction created');
   } catch (txCreateErr: any) {
     console.error('[QF] Step 5 FAILED: api.tx.revive.call threw:', txCreateErr?.message);
     throw txCreateErr;
   }
 
-  console.log('[QF] Step 6: Loading web3FromAddress...');
+  if (import.meta.env.DEV) console.log('[QF] Step 6: Loading web3FromAddress...');
   let injector;
   try {
     const { web3Enable, web3FromAddress } = await import('@polkadot/extension-dapp');
-    console.log('[QF] web3Enable and web3FromAddress imported, calling web3Enable...');
+    if (import.meta.env.DEV) console.log('[QF] web3Enable and web3FromAddress imported, calling web3Enable...');
     await web3Enable('QNS');
-    console.log('[QF] web3Enable complete, calling web3FromAddress with:', signerAddress);
+    if (import.meta.env.DEV) console.log('[QF] web3Enable complete, calling web3FromAddress with:', signerAddress);
     injector = await web3FromAddress(signerAddress);
-    console.log('[QF] Step 6 complete: injector obtained');
+    if (import.meta.env.DEV) console.log('[QF] Step 6 complete: injector obtained');
   } catch (web3Err: any) {
     console.error('[QF] Step 6 FAILED: web3FromAddress threw:', web3Err?.message);
     throw web3Err;
   }
 
-  console.log('[QF] Step 7: Starting signAndSend...');
-  console.log('[QF] Transaction object created, entering Promise...');
+  if (import.meta.env.DEV) console.log('[QF] Step 7: Starting signAndSend...');
+  if (import.meta.env.DEV) console.log('[QF] Transaction object created, entering Promise...');
   return new Promise((resolve, reject) => {
-    console.log('[QF] Inside Promise, calling tx.signAndSend...');
+    const timeout = setTimeout(() => {
+      reject(new Error('Transaction timed out after 120 seconds. The transaction may still be processing.'));
+    }, 120000);
+
+    if (import.meta.env.DEV) console.log('[QF] Inside Promise, calling tx.signAndSend...');
     tx.signAndSend(
       signerAddress,
       { signer: injector.signer, withSignedTransaction: false },
       ({ status, dispatchError }: any) => {
-        console.log('[QF] signAndSend callback fired, status:', status?.type, status?.hash?.toHex?.());
+        if (import.meta.env.DEV) console.log('[QF] signAndSend callback fired, status:', status?.type, status?.hash?.toHex?.());
         if (dispatchError) {
+          clearTimeout(timeout);
           console.error('[QF] dispatchError:', dispatchError);
           if (dispatchError.isModule) {
             const decoded = api.registry.findMetaError(dispatchError.asModule);
@@ -256,11 +265,13 @@ export async function writeContract(
           return;
         }
         if (status.isFinalized) {
-          console.log(`[QF] ${functionName} finalized in block ${status.asFinalized.toHex()}`);
+          clearTimeout(timeout);
+          if (import.meta.env.DEV) console.log(`[QF] ${functionName} finalized in block ${status.asFinalized.toHex()}`);
           resolve(status.asFinalized.toHex());
         }
       }
     ).catch((error: any) => {
+      clearTimeout(timeout);
       console.error('[QF] signAndSend().catch() fired:', error?.message);
       reject(new Error(`Transaction failed: ${error.message}`));
     });
@@ -280,11 +291,16 @@ export async function sendTransfer(
   const injector = await web3FromAddress(signerAddress);
 
   return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Transfer timed out after 120 seconds. The transaction may still be processing.'));
+    }, 120000);
+
     tx.signAndSend(
       signerAddress,
       { signer: injector.signer, withSignedTransaction: false },
       ({ status, dispatchError }: any) => {
         if (dispatchError) {
+          clearTimeout(timeout);
           if (dispatchError.isModule) {
             const decoded = api.registry.findMetaError(dispatchError.asModule);
             reject(new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`));
@@ -294,11 +310,13 @@ export async function sendTransfer(
           return;
         }
         if (status.isFinalized) {
-          console.log(`[QF] Transfer finalized in block ${status.asFinalized.toHex()}`);
+          clearTimeout(timeout);
+          if (import.meta.env.DEV) console.log(`[QF] Transfer finalized in block ${status.asFinalized.toHex()}`);
           resolve(status.asFinalized.toHex());
         }
       }
     ).catch((error: any) => {
+      clearTimeout(timeout);
       reject(new Error(`Transfer failed: ${error.message}`));
     });
   });
