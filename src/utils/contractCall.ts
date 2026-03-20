@@ -248,11 +248,29 @@ export async function sendTransfer(
 
   const typedApi = getTypedApi();
 
+  let gasLimit = { ref_time: 1_000_000_000n, proof_size: 100_000n };
+  let storageDeposit = 0n;
+
+  try {
+    const dryRun = await typedApi.apis.ReviveApi.call(
+      connection.address,
+      Binary.fromHex(toEvmAddress),
+      amount,
+      undefined,
+      undefined,
+      Binary.fromHex('0x')
+    );
+    const d = dryRun as any;
+    if (d.gas_required) gasLimit = d.gas_required;
+    if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
+  } catch {
+  }
+
   const tx = typedApi.tx.Revive.call({
     dest: Binary.fromHex(toEvmAddress),
     value: amount,
-    gas_limit: { ref_time: 50_000_000_000n, proof_size: 1_000_000n },
-    storage_deposit_limit: 0n,
+    gas_limit: gasLimit,
+    storage_deposit_limit: storageDeposit,
     data: Binary.fromHex('0x'),
   });
 
