@@ -277,7 +277,7 @@ export default function Hero() {
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
       await refreshName();
     } catch (err: any) {
-      const errorMessage = (err?.message || err?.cause?.message || '').toLowerCase();
+      const errorMessage = (err?.message || '').toLowerCase();
       const isInsufficientBalance = 
         errorMessage.includes('insufficient') || 
         errorMessage.includes('balance') || 
@@ -286,15 +286,18 @@ export default function Hero() {
       if (isInsufficientBalance && regPrice) {
         setTxError({
           type: 'insufficient_balance',
-          message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.`
+          message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.` 
         });
-      } else {
+      } else if (errorMessage.includes('wallet not connected') || errorMessage.includes('reconnect')) {
+        setTxError({ type: 'generic', message: 'Wallet not connected. Please disconnect and reconnect your wallet.' });
+      } else if (errorMessage.includes('rejected by user') || errorMessage.includes('cancelled')) {
         setTxError({ type: 'generic', message: 'Transaction rejected' });
+      } else {
+        setTxError({ type: 'generic', message: err?.message || 'Transaction failed' });
       }
       setTxState('failed');
       hapticError();
       
-      // Auto-dismiss error after 8 seconds
       if (errorDismissTimerRef.current) {
         clearTimeout(errorDismissTimerRef.current);
       }

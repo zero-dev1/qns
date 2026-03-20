@@ -2,7 +2,7 @@ import { deriveEVMAddress } from './wallet';
 import { getTypedApi } from './papiClient';
 import { Binary } from 'polkadot-api';
 
-const STORAGE_KEY = 'qns_mapped_accounts';
+const STORAGE_KEY = 'qns_mapped_accounts-v2';
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex;

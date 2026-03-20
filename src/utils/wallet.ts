@@ -1,6 +1,7 @@
 import { getInjectedExtensions, connectInjectedExtension } from "polkadot-api/pjs-signer";
 import type { InjectedExtension, InjectedPolkadotAccount } from "polkadot-api/pjs-signer";
 import { keccak256 } from "viem";
+import { getSs58AddressInfo } from "polkadot-api";
 import { getTypedApi as getApi } from "./papiClient";
 
 export { getApi };
@@ -17,9 +18,32 @@ export interface WalletConnection {
 }
 
 export function deriveEVMAddress(ss58Address: string): string {
+  const info = getSs58AddressInfo(ss58Address);
+  if (!info.isValid) throw new Error('Invalid SS58 address');
+  // Convert the 32-byte public key to a hex string
+  const pubKeyHex = '0x' + Array.from(info.publicKey).map(b => b.toString(16).padStart(2, '0')).join('');
+  // Keccak-256 hash of the raw public key bytes, take last 20 bytes
+  const hash = keccak256(pubKeyHex as `0x${string}`);
+  return '0x' + hash.slice(-40);
+}
+
+export function deriveEVMAddressFallback(ss58Address: string): string {
   const encoder = new TextEncoder();
   const hash = keccak256(encoder.encode(ss58Address));
   return "0x" + hash.slice(26);
+}
+
+export async function getOnChainEvmAddress(ss58Address: string): Promise<string> {
+  const typedApi = getApi();
+  // ReviveApi.address maps AccountId32 → H160
+  const result = await typedApi.apis.ReviveApi.address(ss58Address);
+  // result is a Binary (FixedSizeBinary<20>)
+  const hex = result instanceof Uint8Array 
+    ? '0x' + Array.from(result).map(b => b.toString(16).padStart(2, '0')).join('')
+    : typeof result === 'string' 
+      ? result 
+      : result?.asHex?.() ?? '';
+  return hex.toLowerCase();
 }
 
 let currentConnection: WalletConnection | null = null;
@@ -40,7 +64,19 @@ export async function connectSubstrateWallet(
   }
 
   const account = accounts[0];
-  const evmAddress = deriveEVMAddress(account.address);
+  
+  // Use correct SS58 → EVM derivation (last 20 bytes of public key)
+  let evmAddress: string;
+  try {
+    evmAddress = deriveEVMAddress(account.address);
+  } catch (error) {
+    // If derivation fails, try on-chain lookup, then fallback
+    try {
+      evmAddress = await getOnChainEvmAddress(account.address);
+    } catch {
+      evmAddress = deriveEVMAddressFallback(account.address);
+    }
+  }
 
   currentConnection = {
     address: account.address,

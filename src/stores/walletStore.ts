@@ -15,6 +15,7 @@ interface WalletState {
   displayName: string | null;
   connecting: boolean;
   walletConnection: WalletConnection | null;
+  walletName: string | null;
   
   showWalletModal: boolean;
   
@@ -39,6 +40,7 @@ export const useWalletStore = create<WalletState>()(
       displayName: null,
       connecting: false,
       walletConnection: null,
+      walletName: null,
       showWalletModal: false,
       walletError: null,
 
@@ -71,7 +73,8 @@ export const useWalletStore = create<WalletState>()(
           set({ 
             address: evmAddr, 
             ss58Address: ss58Addr,
-            displayName: truncateAddress(ss58Addr)
+            displayName: truncateAddress(ss58Addr),
+            walletName: walletType  // Add this
           });
           
           try {
@@ -84,10 +87,22 @@ export const useWalletStore = create<WalletState>()(
             // Name resolution failed, display truncated address
           }
           
-          ensureAccountMapped(ss58Addr).catch(() => {
-          });
-          
-          set({ showWalletModal: false });
+          let mapped = false;
+for (let attempt = 0; attempt < 3; attempt++) {
+  try {
+    await ensureAccountMapped(ss58Addr);
+    mapped = true;
+    break;
+  } catch {
+    if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+  }
+}
+if (!mapped) {
+  set({ walletError: 'Account mapping failed. Please try reconnecting.' });
+  return;
+}
+
+set({ showWalletModal: false });
         } catch (error: any) {
           const msg = error.message || '';
           if (msg.includes('No accounts found') || msg.includes('no accounts')) {
@@ -110,6 +125,7 @@ export const useWalletStore = create<WalletState>()(
           qnsName: null, 
           displayName: null, 
           walletConnection: null,
+          walletName: null,  // Add this
           showWalletModal: false
         });
       },
@@ -163,10 +179,17 @@ export const useWalletStore = create<WalletState>()(
         ss58Address: state.ss58Address,
         qnsName: state.qnsName,
         displayName: state.displayName,
+        walletName: state.walletName,
       }),
       onRehydrateStorage: () => {
         return (state) => {
-          if (state?.address) {
+          if (state?.address && state?.walletName) {
+            // Reconnect wallet extension silently
+            state.connectWallet(state.walletName as 'talisman' | 'subwallet').catch(() => {
+              // If reconnection fails, clear persisted state
+              state.disconnect();
+            });
+          } else if (state?.address) {
             state.refreshName();
           }
         };

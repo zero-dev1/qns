@@ -4,18 +4,36 @@ A decentralized naming service built on QF Network using Substrate and the Reviv
 
 ## Overview
 
-QNS (QF Name Service) allows users to register human-readable names (like `alice.qf`) that resolve to addresses on the QF Network. It consists of:
+QNS (QF Name Service) allows users to register human-readable names (like `alice.qf`) that resolve to addresses on the QF Network. It consists of three contracts:
 
 - **QNSRegistry**: Stores ownership and expiration information
 - **QNSRegistrar**: Handles registration, renewal, and pricing
 - **QNSResolver**: Provides forward and reverse resolution
 
+All contracts are written in Solidity and compiled to PolkaVM via the Revive compiler.
+
 ## Tech Stack
 
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS
-- **Blockchain**: Substrate-based QF Network with Revive pallet
-- **Smart Contracts**: Solidity compiled to PolkaVM via Revive compiler
-- **Polkadot Integration**: @polkadot/api, @polkadot/extension-dapp
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS, Framer Motion, Zustand for state
+- **Blockchain**: Substrate-based QF Network with pallet-revive
+- **Smart Contracts**: Solidity → PolkaVM via resolc (Revive compiler)
+- **Chain interaction**: polkadot-api (PAPI) — not @polkadot/api
+- **Wallets**: Talisman, SubWallet via polkadot-api/pjs-signer
+- **ABI encoding**: viem (encodeFunctionData/decodeFunctionResult only — no viem RPC client)
+
+## How It Works (for builders)
+
+QF Network uses a Substrate + Solidity model. Here's how it works in plain terms:
+
+- **Smart contracts** are written in Solidity and compiled with `resolc` (the Revive compiler) to PolkaVM bytecode
+- These contracts run inside the Revive pallet on a Substrate-based chain
+- The **frontend does NOT use MetaMask, ethers RPC, or viem RPC**
+- Instead:
+  - **Read calls** use `typedApi.apis.ReviveApi.call()`
+  - **Write calls** use `typedApi.tx.Revive.call().signAndSubmit()`
+- Users connect via **Talisman/SubWallet** (Polkadot wallets)
+- A one-time `map_account` links their SS58 address to an on-chain EVM address
+- **ABI encoding/decoding** uses viem utilities — the ABI JSON is identical to standard Solidity ABIs
 
 ---
 
@@ -24,7 +42,7 @@ QNS (QF Name Service) allows users to register human-readable names (like `alice
 ### Prerequisites
 
 1. **Node.js** (v18+) and npm
-2. **Revive Compiler**: Install from [paritytech/revive](https://github.com/paritytech/revive)
+2. **Revive Compiler (resolc)**: Install from [paritytech/revive](https://github.com/paritytech/revive)
 3. **QF Account**: With testnet/mainnet QF tokens for gas
 
 ### Deployment Flow
@@ -57,7 +75,7 @@ DEPLOYER_MNEMONIC="your twelve word mnemonic phrase here"
 ```
 
 This will:
-- Run the Revive compiler targeting PolkaVM architecture
+- Run resolc (Revive compiler) targeting PolkaVM architecture
 - Generate `.polkavm` bytecode for deployment
 - Generate `.abi` and `.bin` files
 - Copy the ABI to `src/abi/` for frontend use
@@ -141,6 +159,12 @@ cargo build --release
 npm install
 ```
 
+**Note:** Before the first build, you must run:
+```bash
+npx papi generate
+```
+This generates the chain descriptors required for polkadot-api.
+
 ### Run Development Server
 
 ```bash
@@ -155,75 +179,17 @@ npm run build
 
 ---
 
-## React + TypeScript + Vite
+## Project Structure
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable lint-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-  },
-])
+src/
+  utils/
+    contractCall.ts    # Read/write helpers for contract interaction
+    wallet.ts          # Polkadot wallet connection (Talisman/SubWallet)
+    qns.ts             # QNS client functions
+    accountMapping.ts  # SS58↔EVM address mapping utilities
+  config/
+    contracts.ts       # Deployed contract addresses
+  abi/                 # Solidity ABIs for contract interaction
+contracts/             # Solidity source files
 ```

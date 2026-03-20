@@ -396,8 +396,8 @@ export async function transferNameOnChain(
   // Contract expects EVM address — convert SS58 if needed
   let evmOwner = newOwner;
   if (!newOwner.startsWith('0x')) {
-    const { deriveEVMAddress } = await import('./wallet');
-    evmOwner = deriveEVMAddress(newOwner);
+    const { deriveEVMAddressFallback } = await import('./wallet');
+    evmOwner = deriveEVMAddressFallback(newOwner);
       }
 
   return writeContract(

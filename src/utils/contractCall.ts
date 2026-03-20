@@ -101,37 +101,62 @@ export async function writeContract(
   _signer: any,
   value: bigint = 0n
 ): Promise<string> {
+  // Step 1: Check wallet connection
   const connection = getCurrentConnection();
-  if (!connection) throw new Error('Wallet not connected');
+  if (!connection) {
+    throw new Error('Wallet not connected. Please disconnect and reconnect your wallet.');
+  }
 
-  await ensureAccountMapped(connection.address);
+  // Before the dry-run, ensure the account is mapped
+  try {
+    await ensureAccountMapped(connection.address);
+  } catch (mapErr) {
+    throw new Error('Account mapping failed. Please disconnect and reconnect your wallet.');
+  }
 
   const data = encodeFunctionData({ abi, functionName, args });
   const typedApi = getTypedApi();
 
+  // Step 3: Dry-run to estimate gas
+  let dryRun;
+  try {
+    dryRun = await typedApi.apis.ReviveApi.call(
+      connection.address,
+      Binary.fromHex(contractAddress),
+      value,
+      undefined,
+      undefined,
+      Binary.fromHex(data)
+    );
+  } catch (dryRunErr: any) {
+    throw new Error(`Dry-run failed for ${functionName}: ${dryRunErr.message}`);
+  }
 
-  const dryRun = await typedApi.apis.ReviveApi.call(
-    connection.address,              // SS58 address of connected wallet
-    Binary.fromHex(contractAddress), // H160 as FixedSizeBinary<20>
-    value,
-    undefined,
-    undefined,
-    Binary.fromHex(data)
-  );
+  // Note: dry-run may report failure for payable functions because msg.value 
+  // simulation can be unreliable. We still use gas_required from the dry-run
+  // but don't block on success/failure — let the real transaction decide.
 
-  const gasLimit = (dryRun as any).gas_required ?? { ref_time: 50000000000n, proof_size: 500000n };
+  const gasLimit = (dryRun as any).gas_required ?? { ref_time: 50000000000n, proof_size: 5000000n };
   const storageDeposit = (dryRun as any).storage_deposit?.value ?? 0n;
 
-  const result = await typedApi.tx.Revive.call({
-    dest: Binary.fromHex(contractAddress), // H160 as FixedSizeBinary<20>
-    value,
-    gas_limit: gasLimit,
-    storage_deposit_limit: storageDeposit,
-    data: Binary.fromHex(data),      // Binary from hex calldata
-  }).signAndSubmit(connection.signer.polkadotSigner);
+  // Step 4: Sign and submit
+  try {
+    const result = await typedApi.tx.Revive.call({
+      dest: Binary.fromHex(contractAddress),
+      value,
+      gas_limit: gasLimit,
+      storage_deposit_limit: storageDeposit,
+      data: Binary.fromHex(data),
+    }).signAndSubmit(connection.signer.polkadotSigner);
 
-
-  return result.block.hash;
+    return result.block.hash;
+  } catch (signErr: any) {
+    // User rejected in wallet extension
+    if (signErr.message?.includes('Cancelled') || signErr.message?.includes('Rejected')) {
+      throw new Error('Transaction rejected by user');
+    }
+    throw new Error(`Transaction failed: ${signErr.message}`);
+  }
 }
 
 export async function sendTransfer(
