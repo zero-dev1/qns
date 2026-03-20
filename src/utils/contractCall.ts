@@ -4,6 +4,22 @@ import { getTypedApi } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
+async function doCall(
+  typedApi: ReturnType<typeof getTypedApi>,
+  contractAddress: string,
+  data: string
+) {
+  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+  return typedApi.apis.ReviveApi.call(
+    ZERO_ADDRESS,
+    Binary.fromHex(contractAddress),
+    0n,
+    undefined,
+    undefined,
+    Binary.fromHex(data)
+  );
+}
+
 export async function callContract<T = any>(
   contractAddress: string,
   abi: any[],
@@ -13,34 +29,38 @@ export async function callContract<T = any>(
   const data = encodeFunctionData({ abi, functionName, args });
   const typedApi = getTypedApi();
 
-  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
   if (import.meta.env.DEV) console.log(`[QF] Reading ${functionName} via PAPI ReviveApi.call...`);
 
-  const callResult = await typedApi.apis.ReviveApi.call(
-    ZERO_ADDRESS,
-    Binary.fromHex(contractAddress),
-    0n,
-    undefined,
-    undefined,
-    Binary.fromHex(data)
-  );
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const callResult = await doCall(typedApi, contractAddress, data);
 
-  const output = callResult.result?.success
-    ? callResult.result.value.data
-    : null;
+      const output = callResult.result?.success
+        ? callResult.result.value.data
+        : null;
 
-  if (!output) {
-    const altOutput = (callResult as any)?.result?.Ok?.data
-      || (callResult as any)?.result?.value?.data
-      || (callResult as any)?.data;
-    if (!altOutput) {
-      throw new Error(`Contract read failed for ${functionName}`);
+      if (!output) {
+        const altOutput = (callResult as any)?.result?.Ok?.data
+          || (callResult as any)?.result?.value?.data
+          || (callResult as any)?.data;
+        if (!altOutput) {
+          throw new Error(`Contract read failed for ${functionName}`);
+        }
+        return decodeResult(abi, functionName, altOutput);
+      }
+
+      return decodeResult(abi, functionName, output);
+    } catch (err) {
+      lastError = err as Error;
+      if (attempt < 3) {
+        if (import.meta.env.DEV) console.log(`[QF] ${functionName} attempt ${attempt} failed, retrying in 1s...`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
-    return decodeResult(abi, functionName, altOutput);
   }
 
-  return decodeResult(abi, functionName, output);
+  throw new Error(`Contract read failed for ${functionName} after 3 attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
 function decodeResult<T>(abi: any[], functionName: string, output: any): T {

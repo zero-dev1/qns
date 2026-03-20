@@ -56,7 +56,12 @@ export const useWalletStore = create<WalletState>()(
         
         try {
           const walletName = walletType === 'talisman' ? 'talisman' : 'subwallet-js';
-          const connection = await connectSubstrateWallet(walletName);
+          const connection = await Promise.race([
+            connectSubstrateWallet(walletName),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Wallet connection timed out after 10 seconds. Please try again.')), 10000)
+            ),
+          ]);
           
           set({ walletConnection: connection });
           
@@ -86,9 +91,14 @@ export const useWalletStore = create<WalletState>()(
           set({ showWalletModal: false });
         } catch (error: any) {
           console.error('Wallet connection failed:', error);
-          set({ 
-            walletError: error.message || 'Failed to connect wallet',
-          });
+          const msg = error.message || '';
+          if (msg.includes('No accounts found') || msg.includes('no accounts')) {
+            set({ walletError: 'No accounts found. Please create an account in your wallet extension.' });
+          } else if (msg.includes('extension') || msg.includes('not installed') || msg.includes('Cannot read properties')) {
+            set({ walletError: 'Please install Talisman or SubWallet to use this dApp.' });
+          } else {
+            set({ walletError: error.message || 'Failed to connect wallet' });
+          }
         } finally {
           set({ connecting: false });
         }

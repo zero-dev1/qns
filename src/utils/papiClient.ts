@@ -2,6 +2,24 @@ import { createClient, type PolkadotClient, type TypedApi } from "polkadot-api";
 import { getWsProvider } from "polkadot-api/ws-provider";
 import { qf } from "@polkadot-api/descriptors";
 
+export function watchConnectionStatus(callback: (connected: boolean) => void) {
+  const client = getClient();
+  let lastSeen = Date.now();
+  const sub = client.finalizedBlock$.subscribe({
+    next() {
+      lastSeen = Date.now();
+      callback(true);
+    },
+    error() {
+      callback(false);
+    },
+  });
+  const interval = setInterval(() => {
+    if (Date.now() - lastSeen > 30000) callback(false);
+  }, 10000);
+  return () => { sub.unsubscribe(); clearInterval(interval); };
+}
+
 const QF_RPC_URL = import.meta.env.VITE_QF_RPC_URL || "wss://mainnet.qfnode.net";
 
 let client: PolkadotClient | null = null;
