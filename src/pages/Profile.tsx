@@ -355,8 +355,14 @@ export default function ProfilePage() {
 
       setTxHash(hash);
       setGiftSuccess(true);
-    } catch (err) {
-      setGiftError('Transaction failed. Please try again.');
+    } catch (err: any) {
+      console.error('Gift send error:', err);
+      const msg = err?.message ?? String(err);
+      if (msg.includes('rejected') || msg.includes('Rejected') || msg.includes('Cancelled') || msg.includes('cancelled')) {
+        setGiftError('Transaction cancelled.');
+      } else {
+        setGiftError(msg || 'Transaction failed. Please try again.');
+      }
     } finally {
       setIsSending(false);
     }
