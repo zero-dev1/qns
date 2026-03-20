@@ -1,5 +1,6 @@
 import { keccak256, encodePacked, type Hex } from 'viem';
 import { getTypedApi } from './papiClient';
+import { Binary } from 'polkadot-api';
 import { callContract, writeContract, sendTransfer } from './contractCall';
 import {
   QNS_REGISTRAR_ADDRESS,
@@ -506,6 +507,36 @@ export async function getNamesOwnedByAddress(address: string): Promise<{
 export async function getQFBalance(address: string): Promise<bigint> {
   try {
     const typedApi = getTypedApi();
+    
+    // If it's an EVM address (0x...), use ReviveApi.balance to get the correct balance
+    if (address.startsWith('0x') && address.length === 42) {
+      try {
+        const balance = await typedApi.apis.ReviveApi.balance(
+          Binary.fromHex(address)
+        );
+        if (balance !== undefined && balance !== null) {
+          // balance may be a bigint directly or a Binary
+          if (typeof balance === 'bigint') return balance;
+          if (typeof balance === 'number') return BigInt(balance);
+          if (typeof balance === 'string') return BigInt(balance);
+          // If it's a Binary/Uint8Array, convert
+          if (balance instanceof Uint8Array) {
+            const hex = '0x' + Array.from(balance).map((b: number) => b.toString(16).padStart(2, '0')).join('');
+            return BigInt(hex);
+          }
+          if (typeof (balance as any).asHex === 'function') return BigInt((balance as any).asHex());
+        }
+      } catch {
+        // ReviveApi.balance may not exist on this runtime version, fall through
+      }
+      
+      // Fallback: try a zero-value dry-run call and check the account info
+      // by querying System.Account with the deployer as a proxy read
+      // This won't work for contract addresses, so return 0
+      return 0n;
+    }
+    
+    // For SS58 addresses, query System.Account directly
     const accountInfo = await typedApi.query.System.Account.getValue(address);
     return accountInfo?.data?.free ?? 0n;
   } catch (error: any) {

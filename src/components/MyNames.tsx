@@ -42,6 +42,7 @@ export default function MyNames() {
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferSuccess, setTransferSuccess] = useState(false);
 
   // Share modal state
   const [shareModal, setShareModal] = useState<string | null>(null);
@@ -144,26 +145,28 @@ export default function MyNames() {
         }
         recipient = resolved;
       } else {
-        // Check if valid address (SS58 or EVM)
         const format = detectAddressFormat(recipient);
         if (format === 'invalid') {
           setTransferError('Enter a valid .qf name, SS58 address (5...), or EVM address (0x...).');
           setTransferring(false);
           return;
         }
-        // Convert SS58 address to EVM address for the contract
         if (format === 'ss58') {
           recipient = ss58ToEvmAddress(recipient);
         }
-        // EVM addresses are used as-is
       }
 
       const signerAddress = ss58Address || address;
       await transferNameOnChain(transferModal, recipient as `0x${string}`, signerAddress);
-      setTransferModal(null);
-      setTransferRecipient('');
-      await loadNames();
-    } catch (err) {
+      setTransferSuccess(true);
+    } catch (err: any) {
+      console.error('Transfer error:', err);
+      const msg = err?.message ?? String(err);
+      if (msg.includes('rejected') || msg.includes('Rejected') || msg.includes('Cancelled')) {
+        setTransferError('Transaction rejected');
+      } else {
+        setTransferError(msg || 'Transfer failed. Please try again.');
+      }
     } finally {
       setTransferring(false);
     }
@@ -326,6 +329,7 @@ export default function MyNames() {
                         setTransferModal(item.name);
                         setTransferRecipient('');
                         setTransferError(null);
+                        setTransferSuccess(false);
                       }}
                       className="px-3 py-1.5 text-xs rounded-lg text-[#555555] hover:text-white transition-colors cursor-pointer"
                     >
@@ -378,50 +382,91 @@ export default function MyNames() {
         {transferModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
             <div className="bg-[#141414] border border-[#1E1E1E] rounded-xl p-6 max-w-md w-full animate-scale-in">
-              <h3 className="font-clash font-medium text-xl text-white mb-1">
-                Transfer {transferModal}<span className="text-[#00D179]">.qf</span>
-              </h3>
-              <p className="text-sm text-[#8A8A8A] mb-4">Transfer to another wallet</p>
+              {!transferSuccess ? (
+                <>
+                  <h3 className="font-clash font-medium text-xl text-white mb-1">
+                    Transfer {transferModal}<span className="text-[#00D179]">.qf</span>
+                  </h3>
+                  <p className="text-sm text-[#8A8A8A] mb-4">Transfer to another wallet</p>
 
-              <div className="mb-2">
-                <input
-                  type="text"
-                  value={transferRecipient}
-                  onChange={(e) => setTransferRecipient(e.target.value)}
-                  placeholder="5... (Substrate), 0x... (EVM), or name.qf"
-                  className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-[#00D179] transition-colors duration-200 font-mono"
-                />
-                {getTransferAddressLabel() && (
-                  <p className="text-xs text-[#00D179] mt-2 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#00D179]"></span>
-                    {getTransferAddressLabel()}
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      value={transferRecipient}
+                      onChange={(e) => setTransferRecipient(e.target.value)}
+                      placeholder="5... (Substrate), 0x... (EVM), or name.qf"
+                      className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-[#00D179] transition-colors duration-200 font-mono"
+                    />
+                    {getTransferAddressLabel() && (
+                      <p className="text-xs text-[#00D179] mt-2 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00D179]"></span>
+                        {getTransferAddressLabel()}
+                      </p>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-[#F5A623] mb-4 mt-3">
+                    This action cannot be undone. The new owner will have full control of this name.
                   </p>
-                )}
-              </div>
 
-              <p className="text-xs text-[#F5A623] mb-4 mt-3">
-                This action cannot be undone. The new owner will have full control of this name.
-              </p>
+                  {transferError && (
+                    <p className="text-xs text-[#E5484D] mb-3">{transferError}</p>
+                  )}
 
-              {transferError && (
-                <p className="text-xs text-[#E5484D] mb-3">{transferError}</p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleTransfer}
+                      disabled={transferring || !transferRecipient.trim()}
+                      className="flex-1 py-2.5 bg-[#E5484D] hover:bg-[#c93d41] text-white font-medium rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {transferring ? 'Transferring...' : 'Transfer'}
+                    </button>
+                    <button
+                      onClick={() => setTransferModal(null)}
+                      className="text-sm text-[#8A8A8A] hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#00D179]/20 flex items-center justify-center">
+                    <Check size={32} className="text-[#00D179]" />
+                  </div>
+                  <h3 className="font-clash font-medium text-xl text-white mb-2">
+                    {transferModal}<span className="text-[#00D179]">.qf</span> transferred!
+                  </h3>
+                  <p className="text-sm text-[#8A8A8A] mb-6">
+                    Successfully transferred to {transferRecipient.length > 20
+                      ? `${transferRecipient.slice(0, 8)}...${transferRecipient.slice(-6)}`
+                      : transferRecipient}
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={() => {
+                        const text = `Just transferred ${transferModal}.qf on @dotqfns powered by @theqfnetwork`;
+                        const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+                        window.open(url, '_blank');
+                      }}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#1E1E1E] text-white hover:bg-[#1E1E1E] transition-colors duration-200 cursor-pointer"
+                    >
+                      <Twitter size={18} />
+                      Share on X
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTransferModal(null);
+                        setTransferSuccess(false);
+                        loadNames();
+                      }}
+                      className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200 py-2 cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
               )}
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleTransfer}
-                  disabled={transferring || !transferRecipient.trim()}
-                  className="flex-1 py-2.5 bg-[#E5484D] hover:bg-[#c93d41] text-white font-medium rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {transferring ? 'Transferring...' : 'Transfer'}
-                </button>
-                <button
-                  onClick={() => setTransferModal(null)}
-                  className="text-sm text-[#8A8A8A] hover:text-white transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           </div>
         )}
