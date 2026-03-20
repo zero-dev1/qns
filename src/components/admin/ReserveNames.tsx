@@ -53,7 +53,6 @@ export default function ReserveNames() {
       showSuccess(`Reserved "${singleName.toLowerCase()}"`);
       setSingleName('');
     } catch (err: any) {
-      console.error('Reserve failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to reserve name';
@@ -110,7 +109,6 @@ export default function ReserveNames() {
       showSuccess(`Reserved ${names.length} names`);
       setBulkNames('');
     } catch (err: any) {
-      console.error('Bulk reserve failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to reserve some names';
@@ -143,7 +141,6 @@ export default function ReserveNames() {
       await unreserveName(name, signerAddress);
       showSuccess(`Unreserved "${name}"`);
     } catch (err: any) {
-      console.error('Unreserve failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to unreserve name';
@@ -180,7 +177,6 @@ export default function ReserveNames() {
       setAssignName('');
       setAssignAddress('');
     } catch (err: any) {
-      console.error('Assign failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to assign name';

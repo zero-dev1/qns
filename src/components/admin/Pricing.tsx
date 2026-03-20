@@ -58,7 +58,6 @@ export default function Pricing() {
       await updatePrices({ char3: p3, char4: p4, char5Plus: p5 }, signerAddress);
       showSuccess('Prices updated successfully');
     } catch (err: any) {
-      console.error('Price update failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to update prices';
@@ -95,7 +94,6 @@ export default function Pricing() {
       await updatePermanentMultiplier(mult, signerAddress);
       showSuccess('Permanent multiplier updated');
     } catch (err: any) {
-      console.error('Multiplier update failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to update multiplier';
@@ -132,7 +130,6 @@ export default function Pricing() {
       await updateBurnPercent(percent, signerAddress);
       showSuccess('Burn percentage updated');
     } catch (err: any) {
-      console.error('Burn percent update failed:', err);
       
       // Parse error for specific user-friendly messages
       let userMessage = 'Failed to update burn percent';

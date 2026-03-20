@@ -247,7 +247,6 @@ export default function ProfilePage() {
         exists: true,
       });
     } catch (err) {
-      console.error('Error loading profile:', err);
       setError('Failed to load profile. Please try again.');
     } finally {
       setLoading(false);
@@ -357,7 +356,6 @@ export default function ProfilePage() {
       setTxHash(hash);
       setGiftSuccess(true);
     } catch (err) {
-      console.error('Gift transaction failed:', err);
       setGiftError('Transaction failed. Please try again.');
     } finally {
       setIsSending(false);

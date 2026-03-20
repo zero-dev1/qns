@@ -127,7 +127,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }) as `0x${string}`;
       set({ adminAddress: admin });
     } catch (err) {
-      console.error('Error checking admin:', err);
       set({ adminAddress: null });
     } finally {
       set({ isCheckingAdmin: false });
@@ -207,7 +206,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         permanentMultiplier: permMult,
       });
     } catch (err) {
-      console.error('Error loading overview data:', err);
     }
   },
   
@@ -247,7 +245,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
       set({ assignedNames: assigned });
     } catch (err) {
-      console.error('Error loading assigned status:', err);
     } finally {
       set({ isLoadingAssigned: false });
     }
@@ -374,7 +371,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         isLookingUp: false,
       });
     } catch (err) {
-      console.error('Error looking up registration:', err);
       set({ lookupResult: null, isLookingUp: false });
     }
   },

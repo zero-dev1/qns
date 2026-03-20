@@ -585,7 +585,6 @@ export default function MyNamesPage() {
       hapticSuccess();
       closeEditModal();
     } catch (err: any) {
-      console.error('Profile update failed:', err);
       showToast('Failed to save, please try again', 'error');
       hapticError();
     } finally {
@@ -604,7 +603,6 @@ export default function MyNamesPage() {
       setPrimaryNameState(name);
       await refreshName();
     } catch (err: any) {
-      console.error('Set primary failed:', err);
       showToast(err.message || 'Failed to set primary name', 'error');
     } finally {
       setSettingPrimary(null);
@@ -622,7 +620,6 @@ export default function MyNamesPage() {
       await loadNames();
       showToast(`Renewed ${name}.qf successfully`, 'success');
     } catch (err: any) {
-      console.error('Renewal failed:', err);
       
       let userMessage = 'Transaction rejected';
       
@@ -704,7 +701,6 @@ export default function MyNamesPage() {
       const currentPrimary = await resolveReverse(address);
       setPrimaryNameState(currentPrimary);
     } catch (err: any) {
-      console.error('Transfer failed:', err);
       
       let userMessage = 'Transaction rejected';
       

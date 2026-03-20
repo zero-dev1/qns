@@ -23,7 +23,6 @@ async function isAccountMappedOnChain(ss58Address: string): Promise<boolean> {
     
     return result !== null;
   } catch (err) {
-    console.warn('[QF] Could not check on-chain mapping status:', err);
     return false;
   }
 }
@@ -51,18 +50,15 @@ function markAccountMappedLocally(ss58Address: string): void {
 
 export async function ensureAccountMapped(ss58Address: string): Promise<void> {
   if (isAccountMappedLocally(ss58Address)) {
-    console.log('[QF] Account already mapped (cached)');
     return;
   }
 
   const mappedOnChain = await isAccountMappedOnChain(ss58Address);
   if (mappedOnChain) {
-    console.log('[QF] Account already mapped on-chain');
     markAccountMappedLocally(ss58Address);
     return;
   }
 
-  console.log('[QF] Account not mapped, submitting map_account...');
   const api = getTypedApi();
   const { getCurrentConnection } = await import('./wallet');
   const connection = getCurrentConnection();
@@ -79,7 +75,6 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
       if (error) {
         const errorStr = typeof error === 'object' && 'type' in error ? `${(error as { type: string }).type}` : String(error);
         if (errorStr.includes('AlreadyMapped') || errorStr.includes('AccountAlreadyMapped')) {
-          console.log('[QF] Account was already mapped (race condition), continuing...');
           markAccountMappedLocally(ss58Address);
           return;
         }
@@ -87,11 +82,9 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
       }
     }
     
-    console.log('[QF] Account mapped successfully');
     markAccountMappedLocally(ss58Address);
   } catch (err) {
     if ((err as Error).message?.includes('AlreadyMapped') || (err as Error).message?.includes('AccountAlreadyMapped')) {
-      console.log('[QF] Account was already mapped (race condition), continuing...');
       markAccountMappedLocally(ss58Address);
       return;
     }

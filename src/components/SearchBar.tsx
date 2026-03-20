@@ -47,11 +47,8 @@ export default function SearchBar({ onSelect, compact = false }: SearchBarProps)
         hapticTap();
         // Fetch live price from contract
         try {
-          console.log('[SearchBar] about to call getPrice, name:', name);
           const priceWei = await getPrice(name, 1, false);
-          console.log('[SearchBar] priceWei received:', priceWei, typeof priceWei);
           const priceStr = formatEther(priceWei);
-          console.log('[SearchBar] priceStr:', priceStr);
           setResult({ status: 'available', name, price: priceStr });
         } catch (err) {
           // If price fetch fails, still show as available but without price

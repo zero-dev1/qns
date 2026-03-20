@@ -84,13 +84,11 @@ export const useWalletStore = create<WalletState>()(
             // Name resolution failed, display truncated address
           }
           
-          ensureAccountMapped(ss58Addr).catch(err => {
-            console.warn('[QF] Background account mapping failed, will retry before first tx:', err.message);
+          ensureAccountMapped(ss58Addr).catch(() => {
           });
           
           set({ showWalletModal: false });
         } catch (error: any) {
-          console.error('Wallet connection failed:', error);
           const msg = error.message || '';
           if (msg.includes('No accounts found') || msg.includes('no accounts')) {
             set({ walletError: 'No accounts found. Please create an account in your wallet extension.' });

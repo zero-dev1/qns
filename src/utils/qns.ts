@@ -167,7 +167,6 @@ export async function getContractPrice(name: string, years: number, permanent: b
     const finalPrice = permanent ? base * permanentMultiplier : base * BigInt(years);
     return finalPrice;
   } catch (error: any) {
-    console.warn('[QNS] Failed to get contract price, using defaults:', error);
     // Calculate with defaults
     const len = name.length;
     let base: bigint;
@@ -186,7 +185,6 @@ export async function getContractPrices(): Promise<{
   fromContract: boolean;
 }> {
   try {
-    if (import.meta.env.DEV) console.log('[QNS] Fetching prices from contract at:', QNS_REGISTRAR_ADDRESS);
     
     const [r3, r4, r5, rm] = await Promise.all([
       callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'price3Char'),
@@ -195,12 +193,6 @@ export async function getContractPrices(): Promise<{
       callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'permanentMultiplier'),
     ]);
     
-    if (import.meta.env.DEV) console.log('[QNS] Price query results:', {
-      price3Char: r3.toString(),
-      price4Char: r4.toString(),
-      price5PlusChar: r5.toString(),
-      permanentMultiplier: rm.toString(),
-    });
     
     networkAvailable = true;
     lastNetworkError = null;
@@ -213,12 +205,6 @@ export async function getContractPrices(): Promise<{
       fromContract: true
     };
   } catch (error: any) {
-    console.error('[QNS] Failed to fetch prices from contract, using defaults:', error);
-    console.error('[QNS] Error details:', {
-      message: error.message,
-      stack: error.stack,
-      contractAddress: QNS_REGISTRAR_ADDRESS,
-    });
     networkAvailable = false;
     lastNetworkError = error.message || 'Network connection failed';
     
@@ -273,7 +259,6 @@ export async function getPrice(name: string, years: number, permanent: boolean):
   try {
     return await getContractPrice(name, years, permanent);
   } catch (error: any) {
-    console.warn('[QNS] Failed to get price from contract, using calculation with defaults:', error.message || error);
     
     // Calculate price using defaults
     const len = name.length;
@@ -304,7 +289,6 @@ export async function resolveForward(name: string): Promise<string | null> {
     if (!addr || addr === '0x0000000000000000000000000000000000000000') return null;
     return addr;
   } catch (error: any) {
-    console.warn('[QNS] Failed to resolve forward:', error.message || error);
     return null;
   }
 }
@@ -316,7 +300,6 @@ export async function resolveReverse(address: string): Promise<string | null> {
     if (!name || name === '') return null;
     return name.endsWith('.qf') ? name.slice(0, -3) : name;
   } catch (error: any) {
-    console.warn('[QNS] Failed to resolve reverse:', error.message || error);
     networkAvailable = false;
     lastNetworkError = error.message || 'Network connection failed';
     return null;
@@ -329,7 +312,6 @@ export async function checkAvailability(name: string): Promise<boolean> {
     networkAvailable = true;
     return result;
   } catch (error: any) {
-    console.warn('[QNS] Failed to check availability:', error.message || error);
     networkAvailable = false;
     lastNetworkError = error.message || 'Network connection failed';
     throw new Error('Network unavailable - unable to check name availability');
@@ -350,7 +332,6 @@ export async function getRegistration(name: string): Promise<{
     }
     return { owner: result[0], expires: result[1], registeredAt: result[2] };
   } catch (error: any) {
-    console.warn('[QNS] Failed to get registration:', error.message || error);
     networkAvailable = false;
     lastNetworkError = error.message || 'Network connection failed';
     return null;
@@ -363,36 +344,18 @@ export async function registerName(
   permanent: boolean,
   account: string
 ): Promise<string> {
-  if (import.meta.env.DEV) console.log('[QNS] registerName ENTERED:', { name, years, permanent, account });
   
-  console.log('[QNS] Step A: Calculating fee via getPrice...');
   let fee: bigint;
   try {
     fee = await getPrice(name, years, permanent);
-    if (import.meta.env.DEV) {
-      console.log('[QNS] Step A complete:');
-      console.log('  fee (raw bigint):', fee?.toString());
-      console.log('  fee (wei/10^18):', (Number(fee) / 1e18).toString(), 'QF');
-      console.log('  fee (toHex):', '0x' + fee?.toString(16));
-    }
   } catch (feeErr: any) {
-    console.error('[QNS] Step A FAILED: getPrice threw:', feeErr?.message);
     throw feeErr;
   }
   
-  if (import.meta.env.DEV) console.log('[QNS] Step B: Calling writeContract...');
-  if (import.meta.env.DEV) console.log('[QNS] writeContract params:', {
-    contractAddress: QNS_REGISTRAR_ADDRESS,
-    functionName: 'register',
-    args: [name, years, permanent],
-    account,
-    fee: fee?.toString()
-  });
   
   try {
     // Ensure fee is a proper bigint before passing
     const feeBigInt = BigInt(fee?.toString() || '0');
-    if (import.meta.env.DEV) console.log('[QNS] Step B: fee as bigint:', feeBigInt.toString(), '(', (Number(feeBigInt) / 1e18).toString(), 'QF)');
     
     const result = await writeContract(
       QNS_REGISTRAR_ADDRESS,
@@ -402,10 +365,8 @@ export async function registerName(
       account,
       feeBigInt
     );
-    if (import.meta.env.DEV) console.log('[QNS] Step B complete: writeContract returned:', result);
     return result;
   } catch (writeErr: any) {
-    console.error('[QNS] Step B FAILED: writeContract threw:', writeErr?.message);
     throw writeErr;
   }
 }
@@ -437,8 +398,7 @@ export async function transferNameOnChain(
   if (!newOwner.startsWith('0x')) {
     const { deriveEVMAddress } = await import('./wallet');
     evmOwner = deriveEVMAddress(newOwner);
-    if (import.meta.env.DEV) console.log('[QNS] Converted SS58 to EVM for transfer:', newOwner, '->', evmOwner);
-  }
+      }
 
   return writeContract(
     QNS_REGISTRAR_ADDRESS,
@@ -455,7 +415,6 @@ export async function getTextRecord(name: string, key: string): Promise<string> 
     const node = namehash(`${name}.qf`);
     return await callContract<string>(QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'text', [node, key]);
   } catch (error: any) {
-    console.warn('[QNS] Failed to get text record:', error.message || error);
     return '';
   }
 }
@@ -541,7 +500,6 @@ export async function getNamesOwnedByAddress(address: string): Promise<{
 
     return results;
   } catch (error: any) {
-    console.warn('[QNS] Failed to get names by owner:', error.message || error);
     return [];
   }
 }
@@ -552,7 +510,6 @@ export async function getQFBalance(address: string): Promise<bigint> {
     const accountInfo = await typedApi.query.System.Account.getValue(address);
     return accountInfo?.data?.free ?? 0n;
   } catch (error: any) {
-    console.warn('[QNS] Failed to get balance:', error.message || error);
     return 0n;
   }
 }
@@ -676,7 +633,6 @@ export async function getAdmin(): Promise<string | null> {
   try {
     return await callContract<string>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'admin');
   } catch (error: any) {
-    console.warn('[QNS] Failed to get admin:', error.message || error);
     return null;
   }
 }
@@ -685,7 +641,6 @@ export async function getBurnPercentContract(): Promise<bigint | null> {
   try {
     return await callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'burnPercent');
   } catch (error: any) {
-    console.warn('[QNS] Failed to get burn percent:', error.message || error);
     return null;
   }
 }
@@ -694,7 +649,6 @@ export async function getTotalRegistrations(): Promise<bigint | null> {
   try {
     return await callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'totalRegistrations');
   } catch (error: any) {
-    console.warn('[QNS] Failed to get total registrations:', error.message || error);
     return null;
   }
 }
@@ -703,7 +657,6 @@ export async function getReservedNamesList(): Promise<string[]> {
   try {
     return await callContract<string[]>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'getReservedNames');
   } catch (error: any) {
-    console.warn('[QNS] Failed to get reserved names:', error.message || error);
     return [];
   }
 }
@@ -713,7 +666,6 @@ export async function isReserved(name: string): Promise<boolean> {
     const lh = labelHash(name.toLowerCase());
     return await callContract<boolean>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'reserved', [lh]);
   } catch (error: any) {
-    console.warn('[QNS] Failed to check if reserved:', error.message || error);
     return false;
   }
 }

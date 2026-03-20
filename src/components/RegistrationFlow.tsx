@@ -45,28 +45,18 @@ export default function RegistrationFlow() {
   }, [activeName, duration.years, duration.permanent, selectedDuration]);
 
   const handleRegister = async () => {
-    console.log('[QNS] === REGISTRATION START ===');
-    console.log('[QNS] Step 0: Checking activeName:', activeName);
     if (!activeName) {
-      console.log('[QNS] Early return: no activeName');
       return;
     }
-    console.log('[QNS] Step 0.5: Checking address:', address);
     if (!address) {
-      console.log('[QNS] No address, calling connect()...');
       await connect();
       return;
     }
-    console.log('[QNS] Step 1: Setting txState to pending');
     setTxState('pending');
     setErrorMessage(null);
     try {
-      console.log('[QNS] Step 2: Getting signer address');
       const signerAddress = ss58Address || address;
-      console.log('[QNS] Signer address:', signerAddress, '(ss58:', ss58Address, ', evm:', address, ')');
-      console.log('[QNS] Step 3: Calling registerName with:', { activeName, years: duration.years, permanent: duration.permanent, signerAddress });
       await registerName(activeName, duration.years, duration.permanent, signerAddress);
-      console.log('[QNS] Step 4: registerName completed successfully');
       setTxState('success');
       hapticSuccess();
       await refreshName();
@@ -75,10 +65,6 @@ export default function RegistrationFlow() {
         await refreshNames(address);
       }
     } catch (err: any) {
-      console.error('[QNS] === REGISTRATION FAILED ===');
-      console.error('[QNS] Error object:', err);
-      console.error('[QNS] Error message:', err?.message);
-      console.error('[QNS] Error stack:', err?.stack);
       setTxState('failed');
       hapticError();
       

@@ -78,8 +78,7 @@ export default function WalletModal() {
     } catch (err: any) {
       // Error is already handled in the store
       // Modal stays open so user sees the error
-      console.error('[WalletModal] Wallet connection failed:', err);
-    }
+          }
   };
 
   const walletOptions = getWalletOptions();

@@ -19,7 +19,6 @@ export function useCopy() {
       setTimeout(() => setCopied(false), 2000);
       return true;
     } catch (err) {
-      console.error('Failed to copy:', err);
       if (showToastMessage) {
         showToast('Failed to copy', 'error');
       }

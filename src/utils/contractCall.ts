@@ -4,25 +4,8 @@ import { getTypedApi } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
-// Dummy origin for read-only ReviveApi.call
-// Any 20-byte H160 + twelve 0xEE bytes is auto-recognized as eth-derived (no mapping needed)
-const READ_ORIGIN_HEX = "0x0101010101010101010101010101010101010101eeeeeeeeeeeeeeeeeeeeeeee";
-
-async function doCall(
-  typedApi: ReturnType<typeof getTypedApi>,
-  contractAddress: string,
-  data: string,
-  origin: string = READ_ORIGIN_HEX
-) {
-  return typedApi.apis.ReviveApi.call(
-    origin,                          // origin: eth-derived AccountId (raw hex)
-    Binary.fromHex(contractAddress), // dest: H160 as FixedSizeBinary<20>
-    0n,                             // value: bigint
-    undefined,                      // gas_limit: undefined = let runtime decide  
-    undefined,                      // storage_deposit_limit
-    Binary.fromHex(data)            // input_data: Binary (will be encoded as Vec<u8>)
-  );
-}
+// For read-only calls, we need a mapped origin. The deployer is always mapped.
+const DEPLOYER_SS58 = "5FbmtGERRp4MhuwojmA2XGWghZ7XSNBLCUKQCrTVRz8bVGrU";
 
 export async function callContract<T = any>(
   contractAddress: string,
@@ -33,61 +16,81 @@ export async function callContract<T = any>(
   const data = encodeFunctionData({ abi, functionName, args });
   const typedApi = getTypedApi();
 
-  if (import.meta.env.DEV) console.log(`[QF] Reading ${functionName} via PAPI ReviveApi.call...`);
 
-  let lastError: Error | null = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    let callResult;
-    try {
-      callResult = await doCall(typedApi, contractAddress, data);
-    } catch (networkErr: any) {
-      console.error("[QF] doCall NETWORK error:", networkErr.message);
-      throw networkErr;
+  const callResult = await typedApi.apis.ReviveApi.call(
+    DEPLOYER_SS58,                     // origin: SS58 string (PAPI decodes to AccountId32)
+    Binary.fromHex(contractAddress),   // dest: H160
+    0n,                                // value
+    undefined,                         // gas_limit (None = runtime decides)
+    undefined,                         // storage_deposit_limit (None)
+    Binary.fromHex(data)               // input_data
+  );
+
+
+  // Extract return data from the result
+  // The result shape is: { gas_consumed, gas_required, storage_deposit, result: { success: bool, value?: { flags, data } }, debug_message }
+  // On success: result.success === true, data is in result.value.data
+  // On failure: result.success === false
+  
+  const inner = callResult.result;
+  
+  // PAPI may represent this as a tagged union or as a plain object
+  // Try multiple accessor patterns defensively
+  let returnBytes: Uint8Array | string | null = null;
+
+  // Pattern 1: PAPI codec result with .success boolean
+  if (inner && typeof inner === 'object' && 'success' in inner) {
+    if (inner.success && inner.value?.data) {
+      const data = inner.value.data;
+      if (data instanceof Uint8Array) {
+        returnBytes = data;
+      } else if (data && typeof (data as any).asBytes === 'function') {
+        returnBytes = (data as any).asBytes();
+      } else if (data && typeof (data as any).asHex === 'function') {
+        returnBytes = (data as any).asHex();
+      } else {
+        returnBytes = data as any;
+      }
+    } else if (!inner.success) {
+      throw new Error(`Contract call reverted for ${functionName}: ${JSON.stringify(inner)}`);
     }
-
-    console.log("[QF] RAW callResult:", JSON.stringify(callResult, (_, v) => {
-      if (typeof v === "bigint") return "BIGINT:" + v.toString();
-      if (v instanceof Uint8Array) return "BYTES:" + Array.from(v).map(b => b.toString(16).padStart(2, '0')).join('');
-      return v;
-    }, 2));
-
-    try {
-      const output = callResult.result?.success
-        ? callResult.result.value.data
-        : null;
-
-      if (!output) {
-        const altOutput = (callResult as any)?.result?.Ok?.data
-          || (callResult as any)?.result?.value?.data
-          || (callResult as any)?.data;
-        if (!altOutput) {
-          throw new Error(`Contract read failed for ${functionName}`);
-        }
-        return decodeResult(abi, functionName, altOutput);
-      }
-
-      return decodeResult(abi, functionName, output);
-    } catch (err: any) {
-      // This is a parsing error, retry
-      lastError = err;
-      if (attempt < 3) {
-        if (import.meta.env.DEV) console.log(`[QF] ${functionName} attempt ${attempt} failed, retrying in 1s...`);
-        await new Promise(r => setTimeout(r, 1000));
-      }
+  }
+  
+  // Pattern 2: Rust-style Ok/Err enum
+  if (!returnBytes && inner && typeof inner === 'object') {
+    if ('Ok' in inner && (inner as any).Ok?.data) {
+      returnBytes = (inner as any).Ok.data;
+    } else if ('Err' in inner) {
+      throw new Error(`Contract call error for ${functionName}: ${JSON.stringify((inner as any).Err)}`);
     }
   }
 
-  throw new Error(`Contract read failed for ${functionName} after 3 attempts: ${lastError?.message || 'Unknown error'}`);
-}
+  // Pattern 3: Direct .data on result
+  if (!returnBytes && (callResult as any)?.data) {
+    returnBytes = (callResult as any).data;
+  }
 
-function decodeResult<T>(abi: any[], functionName: string, output: any): T {
-  const hex = output instanceof Uint8Array
-    ? Binary.fromBytes(output).asHex()
-    : typeof output === 'string'
-      ? output
-      : output?.asHex?.() ?? '0x';
+  if (!returnBytes) {
+    throw new Error(`No return data from ${functionName}. Raw: ${JSON.stringify(callResult).slice(0, 300)}`);
+  }
 
-  return decodeFunctionResult({ abi, functionName, data: hex as `0x${string}` }) as T;
+  // Convert to hex string for viem decoding
+  let hex: `0x${string}`;
+  if (returnBytes instanceof Uint8Array) {
+    hex = Binary.fromBytes(returnBytes).asHex() as `0x${string}`;
+  } else if (typeof returnBytes === 'string') {
+    hex = (returnBytes.startsWith('0x') ? returnBytes : '0x' + returnBytes) as `0x${string}`;
+  } else if (returnBytes && typeof (returnBytes as any).asHex === 'function') {
+    hex = (returnBytes as any).asHex() as `0x${string}`;
+  } else if (returnBytes && typeof (returnBytes as any).toHex === 'function') {
+    hex = (returnBytes as any).toHex() as `0x${string}`;
+  } else {
+    throw new Error(`Cannot convert return data to hex for ${functionName}`);
+  }
+
+
+  const decoded = decodeFunctionResult({ abi, functionName, data: hex });
+  return decoded as T;
 }
 
 export async function writeContract(
@@ -106,10 +109,6 @@ export async function writeContract(
   const data = encodeFunctionData({ abi, functionName, args });
   const typedApi = getTypedApi();
 
-  if (import.meta.env.DEV) {
-    console.log(`[QF] Writing ${functionName} via PAPI tx.Revive.call...`);
-    console.log(`[QF] Value: ${value.toString()} (${Number(value) / 1e18} QF)`);
-  }
 
   const dryRun = await typedApi.apis.ReviveApi.call(
     connection.address,              // SS58 address of connected wallet
@@ -131,7 +130,6 @@ export async function writeContract(
     data: Binary.fromHex(data),      // Binary from hex calldata
   }).signAndSubmit(connection.signer.polkadotSigner);
 
-  if (import.meta.env.DEV) console.log(`[QF] ${functionName} submitted, block: ${result.block.hash}`);
 
   return result.block.hash;
 }

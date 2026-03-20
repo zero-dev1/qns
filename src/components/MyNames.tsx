@@ -163,8 +163,7 @@ export default function MyNames() {
       setTransferModal(null);
       setTransferRecipient('');
       await loadNames();
-    } catch {
-      setTransferError('Transaction rejected');
+    } catch (err) {
     } finally {
       setTransferring(false);
     }
@@ -229,7 +228,6 @@ export default function MyNames() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 

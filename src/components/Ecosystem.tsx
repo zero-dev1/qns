@@ -11,7 +11,7 @@ const pillars = [
 
 export default function Ecosystem() {
   return (
-    <section className="py-24">
+    <section className="py-24 overflow-x-clip">
       <div className="mx-auto max-w-[1120px]">
         <motion.p
           className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"

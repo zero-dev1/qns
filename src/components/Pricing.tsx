@@ -23,8 +23,7 @@ export default function Pricing() {
         setPrices(result);
         setUsingFallback(!result.fromContract);
       })
-      .catch((err) => {
-        console.error('Failed to fetch prices:', err);
+      .catch(() => {
         setUsingFallback(true);
       })
       .finally(() => setLoading(false));
@@ -84,7 +83,7 @@ export default function Pricing() {
           PRICING
         </motion.p>
         <motion.h2
-          className="font-clash mb-4 text-center text-4xl font-bold text-white md:text-5xl"
+          className="font-clash mb-4 text-center text-3xl font-bold text-white md:text-5xl"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.2 }}
@@ -93,7 +92,7 @@ export default function Pricing() {
           Simple, transparent pricing
         </motion.h2>
         <motion.p
-          className="mx-auto mb-16 max-w-lg text-center text-gray-400"
+          className="mx-auto mb-16 max-w-lg text-center text-gray-400 md:text-base"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.2 }}
