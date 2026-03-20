@@ -151,7 +151,7 @@ export async function writeContract(
         }
       }, 30_000); // 30s is plenty for signing + broadcast
 
-      const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+      tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
         at: 'best' as const,
       }).subscribe({
         next(ev: any) {
@@ -251,7 +251,7 @@ export async function sendTransfer(
         }
       }, 30_000);
 
-      const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+      tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
         at: 'best' as const,
       }).subscribe({
         next(ev: any) {
