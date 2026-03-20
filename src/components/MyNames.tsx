@@ -121,9 +121,10 @@ export default function MyNames() {
     const signerAddress = ss58Address || address;
     try {
       await renewName(name, 1, signerAddress);
+      await new Promise((r) => setTimeout(r, 3000));
       await loadNames();
     } catch {
-      // tx failed
+      // tx failed — toast already shown by lower layers
     } finally {
       setRenewingName(null);
     }
@@ -158,6 +159,10 @@ export default function MyNames() {
 
       const signerAddress = ss58Address || address;
       await transferNameOnChain(transferModal, recipient as `0x${string}`, signerAddress);
+      
+      await new Promise((r) => setTimeout(r, 3000));
+      await loadNames();
+      
       setTransferSuccess(true);
     } catch (err: any) {
       console.error('Transfer error:', err);
@@ -458,7 +463,6 @@ export default function MyNames() {
                       onClick={() => {
                         setTransferModal(null);
                         setTransferSuccess(false);
-                        loadNames();
                       }}
                       className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200 py-2 cursor-pointer"
                     >

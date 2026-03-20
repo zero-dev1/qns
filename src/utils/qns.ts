@@ -508,54 +508,27 @@ export async function getQFBalance(address: string): Promise<bigint> {
   try {
     const typedApi = getTypedApi();
 
-    // EVM address (0x...) — need special handling on pallet-revive
+    // EVM address (0x...) — convert to Substrate AccountId32 using pallet-revive's
+    // AccountId32Mapper fallback: H160 bytes + 12 bytes of 0xEE
     if (address.startsWith('0x') && address.length === 42) {
-
-      // Approach 1: Use ReviveApi.balance(H160) — returns balance in EVM decimals
-      try {
-        const evmBinary = Binary.fromHex(address);
-        const result = await (typedApi.apis.ReviveApi as any).balance(evmBinary);
-        if (result !== undefined && result !== null) {
-          if (typeof result === 'bigint') return result;
-          if (typeof result === 'number') return BigInt(result);
-          if (typeof result === 'string') return BigInt(result);
-          if (result instanceof Uint8Array) {
-            const hex = '0x' + Array.from(result).map((b: number) => b.toString(16).padStart(2, '0')).join('');
-            return BigInt(hex);
-          }
-          if (typeof result?.asHex === 'function') return BigInt(result.asHex());
-          if (typeof result?.toString === 'function') {
-            const s = result.toString();
-            if (/^\d+$/.test(s)) return BigInt(s);
-          }
-        }
-      } catch (e) {
-        console.warn('ReviveApi.balance not available, trying account_id fallback', e);
+      // Strip 0x prefix, get 20 bytes, pad with 0xEE to make 32-byte AccountId32
+      const hexClean = address.slice(2).toLowerCase();
+      const evmBytes = new Uint8Array(20);
+      for (let i = 0; i < 20; i++) {
+        evmBytes[i] = parseInt(hexClean.slice(i * 2, i * 2 + 2), 16);
       }
+      // Build the 32-byte AccountId32: [20 bytes H160] + [12 bytes 0xEE]
+      const accountId32 = new Uint8Array(32);
+      accountId32.set(evmBytes, 0);
+      accountId32.fill(0xEE, 20);
 
-      // Approach 2: Use ReviveApi.account_id(H160) -> AccountId32, then System.Account
-      try {
-        const evmBinary = Binary.fromHex(address);
-        const accountId = await (typedApi.apis.ReviveApi as any).account_id(evmBinary);
-        if (accountId) {
-          let ss58: string;
-          if (typeof accountId === 'string') {
-            ss58 = accountId;
-          } else if (typeof accountId?.asHex === 'function') {
-            ss58 = accountId.asHex();
-          } else if (typeof accountId?.toString === 'function') {
-            ss58 = accountId.toString();
-          } else {
-            ss58 = String(accountId);
-          }
-          const accountInfo = await typedApi.query.System.Account.getValue(ss58);
-          return accountInfo?.data?.free ?? 0n;
-        }
-      } catch (e) {
-        console.warn('ReviveApi.account_id fallback also failed', e);
-      }
+      // Convert to hex string for PAPI query
+      const accountHex = '0x' + Array.from(accountId32).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      return 0n;
+      // Use Binary for the query (PAPI expects this for AccountId32)
+      const accountBinary = Binary.fromHex(accountHex);
+      const accountInfo = await typedApi.query.System.Account.getValue(accountBinary.asHex());
+      return accountInfo?.data?.free ?? 0n;
     }
 
     // SS58 address — query System.Account directly
