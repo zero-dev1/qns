@@ -33,7 +33,6 @@ export default function MyNames() {
   const { address, ss58Address, connect } = useWalletStore();
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null);
   const [textRecords, setTextRecords] = useState<Record<string, Record<string, string>>>({});
   const [editValues, setEditValues] = useState<Record<string, Record<string, string>>>({});
@@ -76,7 +75,6 @@ export default function MyNames() {
 
   const refreshNames = useCallback(async () => {
     if (!address) return;
-    setRefreshing(true);
     try {
       await new Promise((r) => setTimeout(r, 3000));
       const ownedNames = await getNamesOwnedByAddress(address);
@@ -94,8 +92,6 @@ export default function MyNames() {
       }
     } catch {
       // keep existing names on error
-    } finally {
-      setRefreshing(false);
     }
   }, [address]);
 
