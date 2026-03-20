@@ -507,39 +507,62 @@ export async function getNamesOwnedByAddress(address: string): Promise<{
 export async function getQFBalance(address: string): Promise<bigint> {
   try {
     const typedApi = getTypedApi();
-    
-    // If it's an EVM address (0x...), use ReviveApi.balance to get the correct balance
+
+    // EVM address (0x...) — need special handling on pallet-revive
     if (address.startsWith('0x') && address.length === 42) {
+
+      // Approach 1: Use ReviveApi.balance(H160) — returns balance in EVM decimals
       try {
-        const balance = await typedApi.apis.ReviveApi.balance(
-          Binary.fromHex(address)
-        );
-        if (balance !== undefined && balance !== null) {
-          // balance may be a bigint directly or a Binary
-          if (typeof balance === 'bigint') return balance;
-          if (typeof balance === 'number') return BigInt(balance);
-          if (typeof balance === 'string') return BigInt(balance);
-          // If it's a Binary/Uint8Array, convert
-          if (balance instanceof Uint8Array) {
-            const hex = '0x' + Array.from(balance).map((b: number) => b.toString(16).padStart(2, '0')).join('');
+        const evmBinary = Binary.fromHex(address);
+        const result = await (typedApi.apis.ReviveApi as any).balance(evmBinary);
+        if (result !== undefined && result !== null) {
+          if (typeof result === 'bigint') return result;
+          if (typeof result === 'number') return BigInt(result);
+          if (typeof result === 'string') return BigInt(result);
+          if (result instanceof Uint8Array) {
+            const hex = '0x' + Array.from(result).map((b: number) => b.toString(16).padStart(2, '0')).join('');
             return BigInt(hex);
           }
-          if (typeof (balance as any).asHex === 'function') return BigInt((balance as any).asHex());
+          if (typeof result?.asHex === 'function') return BigInt(result.asHex());
+          if (typeof result?.toString === 'function') {
+            const s = result.toString();
+            if (/^\d+$/.test(s)) return BigInt(s);
+          }
         }
-      } catch {
-        // ReviveApi.balance may not exist on this runtime version, fall through
+      } catch (e) {
+        console.warn('ReviveApi.balance not available, trying account_id fallback', e);
       }
-      
-      // Fallback: try a zero-value dry-run call and check the account info
-      // by querying System.Account with the deployer as a proxy read
-      // This won't work for contract addresses, so return 0
+
+      // Approach 2: Use ReviveApi.account_id(H160) -> AccountId32, then System.Account
+      try {
+        const evmBinary = Binary.fromHex(address);
+        const accountId = await (typedApi.apis.ReviveApi as any).account_id(evmBinary);
+        if (accountId) {
+          let ss58: string;
+          if (typeof accountId === 'string') {
+            ss58 = accountId;
+          } else if (typeof accountId?.asHex === 'function') {
+            ss58 = accountId.asHex();
+          } else if (typeof accountId?.toString === 'function') {
+            ss58 = accountId.toString();
+          } else {
+            ss58 = String(accountId);
+          }
+          const accountInfo = await typedApi.query.System.Account.getValue(ss58);
+          return accountInfo?.data?.free ?? 0n;
+        }
+      } catch (e) {
+        console.warn('ReviveApi.account_id fallback also failed', e);
+      }
+
       return 0n;
     }
-    
-    // For SS58 addresses, query System.Account directly
+
+    // SS58 address — query System.Account directly
     const accountInfo = await typedApi.query.System.Account.getValue(address);
     return accountInfo?.data?.free ?? 0n;
   } catch (error: any) {
+    console.error('getQFBalance error:', error);
     return 0n;
   }
 }
