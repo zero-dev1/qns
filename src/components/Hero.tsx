@@ -717,7 +717,7 @@ export default function Hero() {
                 {/* Success State */}
                 {txState === 'success' && (
                   <div className="text-center py-8 transition-all duration-150 ease-in-out animate-fade-in">
-                    <Confetti />
+                    <Confetti active={true} />
                     <div className="mb-4">
                       <svg className="mx-auto mb-4 animate-bounce" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#00D179" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M20 6L9 17l-5-5" />

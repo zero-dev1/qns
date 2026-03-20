@@ -2,7 +2,7 @@
 import { createWalletClient, createPublicClient, http, defineChain, keccak256, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -118,8 +118,9 @@ if (existsSync(combinedJsonPath)) {
 // Run resolc compilation
 console.log('Running resolc compilation...');
 try {
-  execSync(
-    'resolc contracts/QNSRegistry.sol contracts/QNSResolver.sol contracts/QNSRegistrar.sol --combined-json abi,bin -o contracts/ --overwrite',
+  execFileSync(
+    'resolc',
+    ['contracts/QNSRegistry.sol', 'contracts/QNSResolver.sol', 'contracts/QNSRegistrar.sol', '--combined-json', 'abi,bin', '-o', 'contracts/', '--overwrite'],
     { stdio: 'inherit' }
   );
 } catch (err) {
