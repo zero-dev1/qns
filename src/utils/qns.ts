@@ -81,9 +81,7 @@ export function getPublicClient() {
       return result;
     },
     getBalance: async ({ address }: { address: `0x${string}` }): Promise<bigint> => {
-      // Use getContractBalance which queries via eth_getBalance
-      // This is the correct way to get pallet-revive contract ETH balances
-      return getContractBalance(address);
+      return getQFBalance(address);
     },
   };
 }
@@ -550,47 +548,16 @@ export async function getNamesOwnedByAddress(address: string): Promise<{
 
 export async function getQFBalance(address: string): Promise<bigint> {
   try {
-    const api = getTypedApi();
-    const accountInfo = await api.query.System.Account.getValue(address);
-    return accountInfo?.data?.free ? BigInt(accountInfo.data.free.toString()) : 0n;
+    const typedApi = getTypedApi();
+    const accountInfo = await typedApi.query.System.Account.getValue(address);
+    return accountInfo?.data?.free ?? 0n;
   } catch (error: any) {
     console.warn('[QNS] Failed to get balance:', error.message || error);
     return 0n;
   }
 }
 
-// Get contract balance via ETH RPC (eth_getBalance)
-// This is the correct way to get a pallet-revive contract's ETH balance
-export async function getContractBalance(address: string): Promise<bigint> {
-  try {
-    const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL || '/eth-rpc';
-    
-    const response = await fetch(ETH_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'eth_getBalance',
-        params: [address, 'latest'],
-      }),
-    });
-    
-    const json = await response.json();
-    if (json.error) {
-      throw new Error(json.error.message || JSON.stringify(json.error));
-    }
-    
-    // eth_getBalance returns hex string
-    const balanceHex = json.result;
-    const balance = BigInt(balanceHex);
-    if (import.meta.env.DEV) console.log('[QNS] getContractBalance via eth_getBalance:', address, '=', balance.toString(), 'wei');
-    return balance;
-  } catch (error: any) {
-    console.warn('[QNS] eth_getBalance failed, returning 0');
-    return 0n;
-  }
-}
+
 
 export async function getSubstrateQFBalance(ss58Address: string): Promise<bigint> {
   return getQFBalance(ss58Address);
