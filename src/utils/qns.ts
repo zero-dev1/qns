@@ -1,7 +1,7 @@
 import { keccak256, encodePacked, type Hex } from 'viem';
 import { getTypedApi } from './papiClient';
-import { Binary } from 'polkadot-api';
 import { callContract, writeContract, sendTransfer } from './contractCall';
+import { AccountId } from 'polkadot-api';
 import {
   QNS_REGISTRAR_ADDRESS,
   QNS_RESOLVER_ADDRESS,
@@ -509,29 +509,29 @@ export async function getQFBalance(address: string): Promise<bigint> {
     const typedApi = getTypedApi();
 
     // EVM address (0x...) — convert to Substrate AccountId32 using pallet-revive's
-    // AccountId32Mapper fallback: H160 bytes + 12 bytes of 0xEE
+    // AccountId32Mapper: pad 20-byte H160 with 12 bytes of 0xEE to get 32-byte AccountId32,
+    // then SS58-encode it so PAPI can accept it.
     if (address.startsWith('0x') && address.length === 42) {
-      // Strip 0x prefix, get 20 bytes, pad with 0xEE to make 32-byte AccountId32
       const hexClean = address.slice(2).toLowerCase();
       const evmBytes = new Uint8Array(20);
       for (let i = 0; i < 20; i++) {
         evmBytes[i] = parseInt(hexClean.slice(i * 2, i * 2 + 2), 16);
       }
-      // Build the 32-byte AccountId32: [20 bytes H160] + [12 bytes 0xEE]
-      const accountId32 = new Uint8Array(32);
-      accountId32.set(evmBytes, 0);
-      accountId32.fill(0xEE, 20);
+      // Build 32-byte AccountId32: [20 bytes H160] + [12 bytes 0xEE]
+      const accountId32Bytes = new Uint8Array(32);
+      accountId32Bytes.set(evmBytes, 0);
+      accountId32Bytes.fill(0xEE, 20);
 
-      // Convert to hex string for PAPI query
-      const accountHex = '0x' + Array.from(accountId32).map(b => b.toString(16).padStart(2, '0')).join('');
+      // Use PAPI's AccountId codec to SS58-encode the 32-byte AccountId
+      // AccountId(prefix, nBytes) returns a SCALE codec; .dec() decodes raw bytes to SS58String
+      const ss58Codec = AccountId(42, 32);
+      const ss58Address = ss58Codec.dec(accountId32Bytes);
 
-      // Use Binary for the query (PAPI expects this for AccountId32)
-      const accountBinary = Binary.fromHex(accountHex);
-      const accountInfo = await typedApi.query.System.Account.getValue(accountBinary.asHex());
+      const accountInfo = await typedApi.query.System.Account.getValue(ss58Address);
       return accountInfo?.data?.free ?? 0n;
     }
 
-    // SS58 address — query System.Account directly
+    // SS58 address — query directly
     const accountInfo = await typedApi.query.System.Account.getValue(address);
     return accountInfo?.data?.free ?? 0n;
   } catch (error: any) {

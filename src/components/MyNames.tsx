@@ -33,6 +33,7 @@ export default function MyNames() {
   const { address, ss58Address, connect } = useWalletStore();
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null);
   const [textRecords, setTextRecords] = useState<Record<string, Record<string, string>>>({});
   const [editValues, setEditValues] = useState<Record<string, Record<string, string>>>({});
@@ -70,6 +71,31 @@ export default function MyNames() {
       setNames([]);
     } finally {
       setLoading(false);
+    }
+  }, [address]);
+
+  const refreshNames = useCallback(async () => {
+    if (!address) return;
+    setRefreshing(true);
+    try {
+      await new Promise((r) => setTimeout(r, 3000));
+      const ownedNames = await getNamesOwnedByAddress(address);
+      if (ownedNames.length > 0) {
+        setNames(
+          ownedNames.map((item) => ({
+            name: item.name,
+            expires: item.expires,
+            isPermanent: item.expires === 0n,
+            registeredAt: item.registeredAt,
+          }))
+        );
+      } else {
+        setNames([]);
+      }
+    } catch {
+      // keep existing names on error
+    } finally {
+      setRefreshing(false);
     }
   }, [address]);
 
@@ -121,8 +147,7 @@ export default function MyNames() {
     const signerAddress = ss58Address || address;
     try {
       await renewName(name, 1, signerAddress);
-      await new Promise((r) => setTimeout(r, 3000));
-      await loadNames();
+      await refreshNames();
     } catch {
       // tx failed — toast already shown by lower layers
     } finally {
@@ -159,10 +184,9 @@ export default function MyNames() {
 
       const signerAddress = ss58Address || address;
       await transferNameOnChain(transferModal, recipient as `0x${string}`, signerAddress);
-      
-      await new Promise((r) => setTimeout(r, 3000));
-      await loadNames();
-      
+
+      await refreshNames();
+
       setTransferSuccess(true);
     } catch (err: any) {
       console.error('Transfer error:', err);
