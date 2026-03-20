@@ -16,6 +16,7 @@ import {
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
+import Confetti from './Confetti';
 
 export type SearchResult = {
   status: 'available' | 'taken' | 'reserved' | 'invalid' | 'idle';
@@ -347,7 +348,7 @@ export default function Hero() {
 
   const handleShareOnX = () => {
     if (!selectedName) return;
-    const text = `Check out my .qf identity on @dotqfns`;
+    const text = `Just claimed ${selectedName}.qf on @dotqfns — registered in seconds on QF Network. The fastest name service in crypto.`;
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
   };
@@ -702,14 +703,21 @@ export default function Hero() {
                 {/* Pending State */}
                 {txState === 'pending' && (
                   <div className="text-center py-8 transition-all duration-150 ease-in-out animate-fade-in">
-                    <div className="inline-block w-8 h-8 border-3 border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin mb-4" />
-                    <p className="text-[#8A8A8A] font-satoshi">Confirming transaction...</p>
+                    <div className="relative inline-block mb-5">
+                      <div className="w-12 h-12 border-[3px] border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-2 h-2 bg-[#00D179] rounded-full animate-pulse" />
+                      </div>
+                    </div>
+                    <p className="text-white font-satoshi font-medium mb-1">Registering on QF Network</p>
+                    <p className="text-[#555555] text-sm font-satoshi">Powered by sub-second blocks</p>
                   </div>
                 )}
 
                 {/* Success State */}
                 {txState === 'success' && (
                   <div className="text-center py-8 transition-all duration-150 ease-in-out animate-fade-in">
+                    <Confetti />
                     <div className="mb-4">
                       <svg className="mx-auto mb-4 animate-bounce" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#00D179" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M20 6L9 17l-5-5" />
