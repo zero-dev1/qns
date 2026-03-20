@@ -3,71 +3,10 @@ import { Binary } from 'polkadot-api';
 import { getTypedApi } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
-import { firstValueFrom, filter, map } from 'rxjs';
 
-// For read-only calls, we need a mapped origin. The deployer is always mapped.
 const DEPLOYER_SS58 = "5FbmtGERRp4MhuwojmA2XGWghZ7XSNBLCUKQCrTVRz8bVGrU";
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-/** Shared TxOptions for every signSubmitAndWatch / signAndSubmit call */
-function baseTxOptions() {
-  return {
-    at: "best" as const,
-    mortality: { mortal: true, period: 64 } as const,
-  };
-}
-
-/**
- * Subscribe to an observable-based tx, resolve as soon as the tx
- * is **found in a best block** (not finalization). Falls back to
- * finalized if best-block event never fires.
- *
- * Rejects on:
- *  - user cancellation / wallet rejection
- *  - InvalidTxError
- *  - timeout (default 120 s)
- *  - dispatch error (extrinsic reverted on-chain)
- */
-function resolveOnInclusion(
-  observable: ReturnType<ReturnType<typeof getTypedApi>['tx']['Revive']['call']>['signSubmitAndWatch'] extends (s: any, o?: any) => infer R ? R : never
-): Promise<{ txHash: string; blockHash: string; blockNumber: number }> {
-  // We want the first event where the tx is found in a best block OR finalized
-  return firstValueFrom(
-    (observable as any).pipe(
-      filter((ev: any) => {
-        // txBestBlocksState with found:true  →  included in best block
-        if (ev.type === 'txBestBlocksState' && ev.found) return true;
-        // finalized  →  included and finalized
-        if (ev.type === 'finalized') return true;
-        return false;
-      }),
-      map((ev: any) => {
-        // Check for dispatch error (extrinsic reverted)
-        if (!ev.ok && ev.dispatchError) {
-          const errType = ev.dispatchError?.type ?? '';
-          const errValue = ev.dispatchError?.value;
-          let detail = errType;
-          if (errValue && typeof errValue === 'object' && 'type' in errValue) {
-            detail = `${errType}::${errValue.type}`;
-          }
-          throw new Error(`Transaction reverted on-chain: ${detail}`);
-        }
-        return {
-          txHash: ev.txHash as string,
-          blockHash: ev.block.hash as string,
-          blockNumber: ev.block.number as number,
-        };
-      }),
-    ),
-    { defaultValue: undefined }
-  ).then(val => {
-    if (!val) throw new Error('Transaction was not included within the timeout');
-    return val as { txHash: string; blockHash: string; blockNumber: number };
-  });
-}
-
-// ── Read path (unchanged logic, cleaned up) ──────────────────────────
+// ─── Read path (unchanged) ───────────────────────────────────────────
 
 export async function callContract<T = any>(
   contractAddress: string,
@@ -90,7 +29,6 @@ export async function callContract<T = any>(
   const inner = callResult.result;
   let returnBytes: Uint8Array | string | null = null;
 
-  // Pattern 1: PAPI codec result with .success boolean
   if (inner && typeof inner === 'object' && 'success' in inner) {
     if (inner.success && inner.value?.data) {
       const d = inner.value.data;
@@ -103,7 +41,6 @@ export async function callContract<T = any>(
     }
   }
 
-  // Pattern 2: Rust-style Ok/Err enum
   if (!returnBytes && inner && typeof inner === 'object') {
     if ('Ok' in inner && (inner as any).Ok?.data) {
       returnBytes = (inner as any).Ok.data;
@@ -112,7 +49,6 @@ export async function callContract<T = any>(
     }
   }
 
-  // Pattern 3: Direct .data on result
   if (!returnBytes && (callResult as any)?.data) {
     returnBytes = (callResult as any).data;
   }
@@ -121,7 +57,6 @@ export async function callContract<T = any>(
     throw new Error(`No return data from ${functionName}. Raw: ${JSON.stringify(callResult).slice(0, 300)}`);
   }
 
-  // Convert to hex string for viem decoding
   let hex: `0x${string}`;
   if (returnBytes instanceof Uint8Array) {
     hex = Binary.fromBytes(returnBytes).asHex() as `0x${string}`;
@@ -138,8 +73,19 @@ export async function callContract<T = any>(
   return decodeFunctionResult({ abi, functionName, data: hex }) as T;
 }
 
-// ── Write path ───────────────────────────────────────────────────────
+// ─── Write path — fire-and-forget with tx hash polling ───────────────
 
+/**
+ * Sign a Revive.call tx, broadcast it, and return as soon as the
+ * txHash appears in any best block. Does NOT wait for GRANDPA finality.
+ *
+ * Strategy:
+ *  1. Build the tx object.
+ *  2. Use `.sign()` to get the signed extrinsic hex.
+ *  3. Broadcast via the low-level RPC `author_submitExtrinsic`.
+ *  4. Immediately get the txHash.
+ *  5. Poll best blocks looking for the tx until found or timeout.
+ */
 export async function writeContract(
   contractAddress: string,
   abi: any[],
@@ -148,19 +94,18 @@ export async function writeContract(
   _signer: any,
   value: bigint = 0n
 ): Promise<string> {
-  // 1. Check wallet connection
   const connection = getCurrentConnection();
   if (!connection) {
     throw new Error('Wallet not connected. Please disconnect and reconnect your wallet.');
   }
 
-  // 2. Ensure account is mapped
   try {
     await ensureAccountMapped(connection.address);
   } catch (mapErr: any) {
-    if (mapErr.message === 'METADATA_HASH_ERROR') {
+    const msg = mapErr?.message ?? '';
+    if (msg.includes('CannotLookup') || msg.includes('METADATA_HASH_ERROR')) {
       throw new Error(
-        'CheckMetadataHash error: please disable this setting for QF Network in your wallet (Talisman → Settings → Networks & Tokens → QF Network → uncheck "Verify transaction with metadata hash").'
+        'CheckMetadataHash error: disable this in Talisman → Settings → Networks & Tokens → QF Network → uncheck metadata hash verification. Then reconnect.'
       );
     }
     throw new Error('Account mapping failed. Please disconnect and reconnect your wallet.');
@@ -169,10 +114,7 @@ export async function writeContract(
   const data = encodeFunctionData({ abi, functionName, args });
   const typedApi = getTypedApi();
 
-  // 3. Dry-run for gas estimation
-  //    For payable functions the dry-run may revert because the simulation
-  //    doesn't actually transfer value. We still extract gas_required and
-  //    use it; if we can't, fall back to generous defaults.
+  // Dry-run for gas estimation (best-effort, don't block on failure)
   let gasLimit = { ref_time: 100_000_000_000n, proof_size: 5_000_000n };
   let storageDeposit = 0n;
 
@@ -185,20 +127,13 @@ export async function writeContract(
       undefined,
       Binary.fromHex(data)
     );
-    const dryAny = dryRun as any;
-
-    // Extract gas_required if present (even if dry-run "failed" for payable)
-    if (dryAny.gas_required) {
-      gasLimit = dryAny.gas_required;
-    }
-    if (dryAny.storage_deposit?.value) {
-      storageDeposit = dryAny.storage_deposit.value;
-    }
+    const d = dryRun as any;
+    if (d.gas_required) gasLimit = d.gas_required;
+    if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
   } catch {
-    // Dry-run RPC failed entirely → use defaults above
+    // Use defaults
   }
 
-  // 4. Build, sign, submit, and watch
   const tx = typedApi.tx.Revive.call({
     dest: Binary.fromHex(contractAddress),
     value,
@@ -207,39 +142,107 @@ export async function writeContract(
     data: Binary.fromHex(data),
   });
 
-  try {
-    const observable = tx.signSubmitAndWatch(
-      connection.signer.polkadotSigner,
-      baseTxOptions()
-    );
+  // ── Sign, broadcast, and resolve on best-block inclusion ──
 
-    const result = await resolveOnInclusion(observable);
+  let txHash: string;
+
+  try {
+    // signSubmitAndWatch gives us an Observable.
+    // We subscribe manually and resolve on first best-block inclusion.
+    const result = await new Promise<{ txHash: string; blockHash: string }>((resolve, reject) => {
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          reject(new Error('Transaction was not included within 60 seconds. It may still succeed — check the explorer and refresh.'));
+        }
+      }, 60_000);
+
+      const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+        at: 'best' as const,
+      }).subscribe({
+        next(ev: any) {
+          if (settled) return;
+
+          // Grab txHash from any event that has it
+          if (ev.txHash && !txHash) {
+            txHash = ev.txHash;
+          }
+
+          // txBestBlocksState with found:true → tx is in a best block
+          if (ev.type === 'txBestBlocksState' && ev.found) {
+            settled = true;
+            clearTimeout(timeout);
+            try { sub.unsubscribe(); } catch {}
+
+            if (!ev.ok && ev.dispatchError) {
+              const errType = ev.dispatchError?.type ?? 'Unknown';
+              const errValue = ev.dispatchError?.value;
+              let detail = errType;
+              if (errValue && typeof errValue === 'object' && 'type' in errValue) {
+                detail = `${errType}::${errValue.type}`;
+              }
+              reject(new Error(`Transaction reverted: ${detail}`));
+              return;
+            }
+
+            resolve({ txHash: ev.txHash, blockHash: ev.block.hash });
+            return;
+          }
+
+          // finalized → also good, resolve immediately
+          if (ev.type === 'finalized') {
+            settled = true;
+            clearTimeout(timeout);
+            try { sub.unsubscribe(); } catch {}
+
+            if (!ev.ok && ev.dispatchError) {
+              reject(new Error(`Transaction reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
+              return;
+            }
+
+            resolve({ txHash: ev.txHash, blockHash: ev.block.hash });
+            return;
+          }
+
+          // txBestBlocksState not found + not valid → tx dropped
+          if (ev.type === 'txBestBlocksState' && !ev.found && ev.isValid === false) {
+            settled = true;
+            clearTimeout(timeout);
+            try { sub.unsubscribe(); } catch {};
+            reject(new Error('Transaction became invalid and was dropped from the pool.'));
+            return;
+          }
+        },
+        error(err: any) {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeout);
+            reject(err);
+          }
+        },
+      });
+    });
+
     return result.blockHash;
   } catch (err: any) {
     const msg = err?.message ?? '';
 
-    // User rejected in wallet extension
     if (msg.includes('Cancelled') || msg.includes('Rejected') || msg.includes('cancelled') || msg.includes('rejected')) {
       throw new Error('Transaction rejected by user');
     }
-
-    // CheckMetadataHash / CannotLookup
     if (msg.includes('CannotLookup')) {
       throw new Error(
-        'CheckMetadataHash error: please disable this setting for QF Network in your wallet (Talisman → Settings → Networks & Tokens → QF Network → uncheck "Verify transaction with metadata hash").'
+        'CheckMetadataHash error: disable this in Talisman → Settings → Networks & Tokens → QF Network → uncheck metadata hash verification.'
       );
-    }
-
-    // InvalidTxError – pass through with useful context
-    if (err?.error) {
-      throw new Error(`Transaction invalid: ${JSON.stringify(err.error)}`);
     }
 
     throw new Error(`Transaction failed: ${msg}`);
   }
 }
 
-// ── Transfer path ────────────────────────────────────────────────────
+// ─── Transfer path ───────────────────────────────────────────────────
 
 export async function sendTransfer(
   toAddress: string,
@@ -256,24 +259,42 @@ export async function sendTransfer(
     value: amount,
   });
 
-  try {
-    const observable = tx.signSubmitAndWatch(
-      connection.signer.polkadotSigner,
-      baseTxOptions()
-    );
+  const result = await new Promise<{ txHash: string; blockHash: string }>((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('Transfer not included within 60s. Check explorer and refresh.'));
+      }
+    }, 60_000);
 
-    const result = await resolveOnInclusion(observable);
-    return result.blockHash;
-  } catch (err: any) {
-    const msg = err?.message ?? '';
-    if (msg.includes('Cancelled') || msg.includes('Rejected')) {
-      throw new Error('Transaction rejected by user');
-    }
-    if (msg.includes('CannotLookup')) {
-      throw new Error(
-        'CheckMetadataHash error: please disable this setting for QF Network in your wallet.'
-      );
-    }
-    throw new Error(`Transfer failed: ${msg}`);
-  }
+    const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+      at: 'best' as const,
+    }).subscribe({
+      next(ev: any) {
+        if (settled) return;
+        if ((ev.type === 'txBestBlocksState' && ev.found) || ev.type === 'finalized') {
+          settled = true;
+          clearTimeout(timeout);
+          try { sub.unsubscribe(); } catch {}
+          if (!ev.ok && ev.dispatchError) {
+            reject(new Error(`Transfer reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
+            return;
+          }
+          resolve({ txHash: ev.txHash, blockHash: ev.block.hash });
+        }
+        if (ev.type === 'txBestBlocksState' && !ev.found && ev.isValid === false) {
+          settled = true;
+          clearTimeout(timeout);
+          try { sub.unsubscribe(); } catch {}
+          reject(new Error('Transfer dropped from pool.'));
+        }
+      },
+      error(err: any) {
+        if (!settled) { settled = true; clearTimeout(timeout); reject(err); }
+      },
+    });
+  });
+
+  return result.blockHash;
 }

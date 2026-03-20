@@ -263,74 +263,58 @@ export default function Hero() {
       await connect();
       return;
     }
-
-    // Check if account is mapped before attempting registration
-    const { accountMapped } = useWalletStore.getState();
-    if (!accountMapped) {
-      setTxError({
-        type: 'generic',
-        message: 'Your account is not mapped to an EVM address. Please disconnect and reconnect your wallet, and approve the mapping transaction.',
-      });
-      setTxState('failed');
-      hapticError();
-      return;
-    }
-
     setTxState('pending');
     setTxError(null);
     if (errorDismissTimerRef.current) {
       clearTimeout(errorDismissTimerRef.current);
       errorDismissTimerRef.current = null;
     }
-
     try {
       const signerAddress = ss58Address || address;
       await registerName(selectedName, duration.years, duration.permanent, signerAddress);
 
-      // ✅ Set success IMMEDIATELY — don't wait for refreshName
+      // ✅ Show success IMMEDIATELY — do NOT await refreshName
       setTxState('success');
       hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
 
-      // Refresh name in background with timeout — never blocks UI
-      const refreshTimeout = new Promise<void>((resolve) => setTimeout(resolve, 5_000));
-      Promise.race([refreshName(), refreshTimeout]).catch(() => {});
+      // Refresh QNS display name in background — never blocks UI
+      refreshName().catch(() => {});
     } catch (err: any) {
       const errorMessage = (err?.message || '').toLowerCase();
-
       const isInsufficientBalance =
         errorMessage.includes('insufficient') ||
         errorMessage.includes('balance') ||
         errorMessage.includes('funds');
-
-      const isMetadataHash =
-        errorMessage.includes('checkmetadatahash') ||
-        errorMessage.includes('cannotlookup');
 
       if (isInsufficientBalance && regPrice) {
         setTxError({
           type: 'insufficient_balance',
           message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.`,
         });
-      } else if (isMetadataHash) {
+      } else if (errorMessage.includes('checkmetadatahash') || errorMessage.includes('cannotlookup') || errorMessage.includes('metadata hash')) {
         setTxError({
           type: 'generic',
-          message: 'CheckMetadataHash must be disabled for QF Network in Talisman. Go to Settings → Networks & Tokens → QF Network → uncheck metadata hash verification.',
+          message: 'Disable CheckMetadataHash for QF Network in Talisman: Settings → Networks & Tokens → QF Network → uncheck metadata hash. Then reconnect.',
         });
       } else if (errorMessage.includes('wallet not connected') || errorMessage.includes('reconnect')) {
         setTxError({ type: 'generic', message: 'Wallet not connected. Please disconnect and reconnect your wallet.' });
       } else if (errorMessage.includes('rejected by user') || errorMessage.includes('cancelled')) {
         setTxError({ type: 'generic', message: 'Transaction rejected' });
-      } else if (errorMessage.includes('reverted on-chain')) {
-        setTxError({ type: 'generic', message: err?.message || 'Transaction reverted on-chain. The name may no longer be available.' });
+      } else if (errorMessage.includes('not included within')) {
+        setTxError({ type: 'generic', message: 'Transaction sent but confirmation timed out. Check the explorer — it may have succeeded. Try refreshing the page.' });
       } else {
         setTxError({ type: 'generic', message: err?.message || 'Transaction failed' });
       }
       setTxState('failed');
       hapticError();
 
-      if (errorDismissTimerRef.current) clearTimeout(errorDismissTimerRef.current);
-      errorDismissTimerRef.current = setTimeout(() => setTxError(null), 8000);
+      if (errorDismissTimerRef.current) {
+        clearTimeout(errorDismissTimerRef.current);
+      }
+      errorDismissTimerRef.current = setTimeout(() => {
+        setTxError(null);
+      }, 8000);
     }
   };
 
