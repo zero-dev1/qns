@@ -227,18 +227,33 @@ export async function writeContract(
 // ─── Transfer path ───────────────────────────────────────────────────
 
 export async function sendTransfer(
-  toAddress: string,
+  toEvmAddress: string,
   amount: bigint,
   _signerAddress: string
 ): Promise<string> {
   const connection = getCurrentConnection();
   if (!connection) throw new Error('Wallet not connected');
 
+  try {
+    await ensureAccountMapped(connection.address);
+  } catch (mapErr: any) {
+    const msg = mapErr?.message ?? '';
+    if (msg.includes('CannotLookup') || msg.includes('METADATA_HASH_ERROR')) {
+      throw new Error(
+        'CheckMetadataHash error: disable this in Talisman → Settings → Networks & Tokens → QF Network → uncheck metadata hash verification. Then reconnect.'
+      );
+    }
+    throw new Error('Account mapping failed. Please disconnect and reconnect your wallet.');
+  }
+
   const typedApi = getTypedApi();
 
-  const tx = typedApi.tx.Balances.transfer_keep_alive({
-    dest: { type: 'Id', value: toAddress } as any,
+  const tx = typedApi.tx.Revive.call({
+    dest: Binary.fromHex(toEvmAddress),
     value: amount,
+    gas_limit: { ref_time: 50_000_000_000n, proof_size: 1_000_000n },
+    storage_deposit_limit: 0n,
+    data: Binary.fromHex('0x'),
   });
 
   try {
@@ -256,12 +271,14 @@ export async function sendTransfer(
       }).subscribe({
         next(ev: any) {
           if (settled) return;
+
           if (ev.type === 'broadcasted') {
             settled = true;
             clearTimeout(timeout);
             resolve(ev.txHash);
             return;
           }
+
           if ((ev.type === 'txBestBlocksState' && ev.found) || ev.type === 'finalized') {
             if (!settled) {
               settled = true;
@@ -275,7 +292,11 @@ export async function sendTransfer(
           }
         },
         error(err: any) {
-          if (!settled) { settled = true; clearTimeout(timeout); reject(err); }
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeout);
+            reject(err);
+          }
         },
       });
     });
