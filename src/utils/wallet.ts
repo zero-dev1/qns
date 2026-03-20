@@ -27,11 +27,7 @@ export function deriveEVMAddress(ss58Address: string): string {
   return '0x' + hash.slice(-40);
 }
 
-export function deriveEVMAddressFallback(ss58Address: string): string {
-  const encoder = new TextEncoder();
-  const hash = keccak256(encoder.encode(ss58Address));
-  return "0x" + hash.slice(26);
-}
+
 
 export async function getOnChainEvmAddress(ss58Address: string): Promise<string> {
   const typedApi = getApi();
@@ -70,11 +66,10 @@ export async function connectSubstrateWallet(
   try {
     evmAddress = deriveEVMAddress(account.address);
   } catch (error) {
-    // If derivation fails, try on-chain lookup, then fallback
     try {
       evmAddress = await getOnChainEvmAddress(account.address);
     } catch {
-      evmAddress = deriveEVMAddressFallback(account.address);
+      throw new Error('Could not derive EVM address for account. Please ensure your account is properly set up.');
     }
   }
 

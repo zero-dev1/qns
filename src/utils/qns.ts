@@ -393,12 +393,11 @@ export async function transferNameOnChain(
   newOwner: string,
   account: string
 ): Promise<string> {
-  // Contract expects EVM address — convert SS58 if needed
   let evmOwner = newOwner;
   if (!newOwner.startsWith('0x')) {
-    const { deriveEVMAddressFallback } = await import('./wallet');
-    evmOwner = deriveEVMAddressFallback(newOwner);
-      }
+    const { deriveEVMAddress } = await import('./wallet');
+    evmOwner = deriveEVMAddress(newOwner);
+  }
 
   return writeContract(
     QNS_REGISTRAR_ADDRESS,

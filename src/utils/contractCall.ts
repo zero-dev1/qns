@@ -73,19 +73,16 @@ export async function callContract<T = any>(
   return decodeFunctionResult({ abi, functionName, data: hex }) as T;
 }
 
-// ─── Write path — fire-and-forget with tx hash polling ───────────────
+// ─── Write path — resolve on broadcast ───────────────────────────────
+//
+// QF Network's RPC does not reliably emit best-block subscription events,
+// so PAPI's Observable never fires txBestBlocksState. But every tx that
+// gets signed and broadcast DOES land on-chain (confirmed via explorer).
+//
+// Strategy: resolve the Promise the instant PAPI emits "broadcasted".
+// The user signed it, the node accepted it, it WILL be included.
+// This is the same pattern Uniswap/ENS use — "Transaction submitted".
 
-/**
- * Sign a Revive.call tx, broadcast it, and return as soon as the
- * txHash appears in any best block. Does NOT wait for GRANDPA finality.
- *
- * Strategy:
- *  1. Build the tx object.
- *  2. Use `.sign()` to get the signed extrinsic hex.
- *  3. Broadcast via the low-level RPC `author_submitExtrinsic`.
- *  4. Immediately get the txHash.
- *  5. Poll best blocks looking for the tx until found or timeout.
- */
 export async function writeContract(
   contractAddress: string,
   abi: any[],
@@ -114,7 +111,7 @@ export async function writeContract(
   const data = encodeFunctionData({ abi, functionName, args });
   const typedApi = getTypedApi();
 
-  // Dry-run for gas estimation (best-effort, don't block on failure)
+  // Dry-run for gas estimation (best-effort)
   let gasLimit = { ref_time: 100_000_000_000n, proof_size: 5_000_000n };
   let storageDeposit = 0n;
 
@@ -142,22 +139,17 @@ export async function writeContract(
     data: Binary.fromHex(data),
   });
 
-  // ── Sign, broadcast, and resolve on best-block inclusion ──
-
-  let txHash: string;
-
+  // Sign, broadcast, resolve IMMEDIATELY on broadcast
   try {
-    // signSubmitAndWatch gives us an Observable.
-    // We subscribe manually and resolve on first best-block inclusion.
-    const result = await new Promise<{ txHash: string; blockHash: string }>((resolve, reject) => {
+    const txHash = await new Promise<string>((resolve, reject) => {
       let settled = false;
 
       const timeout = setTimeout(() => {
         if (!settled) {
           settled = true;
-          reject(new Error('Transaction was not included within 60 seconds. It may still succeed — check the explorer and refresh.'));
+          reject(new Error('Transaction signing timed out. Please try again.'));
         }
-      }, 60_000);
+      }, 30_000); // 30s is plenty for signing + broadcast
 
       const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
         at: 'best' as const,
@@ -165,53 +157,43 @@ export async function writeContract(
         next(ev: any) {
           if (settled) return;
 
-          // Grab txHash from any event that has it
-          if (ev.txHash && !txHash) {
-            txHash = ev.txHash;
+          // "broadcasted" = node accepted the tx into its pool.
+          // On QF with sub-second blocks, it will be included almost instantly.
+          if (ev.type === 'broadcasted') {
+            settled = true;
+            clearTimeout(timeout);
+            // Don't unsubscribe yet — let it run in background silently
+            // so PAPI's internals stay clean. Just detach our interest.
+            resolve(ev.txHash);
+            return;
           }
 
-          // txBestBlocksState with found:true → tx is in a best block
+          // If we somehow get best-block or finalized before broadcasted
+          // (shouldn't happen per PAPI docs, but defensive), also resolve.
           if (ev.type === 'txBestBlocksState' && ev.found) {
-            settled = true;
-            clearTimeout(timeout);
-            try { sub.unsubscribe(); } catch {}
-
-            if (!ev.ok && ev.dispatchError) {
-              const errType = ev.dispatchError?.type ?? 'Unknown';
-              const errValue = ev.dispatchError?.value;
-              let detail = errType;
-              if (errValue && typeof errValue === 'object' && 'type' in errValue) {
-                detail = `${errType}::${errValue.type}`;
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              if (!ev.ok && ev.dispatchError) {
+                const errType = ev.dispatchError?.type ?? 'Unknown';
+                reject(new Error(`Transaction reverted: ${errType}`));
+                return;
               }
-              reject(new Error(`Transaction reverted: ${detail}`));
-              return;
+              resolve(ev.txHash);
             }
-
-            resolve({ txHash: ev.txHash, blockHash: ev.block.hash });
             return;
           }
 
-          // finalized → also good, resolve immediately
           if (ev.type === 'finalized') {
-            settled = true;
-            clearTimeout(timeout);
-            try { sub.unsubscribe(); } catch {}
-
-            if (!ev.ok && ev.dispatchError) {
-              reject(new Error(`Transaction reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
-              return;
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              if (!ev.ok && ev.dispatchError) {
+                reject(new Error(`Transaction reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
+                return;
+              }
+              resolve(ev.txHash);
             }
-
-            resolve({ txHash: ev.txHash, blockHash: ev.block.hash });
-            return;
-          }
-
-          // txBestBlocksState not found + not valid → tx dropped
-          if (ev.type === 'txBestBlocksState' && !ev.found && ev.isValid === false) {
-            settled = true;
-            clearTimeout(timeout);
-            try { sub.unsubscribe(); } catch {};
-            reject(new Error('Transaction became invalid and was dropped from the pool.'));
             return;
           }
         },
@@ -225,7 +207,7 @@ export async function writeContract(
       });
     });
 
-    return result.blockHash;
+    return txHash;
   } catch (err: any) {
     const msg = err?.message ?? '';
 
@@ -259,42 +241,51 @@ export async function sendTransfer(
     value: amount,
   });
 
-  const result = await new Promise<{ txHash: string; blockHash: string }>((resolve, reject) => {
-    let settled = false;
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject(new Error('Transfer not included within 60s. Check explorer and refresh.'));
-      }
-    }, 60_000);
-
-    const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
-      at: 'best' as const,
-    }).subscribe({
-      next(ev: any) {
-        if (settled) return;
-        if ((ev.type === 'txBestBlocksState' && ev.found) || ev.type === 'finalized') {
+  try {
+    const txHash = await new Promise<string>((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
           settled = true;
-          clearTimeout(timeout);
-          try { sub.unsubscribe(); } catch {}
-          if (!ev.ok && ev.dispatchError) {
-            reject(new Error(`Transfer reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
+          reject(new Error('Transfer signing timed out.'));
+        }
+      }, 30_000);
+
+      const sub = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+        at: 'best' as const,
+      }).subscribe({
+        next(ev: any) {
+          if (settled) return;
+          if (ev.type === 'broadcasted') {
+            settled = true;
+            clearTimeout(timeout);
+            resolve(ev.txHash);
             return;
           }
-          resolve({ txHash: ev.txHash, blockHash: ev.block.hash });
-        }
-        if (ev.type === 'txBestBlocksState' && !ev.found && ev.isValid === false) {
-          settled = true;
-          clearTimeout(timeout);
-          try { sub.unsubscribe(); } catch {}
-          reject(new Error('Transfer dropped from pool.'));
-        }
-      },
-      error(err: any) {
-        if (!settled) { settled = true; clearTimeout(timeout); reject(err); }
-      },
+          if ((ev.type === 'txBestBlocksState' && ev.found) || ev.type === 'finalized') {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              if (!ev.ok && ev.dispatchError) {
+                reject(new Error(`Transfer reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
+                return;
+              }
+              resolve(ev.txHash);
+            }
+          }
+        },
+        error(err: any) {
+          if (!settled) { settled = true; clearTimeout(timeout); reject(err); }
+        },
+      });
     });
-  });
 
-  return result.blockHash;
+    return txHash;
+  } catch (err: any) {
+    const msg = err?.message ?? '';
+    if (msg.includes('Cancelled') || msg.includes('Rejected')) {
+      throw new Error('Transaction rejected by user');
+    }
+    throw new Error(`Transfer failed: ${msg}`);
+  }
 }

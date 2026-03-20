@@ -1,3 +1,4 @@
+import { getSs58AddressInfo } from 'polkadot-api';
 import { keccak256 } from 'viem';
 
 export type AddressFormat = 'ss58' | 'evm' | 'invalid';
@@ -79,7 +80,10 @@ export function getAddressFormatLabel(format: AddressFormat): string {
 }
 
 export function ss58ToEvmAddress(ss58Address: string): string {
-  const encoder = new TextEncoder();
-  const hash = keccak256(encoder.encode(ss58Address));
-  return '0x' + hash.slice(26);
+  const info = getSs58AddressInfo(ss58Address);
+  if (!info.isValid) throw new Error('Invalid SS58 address');
+  const pubKeyHex = ('0x' + Array.from(info.publicKey)
+    .map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
+  const hash = keccak256(pubKeyHex);
+  return '0x' + hash.slice(-40);
 }
