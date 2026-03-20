@@ -24,8 +24,8 @@ const RESOLVER_ABI = [
   },
 ];
 
-const VIEM_EXAMPLE = `import { createPublicClient, http, keccak256, encodePacked, toHex } from 'viem';
-import { quantumFusion } from './config';
+const PAPI_EXAMPLE = `import { encodeFunctionData, decodeFunctionResult } from 'viem';
+import { getTypedApi, Binary } from 'polkadot-api';
 
 const RESOLVER_ABI = [
   {
@@ -46,11 +46,6 @@ const RESOLVER_ABI = [
 
 const RESOLVER_ADDRESS = '${QNS_RESOLVER_ADDRESS}';
 
-const client = createPublicClient({
-  chain: quantumFusion,
-  transport: http(),
-});
-
 // Namehash: converts "alice.qf" to a bytes32 node
 function namehash(name: string): \`0x\${string}\` {
   if (!name) return '0x' + '00'.repeat(32) as \`0x\${string}\`;
@@ -63,70 +58,70 @@ function namehash(name: string): \`0x\${string}\` {
   return node;
 }
 
-// Forward resolution: name → address
-async function resolveName(name: string) {
+// === READ EXAMPLE ===
+async function resolveName(typedApi: any, name: string) {
   const node = namehash(name);
-  const address = await client.readContract({
-    address: RESOLVER_ADDRESS,
+  
+  const calldata = encodeFunctionData({
     abi: RESOLVER_ABI,
     functionName: 'addr',
     args: [node],
   });
-  return address;
-}
-
-// Reverse resolution: address → name
-async function reverseResolve(address: \`0x\${string}\`) {
-  const name = await client.readContract({
-    address: RESOLVER_ADDRESS,
-    abi: RESOLVER_ABI,
-    functionName: 'reverseResolve',
-    args: [address],
-  });
-  return name; // Returns "alice.qf" or ""
-}
-
-// Usage
-const addr = await resolveName('alice.qf');
-const name = await reverseResolve('0x1234...');`;
-
-const ETHERS_EXAMPLE = `import { callContract } from '../utils/contractCall';
-
-const RESOLVER_ABI = [
-  'function addr(bytes32 node) view returns (address)',
-  'function reverseResolve(address _addr) view returns (string)',
-];
-
-const RESOLVER_ADDRESS = '${QNS_RESOLVER_ADDRESS}';
-
-// Namehash: converts "alice.qf" to a bytes32 node
-function namehash(name) {
-  if (!name) return ethers.ZeroHash;
-  const labels = name.split('.').reverse();
-  let node = ethers.ZeroHash;
-  for (const label of labels) {
-    const labelHash = ethers.keccak256(ethers.toUtf8Bytes(label));
-    node = ethers.keccak256(
-      ethers.solidityPacked(['bytes32', 'bytes32'], [node, labelHash])
-    );
+  
+  const result = await typedApi.apis.ReviveApi.call(
+    '5C62Ck4UrFPiB2C...',  // origin SS58 address
+    Binary.fromHex(RESOLVER_ADDRESS),
+    0n,                     // value
+    undefined,              // gas_limit (optional)
+    undefined,              // storage_deposit_limit (optional)
+    Binary.fromHex(calldata)
+  );
+  
+  if (result.success) {
+    const decoded = decodeFunctionResult({
+      abi: RESOLVER_ABI,
+      functionName: 'addr',
+      data: result.value.result.asOk.toHex(),
+    });
+    return decoded;
   }
-  return node;
+  throw new Error('Call failed');
 }
 
-// Forward resolution: name → address
-async function resolveName(name) {
-  const node = namehash(name);
-  return await resolver.addr(node);
-}
-
-// Reverse resolution: address → name
-async function reverseResolve(address) {
-  return await resolver.reverseResolve(address);
-}
-
-// Usage
-const addr = await resolveName('alice.qf');
-const name = await reverseResolve('0x1234...');`;
+// === WRITE EXAMPLE ===
+async function registerName(typedApi: any, signer: any, name: string) {
+  const REGISTRAR_ABI = [...]; // Your registrar ABI
+  
+  const calldata = encodeFunctionData({
+    abi: REGISTRAR_ABI,
+    functionName: 'register',
+    args: [name],
+  });
+  
+  // Dry-run first
+  const dryRun = await typedApi.apis.ReviveApi.call(
+    '5C62Ck4UrFPiB2C...',
+    Binary.fromHex('${QNS_REGISTRAR_ADDRESS}'),
+    1000000000000n,  // registration fee
+    undefined,
+    undefined,
+    Binary.fromHex(calldata)
+  );
+  
+  if (!dryRun.success) throw new Error('Dry run failed');
+  
+  // Submit transaction
+  const tx = typedApi.tx.Revive.call({
+    dest: Binary.fromHex('${QNS_REGISTRAR_ADDRESS}'),
+    value: 1000000000000n,
+    gas_limit: dryRun.value.gas_consumed,
+    storage_deposit_limit: dryRun.value.storage_deposit.asCharge,
+    data: Binary.fromHex(calldata),
+  });
+  
+  const result = await tx.signAndSubmit(signer);
+  return result;
+}`;
 
 const SOLIDITY_EXAMPLE = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -329,18 +324,11 @@ export default function DocsPage() {
                   How It Works
                 </a>
                 <a
-                  href="#viem"
+                  href="#papi"
                   className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
                 >
                   <span className="w-4 text-center text-xs">JS</span>
-                  viem Example
-                </a>
-                <a
-                  href="#ethers"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <span className="w-4 text-center text-xs">JS</span>
-                  ethers.js Example
+                  JavaScript / TypeScript
                 </a>
                 <a
                   href="#solidity"
@@ -421,30 +409,34 @@ export default function DocsPage() {
                       to the original address to prevent spoofing.
                     </p>
                   </div>
+                  <div className="bg-[#141414] border border-[#1E1E1E] rounded-lg p-4 mt-4">
+                    <p className="text-sm">
+                      <strong className="text-white">QF Network Architecture:</strong>{' '}
+                      QF Network uses Substrate + pallet-revive, so interaction is via{' '}
+                      <code className="text-[#00D179]">polkadot-api</code> rather than standard EVM RPC. 
+                      Users connect with Polkadot wallets (Talisman, SubWallet) and a one-time{' '}
+                      <code className="text-[#00D179]">map_account</code> links their SS58 address 
+                      to an on-chain EVM address.
+                    </p>
+                  </div>
                 </div>
               </Section>
 
-              {/* viem Example */}
-              <Section id="viem" title="JavaScript: viem" icon={FileCode}>
+              {/* JavaScript / TypeScript Example */}
+              <Section id="papi" title="JavaScript / TypeScript" icon={FileCode}>
                 <p className="text-[#8A8A8A] mb-4">
-                  Modern, type-safe Ethereum library. Recommended for new projects.
+                  Use polkadot-api (PAPI) to interact with QNS contracts on QF Network. 
+                  viem is used only for ABI encoding/decoding — not for RPC calls.
                 </p>
-                <CodeBlock code={VIEM_EXAMPLE} language="TypeScript" />
-              </Section>
-
-              {/* ethers.js Example */}
-              <Section id="ethers" title="JavaScript: ethers.js" icon={FileCode}>
-                <p className="text-[#8A8A8A] mb-4">
-                  Popular, battle-tested library. Use v6 for the best experience.
-                </p>
-                <CodeBlock code={ETHERS_EXAMPLE} language="JavaScript" />
+                <CodeBlock code={PAPI_EXAMPLE} language="TypeScript" />
               </Section>
 
               {/* Solidity Example */}
               <Section id="solidity" title="Solidity Integration" icon={FileCode}>
                 <p className="text-[#8A8A8A] mb-4">
                   Integrate QNS resolution directly into your smart contracts. 
-                  Perfect for accepting payments to names or displaying user identities.
+                  Perfect for accepting payments to names or displaying user identities. 
+                  On-chain contract-to-contract calls work the same way regardless of frontend.
                 </p>
                 <CodeBlock code={SOLIDITY_EXAMPLE} language="Solidity" />
               </Section>
@@ -454,8 +446,13 @@ export default function DocsPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-[#6A6A6A]">
                     Need help? Check out the{' '}
-                    <a href="/" className="text-[#00D179] hover:underline">
-                      QNS app
+                    <a 
+                      href="https://github.com/your-org/qns" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-[#00D179] hover:underline"
+                    >
+                      GitHub repo
                     </a>.
                   </p>
                   <span className="font-clash font-semibold text-white">

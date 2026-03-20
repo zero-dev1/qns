@@ -4,6 +4,10 @@ import { Binary } from 'polkadot-api';
 
 const STORAGE_KEY = 'qns_mapped_accounts-v2';
 
+// Sentinel error messages used by walletStore to branch UX
+export const METADATA_HASH_ERROR = 'METADATA_HASH_ERROR';
+export const USER_CANCELLED = 'USER_CANCELLED';
+
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
   const bytes = new Uint8Array(clean.length / 2);
@@ -18,11 +22,19 @@ async function isAccountMappedOnChain(ss58Address: string): Promise<boolean> {
     const api = getTypedApi();
     const evmAddress = deriveEVMAddress(ss58Address);
     const evmBinary = Binary.fromBytes(hexToBytes(evmAddress));
-    
-    const result = await api.query.Revive.OriginalAccount.getValue(evmBinary);
-    
-    return result !== null;
-  } catch (err) {
+    const result: any = await api.query.Revive.OriginalAccount.getValue(evmBinary);
+    // A null/undefined result or a result that is all zeros means unmapped
+    if (result === null || result === undefined) return false;
+    // If the value is a Uint8Array of all zeros → unmapped
+    if (result instanceof Uint8Array) {
+      return result.some((b: number) => b !== 0);
+    }
+    // If it's a string, check for zero address
+    if (typeof result === 'string') {
+      return result !== '' && !/^0x0+$/.test(result);
+    }
+    return true;
+  } catch {
     return false;
   }
 }
@@ -49,31 +61,36 @@ function markAccountMappedLocally(ss58Address: string): void {
 }
 
 export async function ensureAccountMapped(ss58Address: string): Promise<void> {
-  if (isAccountMappedLocally(ss58Address)) {
-    return;
-  }
+  // 1. Local cache check
+  if (isAccountMappedLocally(ss58Address)) return;
 
+  // 2. On-chain check
   const mappedOnChain = await isAccountMappedOnChain(ss58Address);
   if (mappedOnChain) {
     markAccountMappedLocally(ss58Address);
     return;
   }
 
+  // 3. Need to submit map_account tx
   const api = getTypedApi();
   const { getCurrentConnection } = await import('./wallet');
   const connection = getCurrentConnection();
-  
-  if (!connection) {
-    throw new Error('No wallet connected');
-  }
+  if (!connection) throw new Error('No wallet connected');
 
   try {
-    const result = await api.tx.Revive.map_account().signAndSubmit(connection.signer.polkadotSigner);
-    
+    const result = await api.tx.Revive.map_account().signAndSubmit(
+      connection.signer.polkadotSigner,
+      {
+        at: 'best' as const,
+      }
+    );
+
     if (!result.ok) {
       const error = result.dispatchError;
       if (error) {
-        const errorStr = typeof error === 'object' && 'type' in error ? `${(error as { type: string }).type}` : String(error);
+        const errorStr = typeof error === 'object' && 'type' in error
+          ? String((error as any).type)
+          : String(error);
         if (errorStr.includes('AlreadyMapped') || errorStr.includes('AccountAlreadyMapped')) {
           markAccountMappedLocally(ss58Address);
           return;
@@ -81,13 +98,27 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
         throw new Error(errorStr);
       }
     }
-    
+
     markAccountMappedLocally(ss58Address);
-  } catch (err) {
-    if ((err as Error).message?.includes('AlreadyMapped') || (err as Error).message?.includes('AccountAlreadyMapped')) {
+  } catch (err: any) {
+    const msg = err?.message ?? '';
+
+    // Already mapped → treat as success
+    if (msg.includes('AlreadyMapped') || msg.includes('AccountAlreadyMapped')) {
       markAccountMappedLocally(ss58Address);
       return;
     }
+
+    // User cancelled the wallet popup
+    if (msg.includes('Cancelled') || msg.includes('Rejected') || msg.includes('cancelled') || msg.includes('rejected')) {
+      throw new Error(USER_CANCELLED);
+    }
+
+    // CannotLookup → CheckMetadataHash misconfiguration
+    if (msg.includes('CannotLookup')) {
+      throw new Error(METADATA_HASH_ERROR);
+    }
+
     throw err;
   }
 }

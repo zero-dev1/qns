@@ -263,47 +263,74 @@ export default function Hero() {
       await connect();
       return;
     }
+
+    // Check if account is mapped before attempting registration
+    const { accountMapped } = useWalletStore.getState();
+    if (!accountMapped) {
+      setTxError({
+        type: 'generic',
+        message: 'Your account is not mapped to an EVM address. Please disconnect and reconnect your wallet, and approve the mapping transaction.',
+      });
+      setTxState('failed');
+      hapticError();
+      return;
+    }
+
     setTxState('pending');
     setTxError(null);
     if (errorDismissTimerRef.current) {
       clearTimeout(errorDismissTimerRef.current);
       errorDismissTimerRef.current = null;
     }
+
     try {
       const signerAddress = ss58Address || address;
       await registerName(selectedName, duration.years, duration.permanent, signerAddress);
+
+      // ✅ Set success IMMEDIATELY — don't wait for refreshName
       setTxState('success');
       hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
-      await refreshName();
+
+      // Refresh name in background with timeout — never blocks UI
+      const refreshTimeout = new Promise<void>((resolve) => setTimeout(resolve, 5_000));
+      Promise.race([refreshName(), refreshTimeout]).catch(() => {});
     } catch (err: any) {
       const errorMessage = (err?.message || '').toLowerCase();
-      const isInsufficientBalance = 
-        errorMessage.includes('insufficient') || 
-        errorMessage.includes('balance') || 
+
+      const isInsufficientBalance =
+        errorMessage.includes('insufficient') ||
+        errorMessage.includes('balance') ||
         errorMessage.includes('funds');
-      
+
+      const isMetadataHash =
+        errorMessage.includes('checkmetadatahash') ||
+        errorMessage.includes('cannotlookup');
+
       if (isInsufficientBalance && regPrice) {
         setTxError({
           type: 'insufficient_balance',
-          message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.` 
+          message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.`,
+        });
+      } else if (isMetadataHash) {
+        setTxError({
+          type: 'generic',
+          message: 'CheckMetadataHash must be disabled for QF Network in Talisman. Go to Settings → Networks & Tokens → QF Network → uncheck metadata hash verification.',
         });
       } else if (errorMessage.includes('wallet not connected') || errorMessage.includes('reconnect')) {
         setTxError({ type: 'generic', message: 'Wallet not connected. Please disconnect and reconnect your wallet.' });
       } else if (errorMessage.includes('rejected by user') || errorMessage.includes('cancelled')) {
         setTxError({ type: 'generic', message: 'Transaction rejected' });
+      } else if (errorMessage.includes('reverted on-chain')) {
+        setTxError({ type: 'generic', message: err?.message || 'Transaction reverted on-chain. The name may no longer be available.' });
       } else {
         setTxError({ type: 'generic', message: err?.message || 'Transaction failed' });
       }
       setTxState('failed');
       hapticError();
-      
-      if (errorDismissTimerRef.current) {
-        clearTimeout(errorDismissTimerRef.current);
-      }
-      errorDismissTimerRef.current = setTimeout(() => {
-        setTxError(null);
-      }, 8000);
+
+      if (errorDismissTimerRef.current) clearTimeout(errorDismissTimerRef.current);
+      errorDismissTimerRef.current = setTimeout(() => setTxError(null), 8000);
     }
   };
 
@@ -661,11 +688,20 @@ export default function Hero() {
 
                     <motion.button
                       onClick={handleRegister}
-                      className="w-full py-3.5 bg-[#00D179] hover:bg-[#00B868] text-black font-bold rounded-xl transition-all duration-200 text-base cursor-pointer"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                      disabled={!address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)}
+                      className={`w-full py-3.5 font-bold rounded-xl transition-all duration-200 text-base cursor-pointer ${
+                        !address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)
+                          ? 'bg-[#333333] text-[#666666] cursor-not-allowed'
+                          : 'bg-[#00D179] hover:bg-[#00B868] text-black'
+                      }`}
+                      whileHover={!address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance) ? {} : { scale: 1.02 }}
+                      whileTap={!address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance) ? {} : { scale: 0.98 }}
                     >
-                      {address ? `Register ${selectedName}.qf` : 'Connect Wallet'}
+                      {!address ? 'Connect Wallet' :
+                       regPriceLoading ? 'Loading price...' :
+                       regPrice === null ? 'Price unavailable' :
+                       (userBalance !== null && regPrice > userBalance) ? 'Not enough QF' :
+                       `Register ${selectedName}.qf`}
                     </motion.button>
 
                     <motion.button
