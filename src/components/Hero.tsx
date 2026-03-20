@@ -82,6 +82,10 @@ export default function Hero() {
   const [burnAddressCopied, setBurnAddressCopied] = useState(false);
   const burnAddress = '0x000000000000000000000000000000000000dEaD';
   
+  // Test state
+  const [testResults, setTestResults] = useState<string[]>([]);
+  const [testRunning, setTestRunning] = useState(false);
+  
   // Wallet balance state
   const [userBalance, setUserBalance] = useState<bigint | null>(null);
   
@@ -336,6 +340,31 @@ export default function Hero() {
     const text = `Check out my .qf identity on @dotqfns`;
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
+  };
+
+  const handleTestContractCalls = async () => {
+    setTestRunning(true);
+    setTestResults([]);
+    
+    const log = (message: string) => {
+      console.log('[CONTRACT_TEST]', message);
+      setTestResults(prev => [...prev, message]);
+    };
+
+    try {
+      log('Starting contract call tests...');
+      
+      // Import and run the test
+      const { testPapiConnection } = await import('../utils/testConnection');
+      await testPapiConnection();
+      
+      log('✅ Tests completed successfully!');
+    } catch (error: any) {
+      log(`❌ Test failed: ${error.message}`);
+    } finally {
+      setTestRunning(false);
+      setTimeout(() => setTestResults([]), 10000); // Clear results after 10 seconds
+    }
   };
 
   const priceDisplay = () => {
@@ -816,6 +845,65 @@ export default function Hero() {
           </div>
         </motion.div>
       </motion.div>
+
+        {/* Contract Test Section */}
+        <motion.div
+          className="mt-8 max-w-[520px] mx-auto"
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.35 }}
+          transition={{ duration: 0.6, ease: HERO_EASE }}
+        >
+          <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-[#00D179]/10">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00D179" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4"/>
+                  <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                </svg>
+              </div>
+              <h3 className="font-clash text-lg font-semibold text-white">Contract Connection Test</h3>
+            </div>
+            
+            <p className="text-[#8A8A8A] text-sm mb-4 leading-relaxed">
+              Test the fixed contract call implementation to verify SS58 address handling.
+            </p>
+            
+            <motion.button
+              onClick={handleTestContractCalls}
+              disabled={testRunning}
+              className="w-full py-2.5 bg-[#00D179] hover:bg-[#00B868] disabled:bg-[#333] disabled:cursor-not-allowed text-black font-bold rounded-xl transition-all duration-200 text-base cursor-pointer flex items-center justify-center gap-2"
+              whileHover={{ scale: testRunning ? 1 : 1.02 }}
+              whileTap={{ scale: testRunning ? 1 : 0.98 }}
+            >
+              {testRunning ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                  </svg>
+                  Run Contract Test
+                </>
+              )}
+            </motion.button>
+            
+            {testResults.length > 0 && (
+              <div className="mt-4 bg-[#0A0A0A] rounded-xl p-3 border border-[#1E1E1A] max-h-40 overflow-y-auto">
+                <p className="text-[#555555] text-xs mb-2">Test Results:</p>
+                {testResults.map((result, i) => (
+                  <p key={i} className="text-xs font-mono text-[#00D179] mb-1">
+                    {result}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
 
       <style>{`
         @keyframes fade-in {

@@ -4,19 +4,23 @@ import { getTypedApi } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
+// Dummy origin for read-only ReviveApi.call
+// Any 20-byte H160 + twelve 0xEE bytes is auto-recognized as eth-derived (no mapping needed)
+const READ_ORIGIN_HEX = "0x0101010101010101010101010101010101010101eeeeeeeeeeeeeeeeeeeeeeee";
+
 async function doCall(
   typedApi: ReturnType<typeof getTypedApi>,
   contractAddress: string,
-  data: string
+  data: string,
+  origin: string = READ_ORIGIN_HEX
 ) {
-  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
   return typedApi.apis.ReviveApi.call(
-    ZERO_ADDRESS,
-    Binary.fromHex(contractAddress),
-    0n,
-    undefined,
-    undefined,
-    Binary.fromHex(data)
+    origin,                          // origin: eth-derived AccountId (raw hex)
+    Binary.fromHex(contractAddress), // dest: H160 as FixedSizeBinary<20>
+    0n,                             // value: bigint
+    undefined,                      // gas_limit: undefined = let runtime decide  
+    undefined,                      // storage_deposit_limit
+    Binary.fromHex(data)            // input_data: Binary (will be encoded as Vec<u8>)
   );
 }
 
@@ -33,9 +37,21 @@ export async function callContract<T = any>(
 
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
+    let callResult;
     try {
-      const callResult = await doCall(typedApi, contractAddress, data);
+      callResult = await doCall(typedApi, contractAddress, data);
+    } catch (networkErr: any) {
+      console.error("[QF] doCall NETWORK error:", networkErr.message);
+      throw networkErr;
+    }
 
+    console.log("[QF] RAW callResult:", JSON.stringify(callResult, (_, v) => {
+      if (typeof v === "bigint") return "BIGINT:" + v.toString();
+      if (v instanceof Uint8Array) return "BYTES:" + Array.from(v).map(b => b.toString(16).padStart(2, '0')).join('');
+      return v;
+    }, 2));
+
+    try {
       const output = callResult.result?.success
         ? callResult.result.value.data
         : null;
@@ -51,8 +67,9 @@ export async function callContract<T = any>(
       }
 
       return decodeResult(abi, functionName, output);
-    } catch (err) {
-      lastError = err as Error;
+    } catch (err: any) {
+      // This is a parsing error, retry
+      lastError = err;
       if (attempt < 3) {
         if (import.meta.env.DEV) console.log(`[QF] ${functionName} attempt ${attempt} failed, retrying in 1s...`);
         await new Promise(r => setTimeout(r, 1000));
@@ -95,8 +112,8 @@ export async function writeContract(
   }
 
   const dryRun = await typedApi.apis.ReviveApi.call(
-    connection.evmAddress,
-    Binary.fromHex(contractAddress),
+    connection.address,              // SS58 address of connected wallet
+    Binary.fromHex(contractAddress), // H160 as FixedSizeBinary<20>
     value,
     undefined,
     undefined,
@@ -107,11 +124,11 @@ export async function writeContract(
   const storageDeposit = (dryRun as any).storage_deposit?.value ?? 0n;
 
   const result = await typedApi.tx.Revive.call({
-    dest: contractAddress as any,
+    dest: Binary.fromHex(contractAddress), // H160 as FixedSizeBinary<20>
     value,
     gas_limit: gasLimit,
     storage_deposit_limit: storageDeposit,
-    data: Binary.fromHex(data),
+    data: Binary.fromHex(data),      // Binary from hex calldata
   }).signAndSubmit(connection.signer.polkadotSigner);
 
   if (import.meta.env.DEV) console.log(`[QF] ${functionName} submitted, block: ${result.block.hash}`);

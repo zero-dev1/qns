@@ -1,26 +1,27 @@
-import { ethers } from 'ethers';
-import { getApi } from './wallet';
+import { encodeFunctionData, decodeFunctionResult } from 'viem';
+import { Binary } from 'polkadot-api';
+import { getTypedApi } from './papiClient';
+import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
-const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL || '/eth-rpc';
+// Dummy origin for read-only ReviveApi.call
+// Any 20-byte H160 + twelve 0xEE bytes is auto-recognized as eth-derived (no mapping needed)
+const READ_ORIGIN_HEX = "0x0101010101010101010101010101010101010101eeeeeeeeeeeeeeeeeeeeeeee";
 
-async function fetchJsonRpc(method: string, params: any[]): Promise<any> {
-  const response = await fetch(ETH_RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method,
-      params,
-    }),
-  });
-  
-  const json = await response.json();
-  if (json.error) {
-    throw new Error(json.error.message || JSON.stringify(json.error));
-  }
-  return json.result;
+async function doCall(
+  typedApi: ReturnType<typeof getTypedApi>,
+  contractAddress: string,
+  data: string,
+  origin: string = READ_ORIGIN_HEX
+) {
+  return typedApi.apis.ReviveApi.call(
+    origin,                          // origin: eth-derived AccountId (raw hex)
+    Binary.fromHex(contractAddress), // dest: H160 as FixedSizeBinary<20>
+    0n,                             // value: bigint
+    undefined,                      // gas_limit: undefined = let runtime decide  
+    undefined,                      // storage_deposit_limit
+    Binary.fromHex(data)            // input_data: Binary (will be encoded as Vec<u8>)
+  );
 }
 
 export async function callContract<T = any>(
@@ -29,27 +30,64 @@ export async function callContract<T = any>(
   functionName: string,
   args: any[] = []
 ): Promise<T> {
-  const iface = new ethers.Interface(abi);
-  const calldata = iface.encodeFunctionData(functionName, args);
+  const data = encodeFunctionData({ abi, functionName, args });
+  const typedApi = getTypedApi();
 
-  try {
-    console.log(`[QF] Reading ${functionName} via fetch eth_call...`);
-    const resultHex = await fetchJsonRpc('eth_call', [
-      {
-        to: contractAddress,
-        data: calldata,
-      },
-      'latest',
-    ]);
+  if (import.meta.env.DEV) console.log(`[QF] Reading ${functionName} via PAPI ReviveApi.call...`);
 
-    const decoded = iface.decodeFunctionResult(functionName, resultHex);
-    const result = Array.isArray(decoded) ? decoded[0] : decoded;
-    console.log(`[QF] Read ${functionName}:`, result);
-    return result as T;
-  } catch (err) {
-    console.error(`[QF] Failed to read ${functionName}:`, err);
-    throw err;
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let callResult;
+    try {
+      callResult = await doCall(typedApi, contractAddress, data);
+    } catch (networkErr: any) {
+      console.error("[QF] doCall NETWORK error:", networkErr.message);
+      throw networkErr;
+    }
+
+    console.log("[QF] RAW callResult:", JSON.stringify(callResult, (_, v) => {
+      if (typeof v === "bigint") return "BIGINT:" + v.toString();
+      if (v instanceof Uint8Array) return "BYTES:" + Array.from(v).map(b => b.toString(16).padStart(2, '0')).join('');
+      return v;
+    }, 2));
+
+    try {
+      const output = callResult.result?.success
+        ? callResult.result.value.data
+        : null;
+
+      if (!output) {
+        const altOutput = (callResult as any)?.result?.Ok?.data
+          || (callResult as any)?.result?.value?.data
+          || (callResult as any)?.data;
+        if (!altOutput) {
+          throw new Error(`Contract read failed for ${functionName}`);
+        }
+        return decodeResult(abi, functionName, altOutput);
+      }
+
+      return decodeResult(abi, functionName, output);
+    } catch (err: any) {
+      // This is a parsing error, retry
+      lastError = err;
+      if (attempt < 3) {
+        if (import.meta.env.DEV) console.log(`[QF] ${functionName} attempt ${attempt} failed, retrying in 1s...`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
   }
+
+  throw new Error(`Contract read failed for ${functionName} after 3 attempts: ${lastError?.message || 'Unknown error'}`);
+}
+
+function decodeResult<T>(abi: any[], functionName: string, output: any): T {
+  const hex = output instanceof Uint8Array
+    ? Binary.fromBytes(output).asHex()
+    : typeof output === 'string'
+      ? output
+      : output?.asHex?.() ?? '0x';
+
+  return decodeFunctionResult({ abi, functionName, data: hex as `0x${string}` }) as T;
 }
 
 export async function writeContract(
@@ -57,184 +95,61 @@ export async function writeContract(
   abi: any[],
   functionName: string,
   args: any[],
-  signer: any,
+  _signer: any,
   value: bigint = 0n
 ): Promise<string> {
-  const signerAddress = typeof signer === 'string' ? signer : (signer?.address || signer);
-  console.log('[QF] writeContract ENTERED:', { contractAddress, functionName, args, signerAddress, value: value?.toString() });
-  
-  // Ensure account is mapped before any contract interaction
-  console.log('[QF] Step 0: Ensuring account is mapped...');
-  try {
-    await ensureAccountMapped(signerAddress);
-    console.log('[QF] Step 0 complete: account mapping verified');
-  } catch (mappingErr: any) {
-    console.error('[QF] Step 0 FAILED: ensureAccountMapped threw:', mappingErr?.message);
-    throw mappingErr;
-  }
-  
-  console.log('[QF] Step 1: Getting API...');
-  let api;
-  try {
-    api = await getApi();
-    console.log('[QF] Step 1 complete: API obtained');
-  } catch (apiErr: any) {
-    console.error('[QF] Step 1 FAILED: getApi threw:', apiErr?.message);
-    throw apiErr;
-  }
-  console.log('[QF] Step 2: Encoding function data...');
-  let iface, calldata;
-  try {
-    iface = new ethers.Interface(abi);
-    calldata = iface.encodeFunctionData(functionName, args);
-    console.log('[QF] Step 2 complete: calldata encoded');
-  } catch (encodeErr: any) {
-    console.error('[QF] Step 2 FAILED: encodeFunctionData threw:', encodeErr?.message);
-    throw encodeErr;
+  const connection = getCurrentConnection();
+  if (!connection) throw new Error('Wallet not connected');
+
+  await ensureAccountMapped(connection.address);
+
+  const data = encodeFunctionData({ abi, functionName, args });
+  const typedApi = getTypedApi();
+
+  if (import.meta.env.DEV) {
+    console.log(`[QF] Writing ${functionName} via PAPI tx.Revive.call...`);
+    console.log(`[QF] Value: ${value.toString()} (${Number(value) / 1e18} QF)`);
   }
 
-  console.log('[QF] Step 3: Calculating gas limit...');
-  let gasLimit;
-  try {
-    const blockWeights = (api.consts.system as any).blockWeights;
-    const maxExtrinsic = blockWeights?.perClass?.normal?.maxExtrinsic?.unwrap?.();
-    
-    if (maxExtrinsic) {
-      gasLimit = api.registry.createType('Weight', {
-        refTime: maxExtrinsic.refTime.toBigInt() * 50n / 100n,
-        proofSize: maxExtrinsic.proofSize.toBigInt() * 50n / 100n,
-      });
-    } else {
-      throw new Error('Block weights not available');
-    }
-    console.log('[QF] Step 3 complete: gasLimit set');
-  } catch (e) {
-    console.warn('[QF] Failed to get block weights, using fallback gas limit');
-    gasLimit = api.registry.createType('Weight', {
-      refTime: 50000000000n,
-      proofSize: 500000n,
-    });
-  }
+  const dryRun = await typedApi.apis.ReviveApi.call(
+    connection.address,              // SS58 address of connected wallet
+    Binary.fromHex(contractAddress), // H160 as FixedSizeBinary<20>
+    value,
+    undefined,
+    undefined,
+    Binary.fromHex(data)
+  );
 
-  console.log('[QF] Step 4: Calculating storage deposit limit...');
-  let storageDepositLimit: bigint;
-  try {
-    const accountInfo = await api.query.system.account(signerAddress) as any;
-    const freeBalance = accountInfo?.data?.free;
-    if (freeBalance) {
-      storageDepositLimit = freeBalance.toBigInt() / 20n;
-    } else {
-      storageDepositLimit = 1000000000000000000n;
-    }
-    console.log('[QF] Step 4 complete: storageDepositLimit =', storageDepositLimit.toString());
-  } catch (e) {
-    console.warn('[QF] Failed to get balance for storage deposit, using default');
-    storageDepositLimit = 1000000000000000000n;
-  }
+  const gasLimit = (dryRun as any).gas_required ?? { ref_time: 50000000000n, proof_size: 500000n };
+  const storageDeposit = (dryRun as any).storage_deposit?.value ?? 0n;
 
-  console.log('[QF] Step 5: Creating transaction...');
-  console.log('[QF] Chain decimals:', api.registry.chainDecimals);
-  console.log('[QF] revive.call params:', {
-    dest: contractAddress,
-    value: value?.toString(),
-    gasLimit: gasLimit.toJSON(),
-    storageDepositLimit: storageDepositLimit?.toString(),
-    dataLength: calldata.length,
-    signerAddress
-  });
-  let tx;
-  try {
-    tx = api.tx.revive.call(
-      contractAddress,
-      value,
-      gasLimit,
-      storageDepositLimit,
-      calldata
-    );
-    console.log('[QF] Step 5 complete: transaction created');
-  } catch (txCreateErr: any) {
-    console.error('[QF] Step 5 FAILED: api.tx.revive.call threw:', txCreateErr?.message);
-    throw txCreateErr;
-  }
+  const result = await typedApi.tx.Revive.call({
+    dest: Binary.fromHex(contractAddress), // H160 as FixedSizeBinary<20>
+    value,
+    gas_limit: gasLimit,
+    storage_deposit_limit: storageDeposit,
+    data: Binary.fromHex(data),      // Binary from hex calldata
+  }).signAndSubmit(connection.signer.polkadotSigner);
 
-  console.log('[QF] Step 6: Loading web3FromAddress...');
-  let injector;
-  try {
-    const { web3Enable, web3FromAddress } = await import('@polkadot/extension-dapp');
-    console.log('[QF] web3Enable and web3FromAddress imported, calling web3Enable...');
-    await web3Enable('QNS');
-    console.log('[QF] web3Enable complete, calling web3FromAddress with:', signerAddress);
-    injector = await web3FromAddress(signerAddress);
-    console.log('[QF] Step 6 complete: injector obtained');
-  } catch (web3Err: any) {
-    console.error('[QF] Step 6 FAILED: web3FromAddress threw:', web3Err?.message);
-    throw web3Err;
-  }
+  if (import.meta.env.DEV) console.log(`[QF] ${functionName} submitted, block: ${result.block.hash}`);
 
-  console.log('[QF] Step 7: Starting signAndSend...');
-  console.log('[QF] Transaction object created, entering Promise...');
-  return new Promise((resolve, reject) => {
-    console.log('[QF] Inside Promise, calling tx.signAndSend...');
-    tx.signAndSend(
-      signerAddress,
-      { signer: injector.signer },
-      ({ status, dispatchError }: any) => {
-        console.log('[QF] signAndSend callback fired, status:', status?.type, status?.hash?.toHex?.());
-        if (dispatchError) {
-          console.error('[QF] dispatchError:', dispatchError);
-          if (dispatchError.isModule) {
-            const decoded = api.registry.findMetaError(dispatchError.asModule);
-            reject(new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`));
-          } else {
-            reject(new Error(dispatchError.toString()));
-          }
-          return;
-        }
-        if (status.isFinalized) {
-          console.log(`[QF] ${functionName} finalized in block ${status.asFinalized.toHex()}`);
-          resolve(status.asFinalized.toHex());
-        }
-      }
-    ).catch((error: any) => {
-      console.error('[QF] signAndSend().catch() fired:', error?.message);
-      reject(new Error(`Transaction failed: ${error.message}`));
-    });
-  });
+  return result.block.hash;
 }
 
 export async function sendTransfer(
   toAddress: string,
   amount: bigint,
-  signerAddress: string
+  _signerAddress: string
 ): Promise<string> {
-  const api = await getApi();
+  const connection = getCurrentConnection();
+  if (!connection) throw new Error('Wallet not connected');
 
-  const tx = api.tx.balances.transferKeepAlive(toAddress, amount);
+  const typedApi = getTypedApi();
 
-  const { web3FromAddress } = await import('@polkadot/extension-dapp');
-  const injector = await web3FromAddress(signerAddress);
+  const result = await typedApi.tx.Balances.transfer_keep_alive({
+    dest: { type: 'Id', value: toAddress } as any,
+    value: amount,
+  }).signAndSubmit(connection.signer.polkadotSigner);
 
-  return new Promise((resolve, reject) => {
-    tx.signAndSend(
-      signerAddress,
-      { signer: injector.signer },
-      ({ status, dispatchError }: any) => {
-        if (dispatchError) {
-          if (dispatchError.isModule) {
-            const decoded = api.registry.findMetaError(dispatchError.asModule);
-            reject(new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`));
-          } else {
-            reject(new Error(dispatchError.toString()));
-          }
-          return;
-        }
-        if (status.isFinalized) {
-          console.log(`[QF] Transfer finalized in block ${status.asFinalized.toHex()}`);
-          resolve(status.asFinalized.toHex());
-        }
-      }
-    ).catch((error: any) => {
-      reject(new Error(`Transfer failed: ${error.message}`));
-    });
-  });
+  return result.block.hash;
 }

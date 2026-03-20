@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -77,6 +78,10 @@ function AnimatedRoutes() {
 }
 
 function App() {
+  useEffect(() => {
+    import('./utils/testConnection').then(m => m.testPapiConnection());
+  }, []);
+
   return (
     <ToastProvider>
       <BrowserRouter>

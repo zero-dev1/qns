@@ -4,11 +4,20 @@ import { Binary } from 'polkadot-api';
 
 const STORAGE_KEY = 'qns_mapped_accounts';
 
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(clean.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
 async function isAccountMappedOnChain(ss58Address: string): Promise<boolean> {
   try {
     const api = getTypedApi();
     const evmAddress = deriveEVMAddress(ss58Address);
-    const evmBinary = Binary.fromHex(evmAddress);
+    const evmBinary = Binary.fromBytes(hexToBytes(evmAddress));
     
     const result = await api.query.Revive.OriginalAccount.getValue(evmBinary);
     
