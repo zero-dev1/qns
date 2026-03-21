@@ -101,7 +101,7 @@ export default function Navbar() {
           <div className="flex items-center gap-6">
             <Link
               to="/my-names"
-              className="hidden sm:block text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
+              className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
             >
               My Names
             </Link>

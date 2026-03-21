@@ -706,7 +706,18 @@ export default function MyNamesPage() {
 
       confirmation.then((result) => {
         if (result.confirmed) {
-          setTimeout(() => refreshName().catch(() => {}), 3000);
+          // Delay refresh to give chain time to index the reverse record.
+          // After refresh, re-assert the optimistic primary in case the
+          // chain's reverse lookup returned stale data.
+          setTimeout(() => {
+            refreshName().catch(() => {}).finally(() => {
+              // Re-assert optimistic primary if it was reverted by stale chain data
+              const current = useWalletStore.getState().qnsName;
+              if (current !== name) {
+                useWalletStore.setState({ qnsName: name, displayName: name });
+              }
+            });
+          }, 5000);
           return;
         }
         if (result.error === 'not_confirmed') {
