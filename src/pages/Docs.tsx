@@ -22,9 +22,19 @@ const RESOLVER_ABI = [
     outputs: [{ name: '', type: 'string' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'text',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: 'key', type: 'string' },
+    ],
+    outputs: [{ name: '', type: 'string' }],
+    stateMutability: 'view',
+  },
 ];
 
-const PAPI_EXAMPLE = `import { encodeFunctionData, decodeFunctionResult } from 'viem';
+const PAPI_EXAMPLE = `import { encodeFunctionData, decodeFunctionResult, keccak256, toHex, encodePacked } from 'viem';
 import { getTypedApi, Binary } from 'polkadot-api';
 
 const RESOLVER_ABI = [
@@ -58,6 +68,8 @@ function namehash(name: string): \`0x\${string}\` {
   return node;
 }
 
+const ORIGIN_SS58 = '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'; // Any valid SS58 address
+
 // === READ EXAMPLE ===
 async function resolveName(typedApi: any, name: string) {
   const node = namehash(name);
@@ -69,7 +81,7 @@ async function resolveName(typedApi: any, name: string) {
   });
   
   const result = await typedApi.apis.ReviveApi.call(
-    '5C62Ck4UrFPiB2C...',  // origin SS58 address
+    ORIGIN_SS58,  // origin SS58 address
     Binary.fromHex(RESOLVER_ADDRESS),
     0n,                     // value
     undefined,              // gas_limit (optional)
@@ -100,7 +112,7 @@ async function registerName(typedApi: any, signer: any, name: string) {
   
   // Dry-run first
   const dryRun = await typedApi.apis.ReviveApi.call(
-    '5C62Ck4UrFPiB2C...',
+    ORIGIN_SS58,
     Binary.fromHex('${QNS_REGISTRAR_ADDRESS}'),
     1000000000000n,  // registration fee
     undefined,
@@ -144,7 +156,7 @@ contract MyContract {
     function _namehash(string calldata label) 
         internal pure returns (bytes32) {
         // qfNode = keccak256(abi.encodePacked(bytes32(0), keccak256("qf")))
-        bytes32 qfNode = 0x[COMPUTED_AT_DEPLOY];
+        bytes32 qfNode = 0xd2053912931651d18bb9045a93e991724ea9e28b11010c9d5433d664804ff6cb;
         bytes32 labelHash = keccak256(bytes(label));
         return keccak256(abi.encodePacked(qfNode, labelHash));
     }
@@ -324,6 +336,13 @@ export default function DocsPage() {
                   How It Works
                 </a>
                 <a
+                  href="#text-records"
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
+                >
+                  <FileCode size={16} />
+                  Text Records
+                </a>
+                <a
                   href="#papi"
                   className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
                 >
@@ -422,6 +441,51 @@ export default function DocsPage() {
                 </div>
               </Section>
 
+              {/* Text Records */}
+              <Section id="text-records" title="Text Records" icon={FileCode}>
+                <p className="text-[#8A8A] mb-4">
+                  QNS names can store profile metadata as text records. These are useful for displaying 
+                  user profiles, avatars, and social links in dApps.
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Supported Keys</h4>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {['avatar', 'bio', 'twitter', 'github', 'url', 'telegram'].map(key => (
+                        <code key={key} className="bg-[#141414] text-[#00D179] px-2 py-1 rounded text-sm">
+                          {key}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Reading Text Records</h4>
+                    <p className="text-[#8A8A] mb-3">
+                      Use the resolver's <code className="text-[#00D179]">text(node, key)</code> function to read metadata:
+                    </p>
+                    <CodeBlock 
+                      code={`// Read text records for a QNS name
+const node = namehash("alice.qf");
+const avatar = await resolver.text(node, "avatar");
+const bio = await resolver.text(node, "bio");
+const twitter = await resolver.text(node, "twitter");
+
+console.log(\`Avatar: \${avatar}\`);
+console.log(\`Bio: \${bio}\`);
+console.log(\`Twitter: \${twitter}\`);`} 
+                      language="JavaScript" 
+                    />
+                  </div>
+                  <div className="bg-[#141414] border border-[#1E1E1E] rounded-lg p-4">
+                    <p className="text-sm text-[#8A8A]">
+                      <strong className="text-white">Note:</strong> Text records are set by the name owner 
+                      and can be updated at any time. Always validate the data before displaying it in your application. 
+                      Empty strings are returned for keys that haven't been set.
+                    </p>
+                  </div>
+                </div>
+              </Section>
+
               {/* JavaScript / TypeScript Example */}
               <Section id="papi" title="JavaScript / TypeScript" icon={FileCode}>
                 <p className="text-[#8A8A8A] mb-4">
@@ -447,12 +511,12 @@ export default function DocsPage() {
                   <p className="text-sm text-[#6A6A6A]">
                     Need help? Check out the{' '}
                     <a 
-                      href="https://github.com/your-org/qns" 
+                      href="https://github.com/QuantumFusion-network" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="text-[#00D179] hover:underline"
                     >
-                      GitHub repo
+                      GitHub
                     </a>.
                   </p>
                   <span className="font-clash font-semibold text-white">
