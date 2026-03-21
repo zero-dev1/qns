@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getPublicClient, getWalletClient, namehash, labelHash } from '../utils/qns';
+import { getPublicClient, getWalletClient, namehash, labelHash, getReservedNamesList } from '../utils/qns';
 import {
   QNS_REGISTRY_ADDRESS,
   QNS_REGISTRY_ABI,
@@ -86,7 +86,7 @@ interface AdminState {
 
 // Static list of reserved names from deploy script
 const RESERVED_NAMES_LIST = [
-  'aave','about','abu','adam','admin','africa','ahmed','airdrop','aisha','alaoui','alchemist','alex','ali','alice','alpha','altcoingordon','altcoinsensei','altstein','amazon','amm','analyst','anna','ansem','anthony','api','app','apple','ariff','arthurhays','artist','asia','australia','avalanche','avatar','axe','axeledger','badge','bahrain','bear','becker','ben','binance','bio','bitboy','bitcoin','bitomoney','block','blog','bluntz','bob','borrow','brazil','brian','bridge','bull','bullishbear','burn','bybit','canada','cardano','careers','ceo','cex','chad','chadpumpiano','chain','chainlink','chancellor','china','chris','claim','cli','cobie','coin','coinbase','compound','congress','contact','contract','core','council','crayola','creator','crediblecrypto','crypto44','cryptobanter','cryptobirb','cryptocaesar','cryptofella','cryptogideon','cryptogodjohn','cryptomanic','cryptomanran','cryptomonk','cryptonova','cryptotony','cryptowizard','cryptoyoda','ctgymrat','cto','curve','dan','dao','dapp','dapplab','dappstore','david','defi','degen','degenkenn','degenpoet','demo','deploy','deployer','developer','dev','dex','dippy','discord','docs','dogecoin','donalt','drew','drprofit','druya','dtcrypto','dubai','dydx','ecosystem','egypt','eliz','ella','embassy','emily','emma','engineer','epoch','eric','ethereum','europe','exchange','explorer','ezmoney','farm','fatima','fattony','faucet','fee','fifa','follow','foundation','founder','france','fund','fusion','futures','gainzy','gamer','gateway','gemdetector','genesis','germany','gideon','goodie','google','goomba','gorgonite','governance','government','governor','grants','harvest','hassan','hawk','help','hodl','home','hongkong','hsaka','hub','hwmedia','identity','incubator','incomeshark','index','india','influencer','info','intrepid','inversebrah','investor','jack','james','jane','japan','jason','jobs','joe','john','jopp','jordan','justiinape','kaleo','karamata','kate','kenobi','kenya','kevin','kingdom','kito','korea','kraken','kucoin','kuwait','labs','lambo','larkdavis','laura','launchpad','lawless','layeralpha','ledger','lend','leo','leverage','lido','link','liquidity','lisa','london','lookonchain','lsd','luke','main','mainnet','maker','manage','margin','maria','mark','market','matt','matteo','mail','manifesto','max','mayor','media','meme','memechi','memecoin','meta','metamask','mexc','mexico','mezcez','mia','michael','microsoft','mike','minister','mint','mohammed','moneylord','moon','murad','musa','musician','name','nations','nebraskagooner','network','news','newyork','nft','nick','nils','nigeria','nilsb','nite','noach','noah','node','nucleus','nucleusx','octgems','official','olivia','olympic','oman','omar','opensea','options','oracle','panamax','paul','paw','pentoshi','pepe','perps','peter','phantom','polkadot','polygon','pool','portal','potus','president','press','privacy','profile','protocol','pump','qatar','qfclash','qflink','qfpad','qfnetwork','qfpay','qfstream','qfswap','qfvote','quantum','quantumfusion','quantumnotary','rabby','rachel','rainbow','raoul','reddit','register','registrar','registry','rektcapital','relay','renew','researcher','reserve','resolver','reverse','rewards','reward','ripple','rishad','root','roshi','royal','rush','russia','ryan','sam','sarah','satoshi','satoshiflipper','saudi','saylor','sdk','search','security','senate','settings','shard','shark','sharky','shiba','sigma','singapore','singularity','soef','solana','sophie','spot','stake','spin','staking','status','steve','streamer','support','swampmonkey','swap','sykodelic','tang','tareeq','team','teddy','telegram','terms','tesla','test','testnet','tiktok','token','tokyo','tom','trade','trader','treasury','trezor','turkey','twitter','uae','ukraine','uniswap','united','uponlygreg','usa','validator','vault','vector','verified','vest','vitalik','vote','wallet','watcherguru','web','web3princess','welcome','whale','yield','youtube','zhusu'
+  'aave','about','abu','adam','admin','africa','ahmed','airdrop','aisha','alaoui','alchemist','alex','ali','alice','alpha','altcoingordon','altcoinsensei','altstein','amazon','amm','analyst','anna','ansem','anthony','api','app','apple','ariff','arthurhays','artist','asia','australia','avalanche','avatar','axe','axeledger','badge','bahrain','bear','becker','ben','binance','bio','bitboy','bitcoin','bitomoney','block','blog','bluntz','bob','borrow','brazil','brian','bridge','bull','bullishbear','burn','bybit','canada','cardano','careers','ceo','cex','chad','chadpumpiano','chain','chainlink','chancellor','china','chris','claim','cli','cobie','coin','coinbase','compound','congress','contact','contract','core','council','crayola','creator','crediblecrypto','crypto44','cryptobanter','cryptobirb','cryptocaesar','cryptofella','cryptogideon','cryptogodjohn','cryptomanic','cryptomanran','cryptomonk','cryptonova','cryptotony','cryptowizard','cryptoyoda','ctgymrat','cto','curve','dan','dao','dapp','dapplab','dappstore','david','defi','degen','degenkenn','degenpoet','demo','deploy','deployer','developer','dev','dex','dippy','discord','docs','dogecoin','donalt','drew','drprofit','druya','dtcrypto','dubai','dydx','ecosystem','egypt','eliz','ella','embassy','emily','emma','engineer','epoch','eric','ethereum','europe','exchange','explorer','ezmoney','farm','fatima','fattony','faucet','fee','fifa','follow','foundation','founder','france','fund','fusion','futures','gainzy','gamer','gateway','gemdetector','genesis','germany','gideon','goodie','google','goomba','gorgonite','governance','government','governor','grants','harvest','hassan','hawk','help','hodl','home','hongkong','hsaka','hub','hwmedia','identity','incubator','incomeshark','index','india','influencer','info','intrepid','inversebrah','investor','jack','james','jane','japan','jason','jobs','joe','john','jopp','jordan','justiinape','kaleo','karamata','kate','kenobi','kenya','kevin','kingdom','kito','korea','kraken','kucoin','kuwait','labs','lambo','larkdavis','laura','launchpad','lawless','layeralpha','ledger','lend','leo','leverage','lido','link','liquidity','lisa','london','lookonchain','lsd','luke','main','mainnet','maker','manage','margin','maria','mark','market','matt','matteo','mail','manifesto','max','mayor','media','meme','memechi','memecoin','meta','metamask','mexc','mexico','mezcez','mia','michael','microsoft','mike','minister','mint','mohammed','moneylord','moon','murad','musa','musician','name','nations','nebraskagooner','network','news','newyork','nft','nick','nils','nigeria','nilsb','nite','noach','noah','node','nucleus','nucleusx','octgems','official','olivia','olympic','oman','omar','opensea','options','oracle','panamax','paul','paw','pentoshi','pepe','perps','peter','phantom','polkadot','polygon','pool','portal','potus','president','press','privacy','profile','protocol','pump','qatar','qfclash','qflink','qfpad','qfnetwork','qfpay','qfstream','qfswap','qfvote','quantum','quantumfusion','quantumnotary','rabby','rachel','rainbow','raoul','reddit','register','registrar','registry','rektcapital','relay','renew','researcher','reserve','resolver','reverse','rewards','reward','ripple','rishad','root','roshi','royal','rush','russia','ryan','sam','sarah','satoshi','satoshiflipper','saudi','saylor','sdk','search','security','senate','settings','shard','shark','sharky','shiba','sigma','singapore','singularity','soef','solana','sophie','spot','stake','spin','staking','status','steve','streamer','support','swampmonkey','swap','sykodelic','tang','tareeq','team','teddy','telegram','terms','tesla','test','testnet','tiktok','token','tokyo','tom','trade','trader','treasury','trezor','turkey','twitter','uae','ukraine','uniswap','united','uponlygreg','usa','validator','vault','vector','verified','vest','vitalik','vote','wallet','watcherguru','web','web3princess','welcome','whale','yield','youtube','zhusu','doomly','key','boolean','user','888','diskword','hayk','denis','alisher','krzysztof','aleksandra','lygin'
 ];
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -195,7 +195,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       
       set({
         totalRegistrations: totalReg,
-        reservedNamesCount: 387,
         contractBalance: balance,
         treasuryAddress: treasury,
         burnAddress: burnAddr,
@@ -205,14 +204,45 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         price5PlusChar: price5,
         permanentMultiplier: permMult,
       });
+      
+      // Get reserved names count from on-chain data
+      try {
+        const onChainReservedNames = await getReservedNamesList();
+        const onChainNames = (onChainReservedNames && onChainReservedNames.length > 0) ? onChainReservedNames : [];
+        const mergedCount = [...new Set([...onChainNames, ...RESERVED_NAMES_LIST])].length;
+        set({ reservedNamesCount: mergedCount });
+      } catch {
+        set({ reservedNamesCount: [...new Set(RESERVED_NAMES_LIST)].length });
+      }
     } catch (err) {
     }
   },
   
   // Load reserved names
   loadReservedNames: async () => {
-    set({ isLoadingReserved: true, reservedNames: [...new Set(RESERVED_NAMES_LIST)], reservedNamesCount: [...new Set(RESERVED_NAMES_LIST)].length });
-    set({ isLoadingReserved: false });
+    set({ isLoadingReserved: true });
+    try {
+      // Try to get on-chain reserved names
+      const onChainReservedNames = await getReservedNamesList();
+      
+      // Always merge on-chain and static lists
+      const onChainNames = (onChainReservedNames && onChainReservedNames.length > 0) ? onChainReservedNames : [];
+      const merged = [...new Set([...onChainNames, ...RESERVED_NAMES_LIST])].sort();
+      
+      set({ 
+        reservedNames: merged,
+        reservedNamesCount: merged.length,
+        isLoadingReserved: false 
+      });
+    } catch (err) {
+      // Fall back to static list if contract call fails
+      const fallbackList = [...new Set(RESERVED_NAMES_LIST)].sort();
+      set({ 
+        reservedNames: fallbackList,
+        reservedNamesCount: fallbackList.length,
+        isLoadingReserved: false 
+      });
+    }
   },
 
   // Load assigned status for reserved names
@@ -262,6 +292,12 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       args: [name],
       account,
     });
+    
+    // Optimistically add the name to local state
+    const currentNames = get().reservedNames;
+    if (!currentNames.includes(name)) {
+      set({ reservedNames: [...currentNames, name].sort(), reservedNamesCount: currentNames.length + 1 });
+    }
     
     // Refresh list after transaction
     await get().loadReservedNames();
