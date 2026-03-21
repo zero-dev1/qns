@@ -654,7 +654,7 @@ export default function MyNamesPage() {
           confirmation.then((result) => {
             if (result.confirmed) return;
             if (result.error === 'not_confirmed') {
-              showToast('Profile update submitted but unconfirmed.', 'error');
+              showToast('Profile update submitted but unconfirmed.', 'warning');
               return;
             }
             // Revert text records
@@ -666,6 +666,10 @@ export default function MyNamesPage() {
           showToast('Failed to save, please try again', 'error');
           hapticError();
         }
+      } else {
+        // Nothing changed — just close
+        showToast('No changes to save', 'success');
+        closeEditModal();
       }
     } finally {
       setSavingAll(false);
@@ -692,7 +696,7 @@ export default function MyNamesPage() {
           return;
         }
         if (result.error === 'not_confirmed') {
-          showToast('Primary name update submitted but unconfirmed.', 'error');
+          showToast('Primary name update submitted but unconfirmed.', 'warning');
           setTimeout(() => refreshName().catch(() => {}), 5000);
           return;
         }
@@ -738,7 +742,7 @@ export default function MyNamesPage() {
           return;
         }
         if (result.error === 'not_confirmed') {
-          showToast(`Renewal of ${name}.qf submitted but unconfirmed. Please check shortly.`, 'error');
+          showToast(`Renewal of ${name}.qf submitted but unconfirmed. Please check shortly.`, 'warning');
           setTimeout(() => bgRefresh(), 5000);
           return;
         }
@@ -834,7 +838,7 @@ export default function MyNamesPage() {
           return;
         }
         if (result.error === 'not_confirmed') {
-          showToast(`Transfer submitted but unconfirmed. Check shortly.`, 'error');
+          showToast(`Transfer submitted but unconfirmed. Check shortly.`, 'warning');
           setTimeout(() => bgRefresh(), 5000);
           return;
         }

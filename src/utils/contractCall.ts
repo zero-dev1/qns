@@ -200,7 +200,7 @@ export async function writeContract(
 
         let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
 
-        tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+        const subscription = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
           at: 'best' as const,
         }).subscribe({
           next(ev: any) {
@@ -216,12 +216,12 @@ export async function writeContract(
                 if (verifyOnChain) {
                   try {
                     const onChain = await verifyOnChain();
-                    confirmationResolve!({ confirmed: onChain, error: onChain ? undefined : 'not_confirmed' });
+                    resolveConfirmation({ confirmed: onChain, error: onChain ? undefined : 'not_confirmed' });
                   } catch {
-                    confirmationResolve!({ confirmed: false, error: 'verification_failed' });
+                    resolveConfirmation({ confirmed: false, error: 'verification_failed' });
                   }
                 } else {
-                  confirmationResolve!({ confirmed: false, error: 'not_confirmed' });
+                  resolveConfirmation({ confirmed: false, error: 'not_confirmed' });
                 }
               }, 30_000);
               return;
@@ -230,10 +230,10 @@ export async function writeContract(
             if (ev.type === 'txBestBlocksState' && ev.found) {
               if (confirmationTimeout) clearTimeout(confirmationTimeout);
               if (ev.ok) {
-                confirmationResolve!({ confirmed: true });
+                resolveConfirmation({ confirmed: true });
               } else {
                 const errType = ev.dispatchError?.type ?? 'Transaction reverted';
-                confirmationResolve!({ confirmed: false, error: errType });
+                resolveConfirmation({ confirmed: false, error: errType });
               }
               return;
             }
@@ -241,9 +241,9 @@ export async function writeContract(
             if (ev.type === 'finalized') {
               if (confirmationTimeout) clearTimeout(confirmationTimeout);
               if (ev.ok) {
-                confirmationResolve!({ confirmed: true });
+                resolveConfirmation({ confirmed: true });
               } else {
-                confirmationResolve!({ confirmed: false, error: ev.dispatchError?.type ?? 'Transaction reverted' });
+                resolveConfirmation({ confirmed: false, error: ev.dispatchError?.type ?? 'Transaction reverted' });
               }
               return;
             }
@@ -251,13 +251,25 @@ export async function writeContract(
           error(err: any) {
             if (!broadcastReceived) {
               clearTimeout(signingTimeout);
+              try { subscription.unsubscribe(); } catch {}
               rejectResult(err);
             } else {
               if (confirmationTimeout) clearTimeout(confirmationTimeout);
-              confirmationResolve!({ confirmed: false, error: err?.message || 'Subscription error' });
+              resolveConfirmation({ confirmed: false, error: err?.message || 'Subscription error' });
             }
           },
         });
+
+        let confirmationResolved = false;
+        const resolveConfirmation = (v: { confirmed: boolean; error?: string }) => {
+          if (confirmationResolved) return; // guard against double-resolve
+          confirmationResolved = true;
+          confirmationResolve(v);
+          // Unsubscribe after a short delay to let PAPI process any final event
+          setTimeout(() => {
+            try { subscription.unsubscribe(); } catch {}
+          }, 100);
+        };
       });
 
       return result;
@@ -360,7 +372,7 @@ export async function sendTransfer(
 
       let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
 
-      tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+      const subscription = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
         at: 'best' as const,
       }).subscribe({
         next(ev: any) {
@@ -376,12 +388,12 @@ export async function sendTransfer(
               if (verifyOnChain) {
                 try {
                   const onChain = await verifyOnChain();
-                  confirmationResolve!({ confirmed: onChain, error: onChain ? undefined : 'not_confirmed' });
+                  resolveConfirmation({ confirmed: onChain, error: onChain ? undefined : 'not_confirmed' });
                 } catch {
-                  confirmationResolve!({ confirmed: false, error: 'verification_failed' });
+                  resolveConfirmation({ confirmed: false, error: 'verification_failed' });
                 }
               } else {
-                confirmationResolve!({ confirmed: false, error: 'not_confirmed' });
+                resolveConfirmation({ confirmed: false, error: 'not_confirmed' });
               }
             }, 30_000);
             return;
@@ -390,10 +402,10 @@ export async function sendTransfer(
           if (ev.type === 'txBestBlocksState' && ev.found) {
             if (confirmationTimeout) clearTimeout(confirmationTimeout);
             if (ev.ok) {
-              confirmationResolve!({ confirmed: true });
+              resolveConfirmation({ confirmed: true });
             } else {
               const errType = ev.dispatchError?.type ?? 'Transfer reverted';
-              confirmationResolve!({ confirmed: false, error: errType });
+              resolveConfirmation({ confirmed: false, error: errType });
             }
             return;
           }
@@ -401,9 +413,9 @@ export async function sendTransfer(
           if (ev.type === 'finalized') {
             if (confirmationTimeout) clearTimeout(confirmationTimeout);
             if (ev.ok) {
-              confirmationResolve!({ confirmed: true });
+              resolveConfirmation({ confirmed: true });
             } else {
-              confirmationResolve!({ confirmed: false, error: ev.dispatchError?.type ?? 'Transfer reverted' });
+              resolveConfirmation({ confirmed: false, error: ev.dispatchError?.type ?? 'Transfer reverted' });
             }
             return;
           }
@@ -411,13 +423,25 @@ export async function sendTransfer(
         error(err: any) {
           if (!broadcastReceived) {
             clearTimeout(signingTimeout);
+            try { subscription.unsubscribe(); } catch {}
             rejectResult(err);
           } else {
             if (confirmationTimeout) clearTimeout(confirmationTimeout);
-            confirmationResolve!({ confirmed: false, error: err?.message || 'Subscription error' });
+            resolveConfirmation({ confirmed: false, error: err?.message || 'Subscription error' });
           }
         },
       });
+
+      let confirmationResolved = false;
+      const resolveConfirmation = (v: { confirmed: boolean; error?: string }) => {
+        if (confirmationResolved) return; // guard against double-resolve
+        confirmationResolved = true;
+        confirmationResolve(v);
+        // Unsubscribe after a short delay to let PAPI process any final event
+        setTimeout(() => {
+          try { subscription.unsubscribe(); } catch {}
+        }, 100);
+      };
     });
 
     return result;

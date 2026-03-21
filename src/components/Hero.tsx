@@ -287,6 +287,8 @@ export default function Hero() {
         registeredAt: now,
         isPermanent: duration.permanent,
       };
+      // Snapshot before optimistic add
+      const previousNames = [...existingStoreNames];
       setOwnedNames([...existingStoreNames, newName]);
       hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
@@ -300,14 +302,14 @@ export default function Hero() {
         }
         if (result.error === 'not_confirmed') {
           // Ambiguous — show soft warning, don't rollback
-          showToast('Registration submitted but not yet confirmed. Check My Names in a moment.', 'error');
+          showToast('Registration submitted but not yet confirmed. Check My Names in a moment.', 'warning');
           return;
         }
         // Hard failure — rollback
         setTxState('failed');
         setTxError({ type: 'generic', message: `Registration failed on-chain: ${result.error}. Your wallet was not charged.` });
         // Remove the optimistic name
-        setOwnedNames(existingStoreNames);
+        setOwnedNames(previousNames);
         // Reset wallet display name if it was set optimistically
         refreshName().catch(() => {});
         hapticError();

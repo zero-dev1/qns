@@ -365,7 +365,7 @@ export default function ProfilePage() {
       confirmation.then((result) => {
         if (result.confirmed) return;
         if (result.error === 'not_confirmed') {
-          setGiftError('Gift sent but not yet confirmed. It may still arrive shortly.');
+          setGiftError('Gift submitted but not yet confirmed on-chain. It may still arrive shortly.');
           return;
         }
         // Hard failure
