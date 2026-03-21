@@ -37,6 +37,7 @@ import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
+import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 
 interface OwnedName {
   name: string;
@@ -657,12 +658,25 @@ export default function MyNamesPage() {
               showToast('Profile update submitted but unconfirmed.', 'warning');
               return;
             }
+            // Check if this is a retryable error
+            if (result.error && isRetryableError(result.error)) {
+              showToast(RETRY_MESSAGE_SHORT, 'warning');
+              loadTextRecords(name); // re-fetch from chain
+              hapticError();
+              return;
+            }
             // Revert text records
             showToast(`Profile update failed: ${result.error}. Reverting changes.`, 'error');
             loadTextRecords(name); // re-fetch from chain
             hapticError();
           });
         } catch (err: any) {
+          // Check if this is a retryable error
+          if (isRetryableError(err.message)) {
+            showToast(RETRY_MESSAGE_SHORT, 'warning');
+            hapticError();
+            return;
+          }
           showToast('Failed to save, please try again', 'error');
           hapticError();
         }
@@ -700,6 +714,14 @@ export default function MyNamesPage() {
           setTimeout(() => refreshName().catch(() => {}), 5000);
           return;
         }
+        // Check if this is a retryable error
+        if (result.error && isRetryableError(result.error)) {
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+          refreshName().catch(() => {});
+          resolveReverse(address).then(setPrimaryNameState).catch(() => {});
+          hapticError();
+          return;
+        }
         // Revert
         showToast(`Failed to set primary: ${result.error}`, 'error');
         refreshName().catch(() => {});
@@ -707,6 +729,12 @@ export default function MyNamesPage() {
         hapticError();
       });
     } catch (err: any) {
+      // Check if this is a retryable error
+      if (isRetryableError(err.message)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
       showToast(err.message || 'Failed to set primary name', 'error');
       hapticError();
     } finally {
@@ -746,12 +774,25 @@ export default function MyNamesPage() {
           setTimeout(() => bgRefresh(), 5000);
           return;
         }
+        // Check if this is a retryable error
+        if (result.error && isRetryableError(result.error)) {
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+          hapticError();
+          bgRefresh(); // reload real data
+          return;
+        }
         // Hard failure — revert optimistic expiry
         showToast(`Renewal of ${name}.qf failed: ${result.error}`, 'error');
         hapticError();
         bgRefresh(); // reload real data
       });
     } catch (err: any) {
+      // Check if this is a retryable error
+      if (isRetryableError(err.message)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
       let userMessage = 'Transaction rejected';
       if (err.message) {
         const message = err.message.toLowerCase();
@@ -842,12 +883,25 @@ export default function MyNamesPage() {
           setTimeout(() => bgRefresh(), 5000);
           return;
         }
+        // Check if this is a retryable error
+        if (result.error && isRetryableError(result.error)) {
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+          hapticError();
+          bgRefresh(); // re-fetch real state
+          return;
+        }
         // Hard failure — add name back
         showToast(`Transfer failed: ${result.error}`, 'error');
         hapticError();
         bgRefresh(); // re-fetch real state
       });
     } catch (err: any) {
+      // Check if this is a retryable error
+      if (isRetryableError(err.message)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
       let userMessage = 'Transaction rejected';
       if (err.message) {
         const message = err.message.toLowerCase();

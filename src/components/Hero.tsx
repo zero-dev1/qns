@@ -17,6 +17,7 @@ import {
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
+import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import Confetti from './Confetti';
 
 export type SearchResult = {
@@ -306,8 +307,14 @@ export default function Hero() {
           return;
         }
         // Hard failure — rollback
-        setTxState('failed');
-        setTxError({ type: 'generic', message: `Registration failed on-chain: ${result.error}. Your wallet was not charged.` });
+        if (result.error && isRetryableError(result.error)) {
+          // Retryable error - show amber warning instead of red error
+          setTxState('idle');
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+        } else {
+          setTxState('failed');
+          setTxError({ type: 'generic', message: `Registration failed on-chain: ${result.error}. Your wallet was not charged.` });
+        }
         // Remove the optimistic name
         setOwnedNames(previousNames);
         // Reset wallet display name if it was set optimistically
@@ -315,30 +322,40 @@ export default function Hero() {
         hapticError();
       });
     } catch (err: any) {
-      const errorMessage = (err?.message || '').toLowerCase();
+      const errorMessage = err?.message || '';
+      
+      // Check if this is a retryable error
+      if (isRetryableError(errorMessage)) {
+        setTxState('idle');
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
+      
+      const errorMessageLower = errorMessage.toLowerCase();
       const isInsufficientBalance =
-        errorMessage.includes('insufficient') ||
-        errorMessage.includes('balance') ||
-        errorMessage.includes('funds');
+        errorMessageLower.includes('insufficient') ||
+        errorMessageLower.includes('balance') ||
+        errorMessageLower.includes('funds');
 
       if (isInsufficientBalance && regPrice) {
         setTxError({
           type: 'insufficient_balance',
           message: `Insufficient QF balance. You need ${formatQF(regPrice)} QF to register this name.`,
         });
-      } else if (errorMessage.includes('checkmetadatahash') || errorMessage.includes('cannotlookup') || errorMessage.includes('metadata hash')) {
+      } else if (errorMessageLower.includes('checkmetadatahash') || errorMessageLower.includes('cannotlookup') || errorMessageLower.includes('metadata hash')) {
         setTxError({
           type: 'generic',
           message: 'Disable CheckMetadataHash for QF Network in Talisman: Settings → Networks & Tokens → QF Network → uncheck metadata hash. Then reconnect.',
         });
-      } else if (errorMessage.includes('wallet not connected') || errorMessage.includes('reconnect')) {
+      } else if (errorMessageLower.includes('wallet not connected') || errorMessageLower.includes('reconnect')) {
         setTxError({ type: 'generic', message: 'Wallet not connected. Please disconnect and reconnect your wallet.' });
-      } else if (errorMessage.includes('rejected by user') || errorMessage.includes('cancelled')) {
+      } else if (errorMessageLower.includes('rejected by user') || errorMessageLower.includes('cancelled')) {
         setTxError({ type: 'generic', message: 'Transaction rejected' });
-      } else if (errorMessage.includes('not included within')) {
+      } else if (errorMessageLower.includes('not included within')) {
         setTxError({ type: 'generic', message: 'Transaction sent but confirmation timed out. Check the explorer — it may have succeeded. Try refreshing the page.' });
       } else {
-        setTxError({ type: 'generic', message: err?.message || 'Transaction failed' });
+        setTxError({ type: 'generic', message: errorMessage });
       }
       setTxState('failed');
       hapticError();

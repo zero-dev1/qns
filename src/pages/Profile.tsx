@@ -20,6 +20,8 @@ import {
 import { useCopy } from '../hooks/useCopy';
 import { hapticTap } from '../utils/haptics';
 import { DAPP_LAB_NAMES, TEAM_NAMES } from '../utils/badges';
+import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
+import { useToast } from '../contexts/ToastContext';
 
 interface ProfileData {
   name: string;
@@ -100,6 +102,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { copy } = useCopy();
+  const { showToast } = useToast();
   
   // Gift modal state
   const { address: senderAddress, ss58Address, connect, connecting } = useWalletStore();
@@ -368,6 +371,13 @@ export default function ProfilePage() {
           setGiftError('Gift submitted but not yet confirmed on-chain. It may still arrive shortly.');
           return;
         }
+        // Check if this is a retryable error
+        if (result.error && isRetryableError(result.error)) {
+          setGiftSuccess(false);
+          setGiftError(RETRY_MESSAGE_SHORT);
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+          return;
+        }
         // Hard failure
         setGiftSuccess(false);
         setGiftError(`Gift failed on-chain: ${result.error}. Your balance was not deducted.`);
@@ -375,6 +385,14 @@ export default function ProfilePage() {
     } catch (err: any) {
       console.error('Gift send error:', err);
       const msg = err?.message ?? String(err);
+      
+      // Check if this is a retryable error
+      if (isRetryableError(msg)) {
+        setGiftError(RETRY_MESSAGE_SHORT);
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        return;
+      }
+      
       if (msg.includes('rejected') || msg.includes('Rejected') || msg.includes('Cancelled') || msg.includes('cancelled')) {
         setGiftError('Transaction cancelled.');
       } else {
