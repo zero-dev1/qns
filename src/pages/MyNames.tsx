@@ -178,6 +178,7 @@ interface NameCardProps {
   renewing: boolean;
   settingPrimary: boolean;
   recentlyRenewed: boolean;
+  recentlyPrimaried: boolean;
   onOpen: () => void;
   onSetPrimary: (e: React.MouseEvent) => void;
   onRenew: (e: React.MouseEvent) => void;
@@ -196,6 +197,7 @@ const NameCard = ({
   renewing,
   settingPrimary,
   recentlyRenewed,
+  recentlyPrimaried,
   onOpen,
   onSetPrimary,
   onRenew,
@@ -255,7 +257,7 @@ const NameCard = ({
       onMouseLeave={handleMouseLeave}
       style={enableTilt ? { rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 800 } : undefined}
       className={`name-card group relative cursor-pointer overflow-hidden rounded-2xl border bg-[#111] transition-all duration-300 hover:border-[#00D179]/20 hover:shadow-lg hover:shadow-[#00D179]/5 ${
-  recentlyRenewed ? 'border-[#00D179]/40 shadow-lg shadow-[#00D179]/10' : 'border-white/5'
+  recentlyRenewed || recentlyPrimaried ? 'border-[#00D179]/40 shadow-lg shadow-[#00D179]/10' : 'border-white/5'
 }`}
     >
       {/* Spotlight effect overlay */}
@@ -292,6 +294,12 @@ const NameCard = ({
             <span className="inline-flex items-center gap-1 rounded-full border border-[#00D179]/30 bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179] animate-pulse">
               <Check size={10} />
               Renewed
+            </span>
+          )}
+          {recentlyPrimaried && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#00D179]/30 bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179] animate-pulse">
+              <Star size={10} fill="currentColor" />
+              Primary set
             </span>
           )}
         </div>
@@ -422,6 +430,7 @@ export default function MyNamesPage() {
   const [savingAll, setSavingAll] = useState(false);
   const [renewingName, setRenewingName] = useState<string | null>(null);
   const [recentlyRenewed, setRecentlyRenewed] = useState<string | null>(null);
+  const [recentlyPrimaried, setRecentlyPrimaried] = useState<string | null>(null);
   const [transferModal, setTransferModal] = useState<string | null>(null);
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferring, setTransferring] = useState(false);
@@ -661,10 +670,25 @@ export default function MyNamesPage() {
     const evmAddress = address;
     try {
       await setPrimaryName(name, evmAddress, signerAddress);
+
+      // Update local state immediately
       setPrimaryNameState(name);
-      await refreshName();
+
+      // Optimistically update the wallet store so navbar/dropdown
+      // shows the new primary name without waiting for chain query
+      useWalletStore.setState({ qnsName: name, displayName: name });
+
+      // Show glow indicator
+      setRecentlyPrimaried(name);
+      setTimeout(() => setRecentlyPrimaried(null), 5000);
+
+      hapticSuccess();
+
+      // Background refresh to confirm (non-blocking)
+      refreshName().catch(() => {});
     } catch (err: any) {
       showToast(err.message || 'Failed to set primary name', 'error');
+      hapticError();
     } finally {
       setSettingPrimary(null);
     }
@@ -996,6 +1020,7 @@ export default function MyNamesPage() {
                       renewing={renewingName === item.name}
                       settingPrimary={settingPrimary === item.name}
                       recentlyRenewed={recentlyRenewed === item.name}
+                      recentlyPrimaried={recentlyPrimaried === item.name}
                       onOpen={() => openEditModal(item.name)}
                       onSetPrimary={(e) => handleSetPrimary(item.name, e)}
                       onRenew={(e) => handleRenew(item.name, e)}
