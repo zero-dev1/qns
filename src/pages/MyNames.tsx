@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -84,14 +84,6 @@ const ClockIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-
-const AlertIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
   </svg>
 );
 
@@ -430,6 +422,9 @@ export default function MyNamesPage() {
   // Edit modal state
   const [editModalName, setEditModalName] = useState<string | null>(null);
 
+  const [transferSuccess, setTransferSuccess] = useState(false);
+  const hasAutoExpanded = useRef(false);
+
   // Share modal state
   const [shareModalName, setShareModalName] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -463,7 +458,33 @@ export default function MyNamesPage() {
     }
   }, [address]);
 
+  const bgRefresh = useCallback(async () => {
+    if (!address) return;
+    try {
+      const ownedNames = await getNamesOwnedByAddress(address);
+      if (ownedNames.length > 0) {
+        const mappedNames = ownedNames.map((item) => ({
+          name: item.name,
+          expires: item.expires,
+          isPermanent: item.expires === 0n,
+          registeredAt: item.registeredAt,
+        }));
+        setNames(mappedNames);
+        for (const item of mappedNames) {
+          if (!textRecords[item.name]) {
+            loadTextRecords(item.name);
+          }
+        }
+      } else {
+        setNames([]);
+      }
+    } catch {
+      // silently ignore — keep existing state
+    }
+  }, [address]);
+
   useEffect(() => {
+    hasAutoExpanded.current = false;
     loadNames();
   }, [loadNames]);
 
@@ -478,7 +499,8 @@ export default function MyNamesPage() {
 
   // Auto-open edit modal if URL param is set
   useEffect(() => {
-    if (expandName && names.some((n) => n.name === expandName)) {
+    if (expandName && !hasAutoExpanded.current && names.some((n) => n.name === expandName)) {
+      hasAutoExpanded.current = true;
       openEditModal(expandName);
     }
   }, [expandName, names]);
@@ -612,17 +634,33 @@ export default function MyNamesPage() {
   const handleRenew = async (name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!address) return;
+    // Close edit modal if open for this name to prevent UI confusion
+    if (editModalName === name) {
+      closeEditModal();
+    }
     setRenewingName(name);
     setRenewError(null);
     const signerAddress = ss58Address || address;
     try {
       await renewName(name, 1, signerAddress);
-      await loadNames();
+
+      // Optimistic update: bump expiry by 1 year locally
+      setNames((prev) =>
+        prev.map((item) => {
+          if (item.name !== name) return item;
+          if (item.isPermanent) return item;
+          const oneYearSecs = 365n * 24n * 60n * 60n;
+          return { ...item, expires: item.expires + oneYearSecs };
+        })
+      );
+
       showToast(`Renewed ${name}.qf successfully`, 'success');
+      hapticSuccess();
+
+      // Silent background refresh after delay
+      setTimeout(() => bgRefresh(), 5000);
     } catch (err: any) {
-      
       let userMessage = 'Transaction rejected';
-      
       if (err.message) {
         const message = err.message.toLowerCase();
         if (message.includes('insufficient funds') || message.includes('insufficient balance')) {
@@ -631,9 +669,9 @@ export default function MyNamesPage() {
           userMessage = 'Transaction rejected';
         }
       }
-      
       setRenewError(`Failed to renew ${name}: ${userMessage}`);
       showToast(err.message || `Failed to renew ${name}`, 'error');
+      hapticError();
     } finally {
       setRenewingName(null);
     }
@@ -650,6 +688,7 @@ export default function MyNamesPage() {
     setTransferModal(name);
     setTransferRecipient('');
     setTransferError(null);
+    setTransferSuccess(false);
   };
 
   const handleEditClick = (name: string, e: React.MouseEvent) => {
@@ -662,10 +701,10 @@ export default function MyNamesPage() {
     setTransferError(null);
     setTransferring(true);
 
+    const nameToTransfer = transferModal;
     let recipient = transferRecipient.trim();
     try {
       if (recipient.endsWith('.qf')) {
-        // Resolve .qf name to EVM address
         const resolved = await resolveForward(recipient);
         if (!resolved) {
           setTransferError('Name not found.');
@@ -676,7 +715,6 @@ export default function MyNamesPage() {
       } else if (/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
         // Valid EVM address — use as-is
       } else if (/^5[a-zA-Z0-9]{47}$/.test(recipient) || /^[a-zA-Z0-9]{46,48}$/.test(recipient)) {
-        // Looks like an SS58 Substrate address — convert to EVM
         try {
           recipient = ss58ToEvmAddress(recipient);
         } catch {
@@ -691,19 +729,33 @@ export default function MyNamesPage() {
       }
 
       const signerAddress = ss58Address || address;
-      await transferNameOnChain(transferModal, recipient as `0x${string}`, signerAddress);
-      setTransferModal(null);
-      setTransferRecipient('');
-      await loadNames();
+      await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
+
+      // Optimistic update: remove the transferred name from the list
+      setNames((prev) => prev.filter((item) => item.name !== nameToTransfer));
+
+      // Close edit modal if it was open for this name
+      if (editModalName === nameToTransfer) {
+        setEditModalName(null);
+      }
+
+      // Show success state in the transfer modal (do NOT close the modal yet)
+      setTransferSuccess(true);
+      hapticSuccess();
+
       // Refresh names in store so wallet dropdown reflects the transfer
-      await refreshNames(address);
-      await refreshName();
-      const currentPrimary = await resolveReverse(address);
-      setPrimaryNameState(currentPrimary);
+      refreshNames(address).catch(() => {});
+      refreshName().catch(() => {});
+
+      // Update primary name state
+      resolveReverse(address).then((currentPrimary) => {
+        setPrimaryNameState(currentPrimary);
+      }).catch(() => {});
+
+      // Silent background refresh after delay
+      setTimeout(() => bgRefresh(), 5000);
     } catch (err: any) {
-      
       let userMessage = 'Transaction rejected';
-      
       if (err.message) {
         const message = err.message.toLowerCase();
         if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
@@ -714,9 +766,9 @@ export default function MyNamesPage() {
           userMessage = 'Insufficient QF balance';
         }
       }
-      
       setTransferError(userMessage);
       showToast(err.message || 'Transfer failed', 'error');
+      hapticError();
     } finally {
       setTransferring(false);
     }
@@ -1115,68 +1167,115 @@ export default function MyNamesPage() {
       <AnimatePresence>
         {transferModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
             initial={modalBackdropVariants.hidden}
             animate={modalBackdropVariants.visible}
             exit={modalBackdropVariants.exit}
-            onClick={() => setTransferModal(null)}
+            onClick={() => {
+              if (!transferring) {
+                setTransferModal(null);
+                setTransferSuccess(false);
+              }
+            }}
           >
             <motion.div
-              className="relative w-full max-w-md overflow-hidden rounded-[24px] border border-white/10 bg-[#111111] p-6 shadow-2xl shadow-[#00D179]/10"
+              className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#111] shadow-2xl"
               initial={modalContentVariants.hidden}
               animate={modalContentVariants.visible}
               exit={modalContentVariants.exit}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-white/[0.06] via-white/[0.03] to-transparent" />
-              <div className="relative">
-                <div className="mb-6 flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="font-clash text-2xl font-bold text-white mb-1">
-                      Transfer {transferModal}<span className="text-[#00D179]">.qf</span>
+              <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-[#00D179]/10 via-[#00D179]/5 to-transparent" />
+              <div className="relative p-6">
+                {!transferSuccess ? (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="font-clash text-xl font-bold text-white">
+                        Transfer {transferModal}<span className="text-[#00D179]">.qf</span>
+                      </h3>
+                      <button
+                        onClick={() => setTransferModal(null)}
+                        className="rounded-xl border border-white/10 bg-white/5 p-2 text-gray-400 transition-all duration-200 hover:border-[#00D179]/20 hover:bg-white/10 hover:text-white cursor-pointer"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="mb-2 block text-xs text-gray-500">Recipient</label>
+                      <input
+                        type="text"
+                        value={transferRecipient}
+                        onChange={(e) => setTransferRecipient(e.target.value)}
+                        placeholder="5... (Substrate), 0x... (EVM), or name.qf"
+                        className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 text-white text-sm outline-none focus:border-[#00D179]/50 transition-colors duration-200 font-mono placeholder:text-gray-600"
+                      />
+                    </div>
+
+                    <p className="text-xs text-[#F5A623] mb-4">
+                      This action cannot be undone. The new owner will have full control of this name.
+                    </p>
+
+                    {transferError && (
+                      <p className="text-xs text-[#E5484D] mb-3">{transferError}</p>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={handleTransfer}
+                        disabled={transferring || !transferRecipient.trim()}
+                        className="flex-1 py-3 bg-[#E5484D] hover:bg-[#c93d41] text-white font-medium rounded-xl transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        {transferring && <Loader2 size={16} className="animate-spin" />}
+                        {transferring ? 'Transferring...' : 'Transfer'}
+                      </button>
+                      <button
+                        onClick={() => setTransferModal(null)}
+                        disabled={transferring}
+                        className="text-sm text-gray-500 hover:text-white transition-colors cursor-pointer px-4 py-3"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-4">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#00D179]/20 flex items-center justify-center">
+                      <Check size={32} className="text-[#00D179]" />
+                    </div>
+                    <h3 className="font-clash font-medium text-xl text-white mb-2">
+                      {transferModal}<span className="text-[#00D179]">.qf</span> transferred!
                     </h3>
-                    <p className="text-sm text-[#8A8A8A]">Transfer to another wallet</p>
+                    <p className="text-sm text-gray-500 mb-6">
+                      Successfully transferred to{' '}
+                      {transferRecipient.length > 20
+                        ? `${transferRecipient.slice(0, 8)}...${transferRecipient.slice(-6)}`
+                        : transferRecipient}
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <button
+                        onClick={() => {
+                          const text = `Just transferred ${transferModal}.qf on @dotqfns powered by @theqfnetwork`;
+                          const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+                          window.open(url, '_blank');
+                        }}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-colors duration-200 cursor-pointer"
+                      >
+                        <Twitter size={18} />
+                        Share on X
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTransferModal(null);
+                          setTransferSuccess(false);
+                        }}
+                        className="text-sm text-gray-500 hover:text-white transition-colors duration-200 py-2 cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setTransferModal(null)}
-                    className="rounded-xl border border-white/10 bg-white/5 p-2 text-[#8A8A8A] transition-all duration-200 hover:border-[#00D179]/20 hover:bg-white/10 hover:text-white cursor-pointer"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                  <input
-                    type="text"
-                    value={transferRecipient}
-                    onChange={(e) => setTransferRecipient(e.target.value)}
-                    placeholder="name.qf, 0x..., or Substrate address"
-                    className="mb-4 w-full rounded-xl border border-white/5 bg-[#090909] px-4 py-3 text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 font-mono"
-                  />
-
-                  <p className="mb-4 flex items-start gap-2 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/10 p-3 text-xs text-[#F5A623]">
-                    <span className="mt-0.5"><AlertIcon /></span>
-                    <span>This action cannot be undone. The new owner will have full control of this name.</span>
-                  </p>
-
-                  {transferError && <p className="mb-3 text-xs text-[#E5484D]">{transferError}</p>}
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleTransfer}
-                      disabled={transferring || !transferRecipient.trim()}
-                      className="flex-1 rounded-xl bg-[#E5484D] py-3 font-medium text-white transition-colors hover:bg-[#c93d41] disabled:opacity-50 cursor-pointer"
-                    >
-                      {transferring ? 'Transferring...' : 'Transfer'}
-                    </button>
-                    <button
-                      onClick={() => setTransferModal(null)}
-                      className="rounded-xl border border-white/10 px-4 py-3 text-sm text-[#8A8A8A] transition-colors hover:text-white cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
