@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Check, Shield, X, Twitter, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWalletStore } from '../stores/walletStore';
+import { useNamesStore } from '../stores/namesStore';
 import {
   validateNameLocal,
   checkAvailability,
@@ -52,6 +53,7 @@ export default function Hero() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { address, ss58Address, connect, refreshName } = useWalletStore();
+  const { setOwnedNames, ownedNames: existingStoreNames } = useNamesStore();
   const { showToast } = useToast();
   const { copy } = useCopy();
 
@@ -276,6 +278,20 @@ export default function Hero() {
 
       // ✅ Show success IMMEDIATELY — do NOT await refreshName
       setTxState('success');
+      
+      // Optimistically inject the new name into the names store
+      // so MyNamesPage shows it immediately when navigated to
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      const oneYearSecs = 365n * 24n * 60n * 60n;
+      const newName = {
+        name: selectedName,
+        owner: address || '',
+        expires: duration.permanent ? 0n : now + (BigInt(duration.years) * oneYearSecs),
+        registeredAt: now,
+        isPermanent: duration.permanent,
+      };
+      setOwnedNames([...existingStoreNames, newName]);
+      
       hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
 

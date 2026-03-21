@@ -432,7 +432,28 @@ export default function MyNamesPage() {
 
   const loadNames = useCallback(async () => {
     if (!address) return;
-    setLoading(true);
+
+    // Pre-fill from the Zustand store if it has names and our local state is empty.
+    // This handles the case where Hero.tsx injected a newly registered name.
+    const storeNames = useNamesStore.getState().ownedNames;
+    if (storeNames.length > 0 && names.length === 0) {
+      const mapped = storeNames.map((item) => ({
+        name: item.name,
+        expires: item.expires ?? 0n,
+        isPermanent: item.isPermanent ?? (item.expires === 0n),
+        registeredAt: item.registeredAt ?? 0n,
+      }));
+      setNames(mapped);
+      for (const item of mapped) {
+        loadTextRecords(item.name);
+      }
+    }
+
+    // Only show the loading spinner if we have nothing to display yet
+    if (names.length === 0 && storeNames.length === 0) {
+      setLoading(true);
+    }
+
     try {
       const ownedNames = await getNamesOwnedByAddress(address);
       if (ownedNames.length > 0) {
@@ -443,16 +464,19 @@ export default function MyNamesPage() {
           registeredAt: item.registeredAt,
         }));
         setNames(mappedNames);
-        
+
         // Fetch profile data for all names
         for (const item of mappedNames) {
           loadTextRecords(item.name);
         }
-      } else {
+      } else if (storeNames.length === 0) {
+        // Only clear if we also don't have optimistic names
         setNames([]);
       }
     } catch {
-      setNames([]);
+      if (storeNames.length === 0) {
+        setNames([]);
+      }
     } finally {
       setLoading(false);
     }
