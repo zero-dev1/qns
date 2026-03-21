@@ -641,22 +641,32 @@ export default function MyNamesPage() {
       
       // Call setMultipleTexts if there are changes
       if (keys.length > 0) {
-        const signerAddress = ss58Address || address;
-        await setMultipleTextRecords(name, keys, values, signerAddress);
+        try {
+          const signerAddress = ss58Address || address;
+          const { confirmation } = await setMultipleTextRecords(name, keys, values, signerAddress);
+
+          // Optimistic update
+          setTextRecords((prev) => ({ ...prev, [name]: { ...(editValues[name] || {}) } }));
+          showToast('Profile updated successfully', 'success');
+          hapticSuccess();
+          closeEditModal();
+
+          confirmation.then((result) => {
+            if (result.confirmed) return;
+            if (result.error === 'not_confirmed') {
+              showToast('Profile update submitted but unconfirmed.', 'error');
+              return;
+            }
+            // Revert text records
+            showToast(`Profile update failed: ${result.error}. Reverting changes.`, 'error');
+            loadTextRecords(name); // re-fetch from chain
+            hapticError();
+          });
+        } catch (err: any) {
+          showToast('Failed to save, please try again', 'error');
+          hapticError();
+        }
       }
-      
-      // Update saved text records
-      setTextRecords((prev) => ({
-        ...prev,
-        [name]: { ...(editValues[name] || {}) },
-      }));
-      
-      showToast('Profile updated successfully', 'success');
-      hapticSuccess();
-      closeEditModal();
-    } catch (err: any) {
-      showToast('Failed to save, please try again', 'error');
-      hapticError();
     } finally {
       setSavingAll(false);
     }
@@ -666,27 +676,32 @@ export default function MyNamesPage() {
     e.stopPropagation();
     if (!address) return;
     setSettingPrimary(name);
-    const signerAddress = ss58Address || address;
-    const evmAddress = address;
     try {
-      await setPrimaryName(name, evmAddress, signerAddress);
+      const { confirmation } = await setPrimaryName(name, address, ss58Address || address);
 
-      // Update local state immediately
+      // Optimistic
       setPrimaryNameState(name);
-
-      // Optimistically update the wallet store so navbar/dropdown
-      // shows the new primary name without waiting for chain query
       useWalletStore.setState({ qnsName: name, displayName: name });
-
-      // Show glow indicator
       setRecentlyPrimaried(name);
       setTimeout(() => setRecentlyPrimaried(null), 5000);
-
       hapticSuccess();
 
-      // Delay the background refresh so the chain has time to process
-      // the setReverse transaction before we query it
-      setTimeout(() => refreshName().catch(() => {}), 5000);
+      confirmation.then((result) => {
+        if (result.confirmed) {
+          setTimeout(() => refreshName().catch(() => {}), 3000);
+          return;
+        }
+        if (result.error === 'not_confirmed') {
+          showToast('Primary name update submitted but unconfirmed.', 'error');
+          setTimeout(() => refreshName().catch(() => {}), 5000);
+          return;
+        }
+        // Revert
+        showToast(`Failed to set primary: ${result.error}`, 'error');
+        refreshName().catch(() => {});
+        resolveReverse(address).then(setPrimaryNameState).catch(() => {});
+        hapticError();
+      });
     } catch (err: any) {
       showToast(err.message || 'Failed to set primary name', 'error');
       hapticError();
@@ -698,35 +713,40 @@ export default function MyNamesPage() {
   const handleRenew = async (name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!address) return;
-    // Close edit modal if open for this name to prevent UI confusion
-    if (editModalName === name) {
-      closeEditModal();
-    }
+    if (editModalName === name) closeEditModal();
     setRenewingName(name);
     setRenewError(null);
     const signerAddress = ss58Address || address;
     try {
-      await renewName(name, 1, signerAddress);
+      const { confirmation } = await renewName(name, 1, signerAddress);
 
-      // Optimistic update: bump expiry by 1 year locally
+      // Optimistic update immediately
       setNames((prev) =>
         prev.map((item) => {
-          if (item.name !== name) return item;
-          if (item.isPermanent) return item;
-          const oneYearSecs = 365n * 24n * 60n * 60n;
-          return { ...item, expires: item.expires + oneYearSecs };
+          if (item.name !== name || item.isPermanent) return item;
+          return { ...item, expires: item.expires + 365n * 24n * 60n * 60n };
         })
       );
-
       showToast(`Renewed ${name}.qf successfully`, 'success');
       hapticSuccess();
-
-      // Show renewed indicator on the card
       setRecentlyRenewed(name);
       setTimeout(() => setRecentlyRenewed(null), 5000);
 
-      // Silent background refresh after delay
-      setTimeout(() => bgRefresh(), 5000);
+      confirmation.then((result) => {
+        if (result.confirmed) {
+          setTimeout(() => bgRefresh(), 3000);
+          return;
+        }
+        if (result.error === 'not_confirmed') {
+          showToast(`Renewal of ${name}.qf submitted but unconfirmed. Please check shortly.`, 'error');
+          setTimeout(() => bgRefresh(), 5000);
+          return;
+        }
+        // Hard failure — revert optimistic expiry
+        showToast(`Renewal of ${name}.qf failed: ${result.error}`, 'error');
+        hapticError();
+        bgRefresh(); // reload real data
+      });
     } catch (err: any) {
       let userMessage = 'Transaction rejected';
       if (err.message) {
@@ -797,33 +817,32 @@ export default function MyNamesPage() {
       }
 
       const signerAddress = ss58Address || address;
-      await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
+      const { confirmation } = await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
 
-      // Optimistic update: remove the transferred name from the list
+      // Optimistic removal
       setNames((prev) => prev.filter((item) => item.name !== nameToTransfer));
-
-      // Close edit modal if it was open for this name
-      if (editModalName === nameToTransfer) {
-        setEditModalName(null);
-      }
-
-      // Show success state in the transfer modal (do NOT close the modal yet)
+      if (editModalName === nameToTransfer) setEditModalName(null);
       setTransferSuccess(true);
       hapticSuccess();
 
-      // Delay refreshes so the chain has time to process the transfer
-      setTimeout(() => {
-        refreshNames(address).catch(() => {});
-        refreshName().catch(() => {});
-      }, 5000);
-
-      // Update primary name state
-      resolveReverse(address).then((currentPrimary) => {
-        setPrimaryNameState(currentPrimary);
-      }).catch(() => {});
-
-      // Silent background refresh after delay
-      setTimeout(() => bgRefresh(), 5000);
+      confirmation.then((result) => {
+        if (result.confirmed) {
+          setTimeout(() => {
+            refreshNames(address).catch(() => {});
+            refreshName().catch(() => {});
+          }, 3000);
+          return;
+        }
+        if (result.error === 'not_confirmed') {
+          showToast(`Transfer submitted but unconfirmed. Check shortly.`, 'error');
+          setTimeout(() => bgRefresh(), 5000);
+          return;
+        }
+        // Hard failure — add name back
+        showToast(`Transfer failed: ${result.error}`, 'error');
+        hapticError();
+        bgRefresh(); // re-fetch real state
+      });
     } catch (err: any) {
       let userMessage = 'Transaction rejected';
       if (err.message) {

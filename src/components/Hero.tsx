@@ -262,9 +262,9 @@ export default function Hero() {
 
   const handleRegister = async () => {
     if (!selectedName) return;
-    if (!address) {
-      await connect();
-      return;
+    if (!address) { 
+      await connect(); 
+      return; 
     }
     setTxState('pending');
     setTxError(null);
@@ -274,13 +274,10 @@ export default function Hero() {
     }
     try {
       const signerAddress = ss58Address || address;
-      await registerName(selectedName, duration.years, duration.permanent, signerAddress);
+      const { confirmation } = await registerName(selectedName, duration.years, duration.permanent, signerAddress);
 
-      // ✅ Show success IMMEDIATELY — do NOT await refreshName
+      // === INSTANT SUCCESS (on broadcast) ===
       setTxState('success');
-      
-      // Optimistically inject the new name into the names store
-      // so MyNamesPage shows it immediately when navigated to
       const now = BigInt(Math.floor(Date.now() / 1000));
       const oneYearSecs = 365n * 24n * 60n * 60n;
       const newName = {
@@ -291,12 +288,30 @@ export default function Hero() {
         isPermanent: duration.permanent,
       };
       setOwnedNames([...existingStoreNames, newName]);
-      
       hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
-
-      // Refresh QNS display name in background — never blocks UI
       refreshName().catch(() => {});
+
+      // === BACKGROUND CONFIRMATION ===
+      confirmation.then((result) => {
+        if (result.confirmed) {
+          // All good — nothing to do, UI already shows success
+          return;
+        }
+        if (result.error === 'not_confirmed') {
+          // Ambiguous — show soft warning, don't rollback
+          showToast('Registration submitted but not yet confirmed. Check My Names in a moment.', 'error');
+          return;
+        }
+        // Hard failure — rollback
+        setTxState('failed');
+        setTxError({ type: 'generic', message: `Registration failed on-chain: ${result.error}. Your wallet was not charged.` });
+        // Remove the optimistic name
+        setOwnedNames(existingStoreNames);
+        // Reset wallet display name if it was set optimistically
+        refreshName().catch(() => {});
+        hapticError();
+      });
     } catch (err: any) {
       const errorMessage = (err?.message || '').toLowerCase();
       const isInsufficientBalance =

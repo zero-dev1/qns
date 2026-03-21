@@ -1,6 +1,6 @@
 import { keccak256, encodePacked, type Hex } from 'viem';
 import { getTypedApi } from './papiClient';
-import { callContract, writeContract, sendTransfer } from './contractCall';
+import { callContract, writeContract, sendTransfer, type TxResult } from './contractCall';
 import {
   QNS_REGISTRAR_ADDRESS,
   QNS_RESOLVER_ADDRESS,
@@ -106,7 +106,7 @@ export function getWalletClient() {
       args?: unknown[];
       account: `0x${string}` | string;
       value?: bigint;
-    }): Promise<`0x${string}`> => {
+    }): Promise<TxResult> => {
       // Use the appropriate ABI based on address
       const addrLower = address.toLowerCase();
       const registrarLower = QNS_REGISTRAR_ADDRESS.toLowerCase();
@@ -121,7 +121,7 @@ export function getWalletClient() {
         contractAbi = abi as any[] || [];
       }
 
-      const txHash = await writeContract(
+      const result = await writeContract(
         address,
         contractAbi,
         functionName,
@@ -129,19 +129,21 @@ export function getWalletClient() {
         account,
         value || 0n
       );
-      return txHash as `0x${string}`;
+      return result;
     },
     sendTransaction: async ({
       to,
       value,
       account,
+      verifyOnChain,
     }: {
       to: `0x${string}`;
       value: bigint;
       account: `0x${string}` | string;
-    }): Promise<`0x${string}`> => {
-      const txHash = await sendTransfer(to, value, account);
-      return txHash as `0x${string}`;
+      verifyOnChain?: () => Promise<boolean>;
+    }): Promise<TxResult> => {
+      const result = await sendTransfer(to, value, account, verifyOnChain);
+      return result;
     },
   };
 }
@@ -345,48 +347,34 @@ export async function registerName(
   years: number,
   permanent: boolean,
   account: string
-): Promise<string> {
-  
-  let fee: bigint;
-  try {
-    fee = await getPrice(name, years, permanent);
-  } catch (feeErr: any) {
-    throw feeErr;
-  }
-  
-  
-  try {
-    // Ensure fee is a proper bigint before passing
-    const feeBigInt = BigInt(fee?.toString() || '0');
-    
-    const result = await writeContract(
-      QNS_REGISTRAR_ADDRESS,
-      REGISTRAR_ABI,
-      'register',
-      [name, years, permanent],
-      account,
-      feeBigInt
-    );
-    return result;
-  } catch (writeErr: any) {
-    throw writeErr;
-  }
+): Promise<TxResult> {
+  const fee = await getPrice(name, years, permanent);
+  return writeContract(
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'register',
+    [name, years, permanent], account, BigInt(fee?.toString() || '0'),
+    // Verification: check if name is now registered
+    async () => {
+      const available = await checkAvailability(name);
+      return !available; // if NOT available, it was registered
+    }
+  );
 }
 
 export async function renewName(
   name: string,
   years: number,
   account: string
-): Promise<string> {
+): Promise<TxResult> {
   const fee = await getPrice(name, years, false);
-  
+  const regBefore = await getRegistration(name).catch(() => null);
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'renew',
-    [name, years],
-    account,
-    fee
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'renew',
+    [name, years], account, fee,
+    async () => {
+      const regAfter = await getRegistration(name);
+      if (!regAfter || !regBefore) return false;
+      return regAfter.expires > regBefore.expires;
+    }
   );
 }
 
@@ -394,20 +382,19 @@ export async function transferNameOnChain(
   name: string,
   newOwner: string,
   account: string
-): Promise<string> {
+): Promise<TxResult> {
   let evmOwner = newOwner;
   if (!newOwner.startsWith('0x')) {
     const { deriveEVMAddress } = await import('./wallet');
     evmOwner = deriveEVMAddress(newOwner);
   }
-
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'transferName',
-    [name, evmOwner],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'transferName',
+    [name, evmOwner], account, 0n,
+    async () => {
+      const reg = await getRegistration(name);
+      return !!reg && reg.owner.toLowerCase() === evmOwner.toLowerCase();
+    }
   );
 }
 
@@ -425,16 +412,16 @@ export async function setTextRecord(
   key: string,
   value: string,
   account: string
-): Promise<string> {
+): Promise<TxResult> {
   const node = namehash(`${name}.qf`);
   
   return writeContract(
-    QNS_RESOLVER_ADDRESS,
-    RESOLVER_ABI,
-    'setText',
-    [node, key, value],
-    account,
-    0n
+    QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setText',
+    [node, key, value], account, 0n,
+    async () => {
+      const stored = await getTextRecord(name, key);
+      return stored === value;
+    }
   );
 }
 
@@ -443,16 +430,16 @@ export async function setMultipleTextRecords(
   keys: string[],
   values: string[],
   account: string
-): Promise<string> {
+): Promise<TxResult> {
   const node = namehash(`${name}.qf`);
   
   return writeContract(
-    QNS_RESOLVER_ADDRESS,
-    RESOLVER_ABI,
-    'setMultipleTexts',
-    [node, keys, values],
-    account,
-    0n
+    QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setMultipleTexts',
+    [node, keys, values], account, 0n,
+    keys.length > 0 ? async () => {
+      const stored = await getTextRecord(name, keys[0]);
+      return stored === values[0];
+    } : undefined
   );
 }
 
@@ -460,16 +447,16 @@ export async function setPrimaryName(
   name: string,
   evmAddress: string,
   signerAddress: string
-): Promise<string> {
+): Promise<TxResult> {
   const nameNode = namehash(`${name}.qf`);
   
   return writeContract(
-    QNS_RESOLVER_ADDRESS,
-    RESOLVER_ABI,
-    'setReverse',
-    [evmAddress, nameNode],
-    signerAddress,
-    0n
+    QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setReverse',
+    [evmAddress, nameNode], signerAddress, 0n,
+    async () => {
+      const resolved = await resolveReverse(evmAddress);
+      return resolved === name;
+    }
   );
 }
 
@@ -547,36 +534,24 @@ export async function hasMinimumBalance(ss58Address: string, minBalance: bigint 
   return balance > minBalance;
 }
 
-export async function reserveName(name: string, account: string): Promise<string> {
+export async function reserveName(name: string, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'reserveName',
-    [name],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'reserveName',
+    [name], account, 0n, undefined
   );
 }
 
-export async function unreserveName(name: string, account: string): Promise<string> {
+export async function unreserveName(name: string, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'unreserveName',
-    [name],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'unreserveName',
+    [name], account, 0n, undefined
   );
 }
 
-export async function assignReservedName(name: string, to: string, account: string): Promise<string> {
+export async function assignReservedName(name: string, to: string, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'assignReservedName',
-    [name, to],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'assignReservedName',
+    [name, to], account, 0n, undefined
   );
 }
 
@@ -585,69 +560,45 @@ export async function setPrice(
   new4: bigint,
   new5Plus: bigint,
   account: string
-): Promise<string> {
+): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'setPrice',
-    [new3, new4, new5Plus],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setPrice',
+    [new3, new4, new5Plus], account, 0n, undefined
   );
 }
 
-export async function setPermanentMultiplier(newMult: bigint, account: string): Promise<string> {
+export async function setPermanentMultiplier(newMult: bigint, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'setPermanentMultiplier',
-    [newMult],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setPermanentMultiplier',
+    [newMult], account, 0n, undefined
   );
 }
 
-export async function setBurnPercent(newPercent: bigint, account: string): Promise<string> {
+export async function setBurnPercent(newPercent: bigint, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'setBurnPercent',
-    [newPercent],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setBurnPercent',
+    [newPercent], account, 0n, undefined
   );
 }
 
-export async function setTreasury(newTreasury: string, account: string): Promise<string> {
+export async function setTreasury(newTreasury: string, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'setTreasury',
-    [newTreasury],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setTreasury',
+    [newTreasury], account, 0n, undefined
   );
 }
 
-export async function setBurnAddress(newBurn: string, account: string): Promise<string> {
+export async function setBurnAddress(newBurn: string, account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'setBurnAddress',
-    [newBurn],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setBurnAddress',
+    [newBurn], account, 0n, undefined
   );
 }
 
-export async function withdrawToTreasury(account: string): Promise<string> {
+export async function withdrawToTreasury(account: string): Promise<TxResult> {
   return writeContract(
-    QNS_REGISTRAR_ADDRESS,
-    REGISTRAR_ABI,
-    'withdrawToTreasury',
-    [],
-    account,
-    0n
+    QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'withdrawToTreasury',
+    [], account, 0n, undefined
   );
 }
 

@@ -61,27 +61,27 @@ interface AdminState {
   // Reserve names actions
   loadReservedNames: () => Promise<void>;
   loadAssignedStatus: () => Promise<void>;
-  reserveName: (name: string, account: string) => Promise<`0x${string}`>;
-  unreserveName: (name: string, account: string) => Promise<`0x${string}`>;
-  assignReservedName: (name: string, to: Address, account: string) => Promise<`0x${string}`>;
+  reserveName: (name: string, account: string) => Promise<string>;
+  unreserveName: (name: string, account: string) => Promise<string>;
+  assignReservedName: (name: string, to: Address, account: string) => Promise<string>;
   
   // Registration lookup
   setLookupName: (name: string) => void;
   lookupRegistration: (name: string) => Promise<void>;
   
   // Pricing actions
-  updatePrices: (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: string) => Promise<`0x${string}`>;
-  updatePermanentMultiplier: (multiplier: bigint, account: string) => Promise<`0x${string}`>;
-  updateBurnPercent: (percent: bigint, account: string) => Promise<`0x${string}`>;
+  updatePrices: (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: string) => Promise<string>;
+  updatePermanentMultiplier: (multiplier: bigint, account: string) => Promise<string>;
+  updateBurnPercent: (percent: bigint, account: string) => Promise<string>;
   
   // Treasury actions
-  withdrawToTreasury: (account: string) => Promise<`0x${string}`>;
+  withdrawToTreasury: (account: string) => Promise<string>;
   
   // Settings actions
-  transferAdmin: (newAdmin: Address, account: string) => Promise<`0x${string}`>;
-  setTreasury: (newTreasury: Address, account: string) => Promise<`0x${string}`>;
-  setBurnAddress: (newBurn: Address, account: string) => Promise<`0x${string}`>;
-  setDefaultResolver: (newResolver: Address, account: string) => Promise<`0x${string}`>;
+  transferAdmin: (newAdmin: Address, account: string) => Promise<string>;
+  setTreasury: (newTreasury: Address, account: string) => Promise<string>;
+  setBurnAddress: (newBurn: Address, account: string) => Promise<string>;
+  setDefaultResolver: (newResolver: Address, account: string) => Promise<string>;
 }
 
 // Static list of reserved names from deploy script
@@ -285,7 +285,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'reserveName',
@@ -299,9 +299,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       set({ reservedNames: [...currentNames, name].sort(), reservedNamesCount: currentNames.length + 1 });
     }
     
-    // Refresh list after transaction
-    await get().loadReservedNames();
-    return hash;
+    // Background confirmation for admin operations
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert optimistic state on failure
+        get().loadReservedNames();
+      }
+    });
+    
+    return txHash;
   },
   
   // Unreserve a name
@@ -309,7 +315,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'unreserveName',
@@ -317,8 +323,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadReservedNames();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadReservedNames();
+      }
+    });
+    
+    return txHash;
   },
   
   // Assign reserved name
@@ -326,7 +339,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'assignReservedName',
@@ -334,8 +347,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadReservedNames();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadReservedNames();
+      }
+    });
+    
+    return txHash;
   },
   
   // Registration lookup
@@ -416,7 +436,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setPrice',
@@ -424,15 +444,22 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadOverviewData();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
   
   updatePermanentMultiplier: async (multiplier: bigint, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setPermanentMultiplier',
@@ -440,15 +467,22 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadOverviewData();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
   
   updateBurnPercent: async (percent: bigint, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setBurnPercent',
@@ -456,8 +490,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadOverviewData();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
   
   // Treasury
@@ -465,7 +506,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'withdrawToTreasury',
@@ -473,8 +514,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadOverviewData();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
   
   // Settings
@@ -482,7 +530,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setAdmin',
@@ -490,15 +538,23 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Re-check admin status on failure
+        get().checkAdmin(get().adminAddress || '0x');
+      }
+    });
+    
     // Note: checkAdmin expects EVM address format - skipped here as account may be SS58
-    return hash;
+    return txHash;
   },
   
   setTreasury: async (newTreasury: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setTreasury',
@@ -506,15 +562,22 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadOverviewData();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
   
   setBurnAddress: async (newBurn: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setBurnAddress',
@@ -522,15 +585,22 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    await get().loadOverviewData();
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
   
   setDefaultResolver: async (newResolver: Address, account: string) => {
     const walletClient = getWalletClient();
     if (!walletClient) throw new Error('No wallet connected');
     
-    const hash = await walletClient.writeContract({
+    const { txHash, confirmation } = await walletClient.writeContract({
       address: QNS_REGISTRAR_ADDRESS,
       abi: QNS_REGISTRAR_ABI,
       functionName: 'setDefaultResolver',
@@ -538,6 +608,14 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    return hash;
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Revert state on failure
+        get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
   },
 }));

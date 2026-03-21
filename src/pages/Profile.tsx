@@ -347,14 +347,31 @@ export default function ProfilePage() {
       if (!walletClient) throw new Error('No wallet connected');
 
       const signerAddress = ss58Address || senderAddress;
-      const hash = await walletClient.sendTransaction({
+      const { txHash, confirmation } = await walletClient.sendTransaction({
         to: profile.address as `0x${string}`,
         value: requiredAmount,
         account: signerAddress,
+        verifyOnChain: async () => {
+          // For gifts, the confirmation event itself is sufficient.
+          // We can't easily verify balance changes without knowing the exact prior balance.
+          return true; // rely on PAPI event, not balance check
+        },
       });
 
-      setTxHash(hash);
+      setTxHash(txHash);
       setGiftSuccess(true);
+
+      // Background confirmation
+      confirmation.then((result) => {
+        if (result.confirmed) return;
+        if (result.error === 'not_confirmed') {
+          setGiftError('Gift sent but not yet confirmed. It may still arrive shortly.');
+          return;
+        }
+        // Hard failure
+        setGiftSuccess(false);
+        setGiftError(`Gift failed on-chain: ${result.error}. Your balance was not deducted.`);
+      });
     } catch (err: any) {
       console.error('Gift send error:', err);
       const msg = err?.message ?? String(err);

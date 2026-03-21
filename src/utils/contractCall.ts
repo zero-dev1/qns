@@ -4,6 +4,12 @@ import { getTypedApi } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
+export interface TxResult {
+  txHash: string;
+  /** Resolves when the tx is confirmed on-chain or the verification timeout elapses. */
+  confirmation: Promise<{ confirmed: boolean; error?: string }>;
+}
+
 const DEPLOYER_SS58 = "5FbmtGERRp4MhuwojmA2XGWghZ7XSNBLCUKQCrTVRz8bVGrU";
 
 // ─── Read path (unchanged) ───────────────────────────────────────────
@@ -89,8 +95,9 @@ export async function writeContract(
   functionName: string,
   args: any[],
   _signer: any,
-  value: bigint = 0n
-): Promise<string> {
+  value: bigint = 0n,
+  verifyOnChain?: () => Promise<boolean>
+): Promise<TxResult> {
   const connection = getCurrentConnection();
   if (!connection) {
     throw new Error('Wallet not connected. Please disconnect and reconnect your wallet.');
@@ -178,67 +185,82 @@ export async function writeContract(
     });
 
     try {
-      const txHash = await new Promise<string>((resolve, reject) => {
-        let settled = false;
+      const result = await new Promise<TxResult>((resolveResult, rejectResult) => {
+        let broadcastReceived = false;
+        let confirmationResolve: (v: { confirmed: boolean; error?: string }) => void;
+        const confirmationPromise = new Promise<{ confirmed: boolean; error?: string }>((res) => {
+          confirmationResolve = res;
+        });
 
-        const timeout = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            reject(new Error('Transaction signing timed out. Please try again.'));
+        const signingTimeout = setTimeout(() => {
+          if (!broadcastReceived) {
+            rejectResult(new Error('Transaction signing timed out. Please try again.'));
           }
         }, 30_000);
+
+        let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
 
         tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
           at: 'best' as const,
         }).subscribe({
           next(ev: any) {
-            if (settled) return;
-
             if (ev.type === 'broadcasted') {
-              settled = true;
-              clearTimeout(timeout);
-              resolve(ev.txHash);
+              broadcastReceived = true;
+              clearTimeout(signingTimeout);
+              // Resolve the outer result immediately — UI shows success
+              resolveResult({ txHash: ev.txHash, confirmation: confirmationPromise });
+
+              // Start 30s confirmation window
+              confirmationTimeout = setTimeout(async () => {
+                // Timeout: try active verification
+                if (verifyOnChain) {
+                  try {
+                    const onChain = await verifyOnChain();
+                    confirmationResolve!({ confirmed: onChain, error: onChain ? undefined : 'not_confirmed' });
+                  } catch {
+                    confirmationResolve!({ confirmed: false, error: 'verification_failed' });
+                  }
+                } else {
+                  confirmationResolve!({ confirmed: false, error: 'not_confirmed' });
+                }
+              }, 30_000);
               return;
             }
 
             if (ev.type === 'txBestBlocksState' && ev.found) {
-              if (!settled) {
-                settled = true;
-                clearTimeout(timeout);
-                if (!ev.ok && ev.dispatchError) {
-                  const errType = ev.dispatchError?.type ?? 'Unknown';
-                  reject(new Error(`Transaction reverted: ${errType}`));
-                  return;
-                }
-                resolve(ev.txHash);
+              if (confirmationTimeout) clearTimeout(confirmationTimeout);
+              if (ev.ok) {
+                confirmationResolve!({ confirmed: true });
+              } else {
+                const errType = ev.dispatchError?.type ?? 'Transaction reverted';
+                confirmationResolve!({ confirmed: false, error: errType });
               }
               return;
             }
 
             if (ev.type === 'finalized') {
-              if (!settled) {
-                settled = true;
-                clearTimeout(timeout);
-                if (!ev.ok && ev.dispatchError) {
-                  reject(new Error(`Transaction reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
-                  return;
-                }
-                resolve(ev.txHash);
+              if (confirmationTimeout) clearTimeout(confirmationTimeout);
+              if (ev.ok) {
+                confirmationResolve!({ confirmed: true });
+              } else {
+                confirmationResolve!({ confirmed: false, error: ev.dispatchError?.type ?? 'Transaction reverted' });
               }
               return;
             }
           },
           error(err: any) {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timeout);
-              reject(err);
+            if (!broadcastReceived) {
+              clearTimeout(signingTimeout);
+              rejectResult(err);
+            } else {
+              if (confirmationTimeout) clearTimeout(confirmationTimeout);
+              confirmationResolve!({ confirmed: false, error: err?.message || 'Subscription error' });
             }
           },
         });
       });
 
-      return txHash;
+      return result;
     } catch (err: any) {
       const msg = err?.message ?? '';
 
@@ -271,8 +293,9 @@ export async function writeContract(
 export async function sendTransfer(
   toEvmAddress: string,
   amount: bigint,
-  _signerAddress: string
-): Promise<string> {
+  _signerAddress: string,
+  verifyOnChain?: () => Promise<boolean>
+): Promise<TxResult> {
   const connection = getCurrentConnection();
   if (!connection) throw new Error('Wallet not connected');
 
@@ -322,51 +345,82 @@ export async function sendTransfer(
   });
 
   try {
-    const txHash = await new Promise<string>((resolve, reject) => {
-      let settled = false;
-      const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          reject(new Error('Transfer signing timed out.'));
+    const result = await new Promise<TxResult>((resolveResult, rejectResult) => {
+      let broadcastReceived = false;
+      let confirmationResolve: (v: { confirmed: boolean; error?: string }) => void;
+      const confirmationPromise = new Promise<{ confirmed: boolean; error?: string }>((res) => {
+        confirmationResolve = res;
+      });
+
+      const signingTimeout = setTimeout(() => {
+        if (!broadcastReceived) {
+          rejectResult(new Error('Transfer signing timed out.'));
         }
       }, 30_000);
+
+      let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
 
       tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
         at: 'best' as const,
       }).subscribe({
         next(ev: any) {
-          if (settled) return;
-
           if (ev.type === 'broadcasted') {
-            settled = true;
-            clearTimeout(timeout);
-            resolve(ev.txHash);
+            broadcastReceived = true;
+            clearTimeout(signingTimeout);
+            // Resolve the outer result immediately — UI shows success
+            resolveResult({ txHash: ev.txHash, confirmation: confirmationPromise });
+
+            // Start 30s confirmation window
+            confirmationTimeout = setTimeout(async () => {
+              // Timeout: try active verification
+              if (verifyOnChain) {
+                try {
+                  const onChain = await verifyOnChain();
+                  confirmationResolve!({ confirmed: onChain, error: onChain ? undefined : 'not_confirmed' });
+                } catch {
+                  confirmationResolve!({ confirmed: false, error: 'verification_failed' });
+                }
+              } else {
+                confirmationResolve!({ confirmed: false, error: 'not_confirmed' });
+              }
+            }, 30_000);
             return;
           }
 
-          if ((ev.type === 'txBestBlocksState' && ev.found) || ev.type === 'finalized') {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timeout);
-              if (!ev.ok && ev.dispatchError) {
-                reject(new Error(`Transfer reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
-                return;
-              }
-              resolve(ev.txHash);
+          if (ev.type === 'txBestBlocksState' && ev.found) {
+            if (confirmationTimeout) clearTimeout(confirmationTimeout);
+            if (ev.ok) {
+              confirmationResolve!({ confirmed: true });
+            } else {
+              const errType = ev.dispatchError?.type ?? 'Transfer reverted';
+              confirmationResolve!({ confirmed: false, error: errType });
             }
+            return;
+          }
+
+          if (ev.type === 'finalized') {
+            if (confirmationTimeout) clearTimeout(confirmationTimeout);
+            if (ev.ok) {
+              confirmationResolve!({ confirmed: true });
+            } else {
+              confirmationResolve!({ confirmed: false, error: ev.dispatchError?.type ?? 'Transfer reverted' });
+            }
+            return;
           }
         },
         error(err: any) {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timeout);
-            reject(err);
+          if (!broadcastReceived) {
+            clearTimeout(signingTimeout);
+            rejectResult(err);
+          } else {
+            if (confirmationTimeout) clearTimeout(confirmationTimeout);
+            confirmationResolve!({ confirmed: false, error: err?.message || 'Subscription error' });
           }
         },
       });
     });
 
-    return txHash;
+    return result;
   } catch (err: any) {
     const msg = err?.message ?? '';
     if (msg.includes('Cancelled') || msg.includes('Rejected')) {
