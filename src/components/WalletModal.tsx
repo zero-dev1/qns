@@ -3,6 +3,9 @@ import { useWalletStore } from '../stores/walletStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
+// Simple mobile detection helper
+const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 
 // Simple icon components for wallet logos
 const TalismanIcon = () => (
@@ -63,22 +66,21 @@ export default function WalletModal() {
 
   const handleWalletSelect = async (walletType: 'talisman' | 'subwallet') => {
     try {
-      // Clear any previous errors
       clearWalletError();
-      
-      // Connect wallet - this will:
-      // 1. Connect and get accounts
-      // 2. Resolve QNS name (reverse lookup)
-      // 3. Update UI state
-      // 4. Close the modal (done in store on success)
       await connectWallet(walletType);
       
-      // Modal is automatically closed by the store on success
-      // If there's an error, the modal stays open and shows the error
+      // If connection failed on mobile, override with mobile-specific guidance
+      const currentError = useWalletStore.getState().walletError;
+      if (currentError && isMobile()) {
+        const walletName = walletType === 'talisman' ? 'Talisman' : 'SubWallet';
+        useWalletStore.getState().clearWalletError();
+        useWalletStore.setState({ 
+          walletError: `Open this dApp inside ${walletName}'s built-in browser to connect on mobile.` 
+        });
+      }
     } catch (err: any) {
-      // Error is already handled in the store
-      // Modal stays open so user sees the error
-          }
+      // Error handled in store
+    }
   };
 
   const walletOptions = getWalletOptions();

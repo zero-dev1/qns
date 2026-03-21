@@ -23,6 +23,9 @@ interface WalletState {
   showWalletModal: boolean;
   walletError: string | null;
 
+  /** True when connectWallet is being called from rehydration (suppress walletError) */
+  _rehydrating: boolean;
+
   getBalanceAddress: () => string | null;
   connect: () => Promise<void>;
   connectWallet: (walletType: 'talisman' | 'subwallet') => Promise<void>;
@@ -45,6 +48,7 @@ export const useWalletStore = create<WalletState>()(
       accountMapped: false,
       showWalletModal: false,
       walletError: null,
+      _rehydrating: false,
 
       getBalanceAddress: () => get().ss58Address,
 
@@ -53,6 +57,13 @@ export const useWalletStore = create<WalletState>()(
       },
 
       connectWallet: async (walletType: 'talisman' | 'subwallet') => {
+        const isRehydrating = get()._rehydrating;
+        const setError = (error: string) => {
+          if (!isRehydrating) {
+            set({ walletError: error });
+          }
+        };
+        
         set({ connecting: true, walletError: null });
 
         try {
@@ -92,13 +103,12 @@ export const useWalletStore = create<WalletState>()(
 
             if (msg === METADATA_HASH_ERROR || msg.includes('METADATA_HASH_ERROR')) {
               // Talisman has CheckMetadataHash enabled for QF
-              set({
-                walletError:
-                  'QF Network requires CheckMetadataHash to be disabled in your wallet. ' +
-                  'In Talisman: Settings → Networks & Tokens → Manage Networks → find "QF Network" → ' +
-                  'uncheck "Verify transaction with metadata hash". Then reconnect.',
-                accountMapped: false,
-              });
+              setError(
+                'QF Network requires CheckMetadataHash to be disabled in your wallet. ' +
+                'In Talisman: Settings → Networks & Tokens → Manage Networks → find "QF Network" → ' +
+                'uncheck "Verify transaction with metadata hash". Then reconnect.',
+              );
+              set({ accountMapped: false });
               // Don't close modal – let user see the error
               return;
             }
@@ -115,8 +125,8 @@ export const useWalletStore = create<WalletState>()(
 
             // Generic mapping error — clean up to prevent zombie state
             disconnectWallet();
+            setError('Account setup incomplete — please try connecting again.');
             set({
-              walletError: 'Account setup incomplete — please try connecting again.',
               accountMapped: false,
               address: null,
               ss58Address: null,
@@ -130,13 +140,13 @@ export const useWalletStore = create<WalletState>()(
         } catch (error: any) {
           const msg = error.message || '';
           if (msg.includes('No accounts found') || msg.includes('no accounts')) {
-            set({ walletError: 'No accounts found. Please create an account in your wallet extension.' });
+            setError('No accounts found. Please create an account in your wallet extension.');
           } else if (msg.includes('extension') || msg.includes('not installed') || msg.includes('Cannot read properties')) {
-            set({ walletError: 'Please install Talisman or SubWallet to use this dApp.' });
+            setError('Please install Talisman or SubWallet to use this dApp.');
           } else if (msg.includes('timed out')) {
-            set({ walletError: msg });
+            setError(msg);
           } else {
-            set({ walletError: msg || 'Failed to connect wallet' });
+            setError(msg || 'Failed to connect wallet');
           }
           // ── NEW: prevent zombie state ──
           // Clear identity so navbar reflects reality
@@ -195,8 +205,7 @@ export const useWalletStore = create<WalletState>()(
       },
 
       setShowWalletModal: (show: boolean) => {
-        set({ showWalletModal: show });
-        if (!show) set({ walletError: null });
+        set({ showWalletModal: show, walletError: null });
       },
 
       clearWalletError: () => {
@@ -222,18 +231,23 @@ export const useWalletStore = create<WalletState>()(
         return (state) => {
           if (state?.address && state?.walletName) {
             const walletType = state.walletName as 'talisman' | 'subwallet';
-            // Attempt immediate reconnect; if it fails (extension not injected yet),
-            // retry once after a short delay for in-app browsers (SubWallet).
+            // Mark as rehydrating to suppress walletError
+            useWalletStore.setState({ _rehydrating: true });
             state.connectWallet(walletType).then(() => {
-              // Check if connection actually succeeded (address will be null if it failed)
-              if (!state.address) {
-                // First attempt cleared state — retry after delay
+              useWalletStore.setState({ _rehydrating: false });
+              if (!useWalletStore.getState().address) {
+                // First attempt failed — retry after delay for slow extension injection
+                useWalletStore.setState({ _rehydrating: true });
                 setTimeout(() => {
-                  state.connectWallet(walletType).catch(() => {});
+                  state.connectWallet(walletType).then(() => {
+                    useWalletStore.setState({ _rehydrating: false });
+                  }).catch(() => {
+                    useWalletStore.setState({ _rehydrating: false });
+                  });
                 }, 1500);
               }
             }).catch(() => {
-              // connectWallet doesn't throw (catches internally), but just in case
+              useWalletStore.setState({ _rehydrating: false });
               state.disconnect();
             });
           } else if (state?.address) {
