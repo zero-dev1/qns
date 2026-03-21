@@ -8,7 +8,8 @@ const RETRYABLE_PATTERNS = [
   'WouldBlock',
 ];
 
-export function isRetryableError(message: string): boolean {
+export function isRetryableError(message: string | undefined | null): boolean {
+  if (!message) return false;
   const lower = message.toLowerCase();
   return RETRYABLE_PATTERNS.some(p => lower.includes(p.toLowerCase()));
 }
