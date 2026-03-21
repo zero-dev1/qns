@@ -126,11 +126,12 @@ export async function writeContract(
     );
     const d = dryRun as any;
     if (d.gas_required) {
-      // Add 25% buffer to proof_size to prevent BadProof errors
-      // caused by state trie changes between dry-run and inclusion
+      // Add 50% buffer to both ref_time and proof_size.
+      // pallet-revive dry-runs underestimate gas on live chains
+      // due to state trie changes between dry-run and inclusion.
       gasLimit = {
-        ref_time: d.gas_required.ref_time,
-        proof_size: (d.gas_required.proof_size * 125n) / 100n,
+        ref_time: (d.gas_required.ref_time * 150n) / 100n,
+        proof_size: (d.gas_required.proof_size * 150n) / 100n,
       };
     }
     if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
@@ -138,97 +139,131 @@ export async function writeContract(
     // Use defaults
   }
 
-  const tx = typedApi.tx.Revive.call({
-    dest: Binary.fromHex(contractAddress),
-    value,
-    gas_limit: gasLimit,
-    storage_deposit_limit: storageDeposit,
-    data: Binary.fromHex(data),
-  });
+  // Retry logic: if tx fails with BadProof or similar dispatch errors,
+  // re-estimate gas and retry once automatically.
+  const maxAttempts = 2;
 
-  // Sign, broadcast, resolve IMMEDIATELY on broadcast
-  try {
-    const txHash = await new Promise<string>((resolve, reject) => {
-      let settled = false;
-
-      const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          reject(new Error('Transaction signing timed out. Please try again.'));
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Re-estimate gas on retry
+    if (attempt > 1) {
+      try {
+        const retryDryRun = await typedApi.apis.ReviveApi.call(
+          connection.address,
+          Binary.fromHex(contractAddress),
+          value,
+          undefined,
+          undefined,
+          Binary.fromHex(data)
+        );
+        const rd = retryDryRun as any;
+        if (rd.gas_required) {
+          // Use 2x buffer on retry for maximum safety
+          gasLimit = {
+            ref_time: rd.gas_required.ref_time * 2n,
+            proof_size: rd.gas_required.proof_size * 2n,
+          };
         }
-      }, 30_000); // 30s is plenty for signing + broadcast
+        if (rd.storage_deposit?.value) storageDeposit = rd.storage_deposit.value;
+      } catch {
+        // Use previous estimates
+      }
+    }
 
-      tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
-        at: 'best' as const,
-      }).subscribe({
-        next(ev: any) {
-          if (settled) return;
-
-          // "broadcasted" = node accepted the tx into its pool.
-          // On QF with sub-second blocks, it will be included almost instantly.
-          if (ev.type === 'broadcasted') {
-            settled = true;
-            clearTimeout(timeout);
-            // Don't unsubscribe yet — let it run in background silently
-            // so PAPI's internals stay clean. Just detach our interest.
-            resolve(ev.txHash);
-            return;
-          }
-
-          // If we somehow get best-block or finalized before broadcasted
-          // (shouldn't happen per PAPI docs, but defensive), also resolve.
-          if (ev.type === 'txBestBlocksState' && ev.found) {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timeout);
-              if (!ev.ok && ev.dispatchError) {
-                const errType = ev.dispatchError?.type ?? 'Unknown';
-                reject(new Error(`Transaction reverted: ${errType}`));
-                return;
-              }
-              resolve(ev.txHash);
-            }
-            return;
-          }
-
-          if (ev.type === 'finalized') {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timeout);
-              if (!ev.ok && ev.dispatchError) {
-                reject(new Error(`Transaction reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
-                return;
-              }
-              resolve(ev.txHash);
-            }
-            return;
-          }
-        },
-        error(err: any) {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timeout);
-            reject(err);
-          }
-        },
-      });
+    const tx = typedApi.tx.Revive.call({
+      dest: Binary.fromHex(contractAddress),
+      value,
+      gas_limit: gasLimit,
+      storage_deposit_limit: storageDeposit,
+      data: Binary.fromHex(data),
     });
 
-    return txHash;
-  } catch (err: any) {
-    const msg = err?.message ?? '';
+    try {
+      const txHash = await new Promise<string>((resolve, reject) => {
+        let settled = false;
 
-    if (msg.includes('Cancelled') || msg.includes('Rejected') || msg.includes('cancelled') || msg.includes('rejected')) {
-      throw new Error('Transaction rejected by user');
-    }
-    if (msg.includes('CannotLookup')) {
-      throw new Error(
-        'CheckMetadataHash error: disable this in Talisman → Settings → Networks & Tokens → QF Network → uncheck metadata hash verification.'
-      );
-    }
+        const timeout = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            reject(new Error('Transaction signing timed out. Please try again.'));
+          }
+        }, 30_000);
 
-    throw new Error(`Transaction failed: ${msg}`);
+        tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
+          at: 'best' as const,
+        }).subscribe({
+          next(ev: any) {
+            if (settled) return;
+
+            if (ev.type === 'broadcasted') {
+              settled = true;
+              clearTimeout(timeout);
+              resolve(ev.txHash);
+              return;
+            }
+
+            if (ev.type === 'txBestBlocksState' && ev.found) {
+              if (!settled) {
+                settled = true;
+                clearTimeout(timeout);
+                if (!ev.ok && ev.dispatchError) {
+                  const errType = ev.dispatchError?.type ?? 'Unknown';
+                  reject(new Error(`Transaction reverted: ${errType}`));
+                  return;
+                }
+                resolve(ev.txHash);
+              }
+              return;
+            }
+
+            if (ev.type === 'finalized') {
+              if (!settled) {
+                settled = true;
+                clearTimeout(timeout);
+                if (!ev.ok && ev.dispatchError) {
+                  reject(new Error(`Transaction reverted: ${ev.dispatchError?.type ?? 'Unknown'}`));
+                  return;
+                }
+                resolve(ev.txHash);
+              }
+              return;
+            }
+          },
+          error(err: any) {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              reject(err);
+            }
+          },
+        });
+      });
+
+      return txHash;
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+
+      if (msg.includes('Cancelled') || msg.includes('Rejected') || msg.includes('cancelled') || msg.includes('rejected')) {
+        throw new Error('Transaction rejected by user');
+      }
+      if (msg.includes('CannotLookup')) {
+        throw new Error(
+          'CheckMetadataHash error: disable this in Talisman → Settings → Networks & Tokens → QF Network → uncheck metadata hash verification.'
+        );
+      }
+
+      // On retriable errors (BadProof, gas-related), retry if we have attempts left
+      const isRetriable = msg.includes('BadProof') || msg.includes('OutOfGas') || msg.includes('reverted');
+      if (isRetriable && attempt < maxAttempts) {
+        // Small delay before retry
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+
+      throw new Error(`Transaction failed: ${msg}`);
+    }
   }
+
+  throw new Error('Transaction failed after retry');
 }
 
 // ─── Transfer path ───────────────────────────────────────────────────
@@ -270,8 +305,8 @@ export async function sendTransfer(
     const d = dryRun as any;
     if (d.gas_required) {
       gasLimit = {
-        ref_time: d.gas_required.ref_time,
-        proof_size: (d.gas_required.proof_size * 125n) / 100n,
+        ref_time: (d.gas_required.ref_time * 150n) / 100n,
+        proof_size: (d.gas_required.proof_size * 150n) / 100n,
       };
     }
     if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;

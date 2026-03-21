@@ -684,8 +684,9 @@ export default function MyNamesPage() {
 
       hapticSuccess();
 
-      // Background refresh to confirm (non-blocking)
-      refreshName().catch(() => {});
+      // Delay the background refresh so the chain has time to process
+      // the setReverse transaction before we query it
+      setTimeout(() => refreshName().catch(() => {}), 5000);
     } catch (err: any) {
       showToast(err.message || 'Failed to set primary name', 'error');
       hapticError();
@@ -810,9 +811,11 @@ export default function MyNamesPage() {
       setTransferSuccess(true);
       hapticSuccess();
 
-      // Refresh names in store so wallet dropdown reflects the transfer
-      refreshNames(address).catch(() => {});
-      refreshName().catch(() => {});
+      // Delay refreshes so the chain has time to process the transfer
+      setTimeout(() => {
+        refreshNames(address).catch(() => {});
+        refreshName().catch(() => {});
+      }, 5000);
 
       // Update primary name state
       resolveReverse(address).then((currentPrimary) => {
