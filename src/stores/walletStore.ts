@@ -113,10 +113,17 @@ export const useWalletStore = create<WalletState>()(
               return;
             }
 
-            // Generic mapping error
+            // Generic mapping error — clean up to prevent zombie state
+            disconnectWallet();
             set({
-              walletError: 'Account mapping failed. Please try reconnecting your wallet.',
+              walletError: 'Account setup incomplete — please try connecting again.',
               accountMapped: false,
+              address: null,
+              ss58Address: null,
+              qnsName: null,
+              displayName: null,
+              walletConnection: null,
+              walletName: null,
             });
             return;
           }
@@ -131,6 +138,18 @@ export const useWalletStore = create<WalletState>()(
           } else {
             set({ walletError: msg || 'Failed to connect wallet' });
           }
+          // ── NEW: prevent zombie state ──
+          // Clear identity so navbar reflects reality
+          disconnectWallet(); // clears currentConnection in wallet.ts
+          set({
+            address: null,
+            ss58Address: null,
+            qnsName: null,
+            displayName: null,
+            walletConnection: null,
+            walletName: null,
+            accountMapped: false,
+          });
         } finally {
           set({ connecting: false });
         }
@@ -202,7 +221,19 @@ export const useWalletStore = create<WalletState>()(
       onRehydrateStorage: () => {
         return (state) => {
           if (state?.address && state?.walletName) {
-            state.connectWallet(state.walletName as 'talisman' | 'subwallet').catch(() => {
+            const walletType = state.walletName as 'talisman' | 'subwallet';
+            // Attempt immediate reconnect; if it fails (extension not injected yet),
+            // retry once after a short delay for in-app browsers (SubWallet).
+            state.connectWallet(walletType).then(() => {
+              // Check if connection actually succeeded (address will be null if it failed)
+              if (!state.address) {
+                // First attempt cleared state — retry after delay
+                setTimeout(() => {
+                  state.connectWallet(walletType).catch(() => {});
+                }, 1500);
+              }
+            }).catch(() => {
+              // connectWallet doesn't throw (catches internally), but just in case
               state.disconnect();
             });
           } else if (state?.address) {

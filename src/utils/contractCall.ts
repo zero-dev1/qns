@@ -98,9 +98,25 @@ export async function writeContract(
   value: bigint = 0n,
   verifyOnChain?: () => Promise<boolean>
 ): Promise<TxResult> {
-  const connection = getCurrentConnection();
+  let connection = getCurrentConnection();
   if (!connection) {
-    throw new Error('Wallet not connected. Please disconnect and reconnect your wallet.');
+    // Connection lost (page refresh, in-app browser navigation, etc.)
+    // Attempt to silently re-establish from persisted wallet state
+    try {
+      const { useWalletStore } = await import('../stores/walletStore');
+      const { walletName } = useWalletStore.getState();
+      if (walletName) {
+        const { connectSubstrateWallet } = await import('./wallet');
+        const walletId = walletName === 'talisman' ? 'talisman' : 'subwallet-js';
+        await connectSubstrateWallet(walletId);
+        connection = getCurrentConnection();
+      }
+    } catch {
+      // Re-connection failed — fall through to error
+    }
+    if (!connection) {
+      throw new Error('Wallet not connected. Please disconnect and reconnect your wallet.');
+    }
   }
 
   try {
@@ -308,8 +324,26 @@ export async function sendTransfer(
   _signerAddress: string,
   verifyOnChain?: () => Promise<boolean>
 ): Promise<TxResult> {
-  const connection = getCurrentConnection();
-  if (!connection) throw new Error('Wallet not connected');
+  let connection = getCurrentConnection();
+  if (!connection) {
+    // Connection lost (page refresh, in-app browser navigation, etc.)
+    // Attempt to silently re-establish from persisted wallet state
+    try {
+      const { useWalletStore } = await import('../stores/walletStore');
+      const { walletName } = useWalletStore.getState();
+      if (walletName) {
+        const { connectSubstrateWallet } = await import('./wallet');
+        const walletId = walletName === 'talisman' ? 'talisman' : 'subwallet-js';
+        await connectSubstrateWallet(walletId);
+        connection = getCurrentConnection();
+      }
+    } catch {
+      // Re-connection failed — fall through to error
+    }
+    if (!connection) {
+      throw new Error('Wallet not connected. Please disconnect and reconnect your wallet.');
+    }
+  }
 
   try {
     await ensureAccountMapped(connection.address);
