@@ -125,7 +125,14 @@ export async function writeContract(
       Binary.fromHex(data)
     );
     const d = dryRun as any;
-    if (d.gas_required) gasLimit = d.gas_required;
+    if (d.gas_required) {
+      // Add 25% buffer to proof_size to prevent BadProof errors
+      // caused by state trie changes between dry-run and inclusion
+      gasLimit = {
+        ref_time: d.gas_required.ref_time,
+        proof_size: (d.gas_required.proof_size * 125n) / 100n,
+      };
+    }
     if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
   } catch {
     // Use defaults
@@ -261,7 +268,12 @@ export async function sendTransfer(
       Binary.fromHex('0x')
     );
     const d = dryRun as any;
-    if (d.gas_required) gasLimit = d.gas_required;
+    if (d.gas_required) {
+      gasLimit = {
+        ref_time: d.gas_required.ref_time,
+        proof_size: (d.gas_required.proof_size * 125n) / 100n,
+      };
+    }
     if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
   } catch {
   }

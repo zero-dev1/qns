@@ -177,6 +177,7 @@ interface NameCardProps {
   enableTilt: boolean;
   renewing: boolean;
   settingPrimary: boolean;
+  recentlyRenewed: boolean;
   onOpen: () => void;
   onSetPrimary: (e: React.MouseEvent) => void;
   onRenew: (e: React.MouseEvent) => void;
@@ -194,6 +195,7 @@ const NameCard = ({
   enableTilt,
   renewing,
   settingPrimary,
+  recentlyRenewed,
   onOpen,
   onSetPrimary,
   onRenew,
@@ -252,7 +254,9 @@ const NameCard = ({
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={enableTilt ? { rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 800 } : undefined}
-      className="name-card group relative cursor-pointer overflow-hidden rounded-2xl border border-white/5 bg-[#111] transition-all duration-300 hover:border-[#00D179]/20 hover:shadow-lg hover:shadow-[#00D179]/5"
+      className={`name-card group relative cursor-pointer overflow-hidden rounded-2xl border bg-[#111] transition-all duration-300 hover:border-[#00D179]/20 hover:shadow-lg hover:shadow-[#00D179]/5 ${
+  recentlyRenewed ? 'border-[#00D179]/40 shadow-lg shadow-[#00D179]/10' : 'border-white/5'
+}`}
     >
       {/* Spotlight effect overlay */}
       <div
@@ -282,6 +286,12 @@ const NameCard = ({
           {isDappLab && (
             <span className="inline-flex rounded-full border border-[#00D179]/30 bg-[#00D179]/5 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
               dApp Lab
+            </span>
+          )}
+          {recentlyRenewed && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#00D179]/30 bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179] animate-pulse">
+              <Check size={10} />
+              Renewed
             </span>
           )}
         </div>
@@ -411,6 +421,7 @@ export default function MyNamesPage() {
   const [editValues, setEditValues] = useState<Record<string, Record<string, string>>>({});
   const [savingAll, setSavingAll] = useState(false);
   const [renewingName, setRenewingName] = useState<string | null>(null);
+  const [recentlyRenewed, setRecentlyRenewed] = useState<string | null>(null);
   const [transferModal, setTransferModal] = useState<string | null>(null);
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferring, setTransferring] = useState(false);
@@ -434,7 +445,6 @@ export default function MyNamesPage() {
     if (!address) return;
 
     // Pre-fill from the Zustand store if it has names and our local state is empty.
-    // This handles the case where Hero.tsx injected a newly registered name.
     const storeNames = useNamesStore.getState().ownedNames;
     if (storeNames.length > 0 && names.length === 0) {
       const mapped = storeNames.map((item) => ({
@@ -450,7 +460,8 @@ export default function MyNamesPage() {
     }
 
     // Only show the loading spinner if we have nothing to display yet
-    if (names.length === 0 && storeNames.length === 0) {
+    const hasLocalNames = names.length > 0 || storeNames.length > 0;
+    if (!hasLocalNames) {
       setLoading(true);
     }
 
@@ -464,19 +475,14 @@ export default function MyNamesPage() {
           registeredAt: item.registeredAt,
         }));
         setNames(mappedNames);
-
-        // Fetch profile data for all names
         for (const item of mappedNames) {
           loadTextRecords(item.name);
         }
-      } else if (storeNames.length === 0) {
-        // Only clear if we also don't have optimistic names
-        setNames([]);
       }
+      // If chain returns empty but we have optimistic names, do NOT clear.
+      // The bgRefresh after 5s will reconcile.
     } catch {
-      if (storeNames.length === 0) {
-        setNames([]);
-      }
+      // Keep whatever we have
     } finally {
       setLoading(false);
     }
@@ -528,6 +534,15 @@ export default function MyNamesPage() {
       openEditModal(expandName);
     }
   }, [expandName, names]);
+
+  // After registration navigation, schedule a background refresh
+  // to replace optimistic data with real chain data
+  useEffect(() => {
+    if (expandName && address) {
+      const timer = setTimeout(() => bgRefresh(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [expandName, address, bgRefresh]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -680,6 +695,10 @@ export default function MyNamesPage() {
 
       showToast(`Renewed ${name}.qf successfully`, 'success');
       hapticSuccess();
+
+      // Show renewed indicator on the card
+      setRecentlyRenewed(name);
+      setTimeout(() => setRecentlyRenewed(null), 5000);
 
       // Silent background refresh after delay
       setTimeout(() => bgRefresh(), 5000);
@@ -976,6 +995,7 @@ export default function MyNamesPage() {
                       enableTilt={enableTilt}
                       renewing={renewingName === item.name}
                       settingPrimary={settingPrimary === item.name}
+                      recentlyRenewed={recentlyRenewed === item.name}
                       onOpen={() => openEditModal(item.name)}
                       onSetPrimary={(e) => handleSetPrimary(item.name, e)}
                       onRenew={(e) => handleRenew(item.name, e)}
