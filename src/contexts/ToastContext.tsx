@@ -19,7 +19,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = (message: string, type: ToastType) => {
     const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts(prev => {
+      // If new toast is error, remove any existing error toasts
+      let filtered = type === 'error' ? prev.filter(t => t.type !== 'error') : prev;
+      // Keep max 3 toasts
+      if (filtered.length >= 3) {
+        filtered = filtered.slice(1);
+      }
+      return [...filtered, { id, message, type }];
+    });
   };
 
   const removeToast = (id: string) => {
@@ -29,14 +37,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={() => removeToast(toast.id)}
-        />
-      ))}
+      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3">
+        {toasts.map(toast => (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        ))}
+      </div>
     </ToastContext.Provider>
   );
 }

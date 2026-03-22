@@ -108,7 +108,7 @@ export default function ProfilePage() {
   const { address: senderAddress, ss58Address, connect, connecting } = useWalletStore();
   const [giftModalOpen, setGiftModalOpen] = useState(false);
   const [giftAmount, setGiftAmount] = useState('');
-  const [senderBalance, setSenderBalance] = useState<bigint>(0n);
+  const [senderBalance] = useState<bigint>(0n);
   const [isSending, setIsSending] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
   const [giftSuccess, setGiftSuccess] = useState(false);
@@ -297,22 +297,14 @@ export default function ProfilePage() {
   const openGiftModal = async () => {
     hapticTap();
     setGiftModalOpen(true);
-    setGiftAmount('');
-    setGiftError(null);
-    setGiftSuccess(false);
-    setTxHash(null);
-    if (balanceAddress) {
-      const balance = await getQFBalance(balanceAddress);
-      setSenderBalance(balance);
-    }
   };
 
   const closeGiftModal = () => {
     setGiftModalOpen(false);
     setGiftAmount('');
     setGiftError(null);
+    setIsSending(false);
     setGiftSuccess(false);
-    setTxHash(null);
   };
 
   const handleQuickSelect = (amount: number) => {
@@ -320,8 +312,14 @@ export default function ProfilePage() {
     setGiftError(null);
   };
 
+  // Calculate if send button should be disabled
+  const sendDisabled = !giftAmount || parseFloat(giftAmount) <= 0 || (balanceAddress && parseEther(giftAmount) + 500000000000000000n > senderBalance);
+
   const handleSendGift = async () => {
     if (!senderAddress || !profile?.address || !giftAmount) return;
+    
+    // Early return if button should be disabled
+    if (sendDisabled) return;
     
     const amount = parseFloat(giftAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -336,8 +334,9 @@ export default function ProfilePage() {
     }
     const balance = await getQFBalance(balanceAddress);
     const requiredAmount = parseEther(giftAmount);
+    const gasBuffer = 500000000000000000n; // 0.5 QF
     
-    if (balance < requiredAmount) {
+    if (balance < requiredAmount + gasBuffer) {
       setGiftError('Insufficient QF balance');
       return;
     }
@@ -750,8 +749,12 @@ export default function ProfilePage() {
                         {/* Send Gift Button */}
                         <button
                           onClick={handleSendGift}
-                          disabled={isSending || !giftAmount}
-                          className="w-full py-3 rounded-xl bg-[#00D179] text-black font-semibold transition-all duration-200 hover:bg-[#00B868] active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                          disabled={isSending || sendDisabled || false}
+                          className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 ${
+                            isSending || sendDisabled
+                              ? 'bg-[#00D179]/50 text-black/50 cursor-not-allowed'
+                              : 'bg-[#00D179] hover:bg-[#00B868] text-black cursor-pointer'
+                          }`}
                         >
                           {isSending ? (
                             <Loader2 size={18} className="animate-spin" />

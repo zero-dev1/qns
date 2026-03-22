@@ -38,6 +38,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
+import RenewModal from '../components/RenewModal';
 
 interface OwnedName {
   name: string;
@@ -451,6 +452,9 @@ export default function MyNamesPage() {
   const [copied, setCopied] = useState(false);
   const [enableTilt, setEnableTilt] = useState(false);
 
+  // Renew modal state
+  const [renewModalName, setRenewModalName] = useState<string | null>(null);
+
   const loadNames = useCallback(async () => {
     if (!address) return;
 
@@ -578,10 +582,11 @@ export default function MyNamesPage() {
         if (editModalName) closeEditModal();
         if (transferModal) setTransferModal(null);
         if (shareModalName) setShareModalName(null);
+        if (renewModalName) setRenewModalName(null);
       }
     };
 
-    const hasOpenModal = editModalName || transferModal || shareModalName;
+    const hasOpenModal = editModalName || transferModal || shareModalName || renewModalName;
 
     if (hasOpenModal) {
       document.addEventListener('keydown', handleKeyDown);
@@ -753,24 +758,22 @@ export default function MyNamesPage() {
     }
   };
 
-  const handleRenew = async (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRenew = async (name: string, years: number) => {
     if (!address) return;
-    if (editModalName === name) closeEditModal();
     setRenewingName(name);
     setRenewError(null);
     const signerAddress = ss58Address || address;
     try {
-      const { confirmation } = await renewName(name, 1, signerAddress);
+      const { confirmation } = await renewName(name, years, signerAddress);
 
       // Optimistic update immediately
       setNames((prev) =>
         prev.map((item) => {
           if (item.name !== name || item.isPermanent) return item;
-          return { ...item, expires: item.expires + 365n * 24n * 60n * 60n };
+          return { ...item, expires: item.expires + BigInt(years) * 365n * 24n * 60n * 60n };
         })
       );
-      showToast(`Renewed ${name}.qf successfully`, 'success');
+      showToast(`Renewed ${name}.qf for ${years} year${years > 1 ? 's' : ''}`, 'success');
       hapticSuccess();
       setRecentlyRenewed(name);
       setTimeout(() => setRecentlyRenewed(null), 5000);
@@ -1114,7 +1117,10 @@ export default function MyNamesPage() {
                       recentlyPrimaried={recentlyPrimaried === item.name}
                       onOpen={() => openEditModal(item.name)}
                       onSetPrimary={(e) => handleSetPrimary(item.name, e)}
-                      onRenew={(e) => handleRenew(item.name, e)}
+                      onRenew={(e) => {
+                        e.stopPropagation();
+                        setRenewModalName(item.name);
+                      }}
                       onShare={(e) => handleShare(item.name, e)}
                       onEdit={(e) => handleEditClick(item.name, e)}
                       onTransfer={(e) => handleTransferClick(item.name, e)}
@@ -1215,7 +1221,11 @@ export default function MyNamesPage() {
                 {/* Renew - emerald color, only for non-permanent */}
                 {getSelectedNameData() && !getSelectedNameData()!.isPermanent && (
                   <button
-                    onClick={(e) => handleRenew(editModalName, e)}
+                    onClick={() => {
+                      const name = editModalName;
+                      closeEditModal();
+                      if (name) setRenewModalName(name);
+                    }}
                     disabled={renewingName === editModalName}
                     className="group flex flex-1 flex-col items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
@@ -1498,6 +1508,26 @@ export default function MyNamesPage() {
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Renew Modal */}
+      <AnimatePresence>
+        {renewModalName && (() => {
+          const item = names.find(n => n.name === renewModalName);
+          if (!item) return null;
+          return (
+            <RenewModal
+              name={item.name}
+              currentExpiry={item.expires}
+              nameLength={item.name.length}
+              onClose={() => setRenewModalName(null)}
+              onConfirm={(years) => {
+                setRenewModalName(null);
+                handleRenew(item.name, years);
+              }}
+            />
+          );
+        })()}
       </AnimatePresence>
 
       <style>{`

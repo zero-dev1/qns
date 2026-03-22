@@ -13,16 +13,17 @@ interface ToastProps {
 export default function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   const [isVisible, setIsVisible] = useState(true);
 
-  const effectiveDuration = type === 'warning' ? 5000 : duration;
-
   useEffect(() => {
+    if (type === 'error') return; // no auto-dismiss for errors
+    
+    const effectiveDuration = type === 'warning' ? 7000 : duration;
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(onClose, 300); // Allow exit animation to complete
     }, effectiveDuration);
 
     return () => clearTimeout(timer);
-  }, [effectiveDuration, onClose]);
+  }, [type, duration, onClose]);
 
   const icons = {
     success: <Check size={20} />,
@@ -44,15 +45,26 @@ export default function Toast({ message, type, onClose, duration = 3000 }: Toast
 
   return (
     <div
-      className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out ${
+      className={`transition-all duration-300 ease-in-out ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
       }`}
     >
       <div
-        className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg ${colors[type]}`}
+        className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-lg ${colors[type]}`}
       >
-        {icons[type]}
-        <span className="font-medium text-sm">{message}</span>
+        <div className="flex items-center gap-3">
+          {icons[type]}
+          <span className="font-medium text-sm">{message}</span>
+        </div>
+        <button
+          onClick={() => {
+            setIsVisible(false);
+            setTimeout(onClose, 300);
+          }}
+          className="ml-2 opacity-70 hover:opacity-100 transition-opacity"
+        >
+          <X size={16} />
+        </button>
       </div>
     </div>
   );
