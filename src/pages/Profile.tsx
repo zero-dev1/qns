@@ -108,7 +108,7 @@ export default function ProfilePage() {
   const { address: senderAddress, ss58Address, connect, connecting } = useWalletStore();
   const [giftModalOpen, setGiftModalOpen] = useState(false);
   const [giftAmount, setGiftAmount] = useState('');
-  const [senderBalance] = useState<bigint>(0n);
+  const [senderBalance, setSenderBalance] = useState<bigint>(0n);
   const [isSending, setIsSending] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
   const [giftSuccess, setGiftSuccess] = useState(false);
@@ -292,6 +292,13 @@ export default function ProfilePage() {
 
   // Get the address to use for balance queries
   const balanceAddress = ss58Address || senderAddress;
+
+  // Fetch balance when modal opens or address changes
+  useEffect(() => {
+    if (giftModalOpen && balanceAddress) {
+      getQFBalance(balanceAddress).then(setSenderBalance).catch(console.error);
+    }
+  }, [giftModalOpen, balanceAddress]);
 
   // Gift modal handlers
   const openGiftModal = async () => {
