@@ -72,7 +72,7 @@ export default function Pricing() {
 
   return (
     <section className="relative py-24">
-      <div className="mx-auto max-w-[1120px]">
+      <div className="mx-auto max-w-[1120px] px-6">
         <motion.p
           className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"
           initial={{ opacity: 0, y: 30 }}
@@ -123,7 +123,7 @@ export default function Pricing() {
             <Loader2 size={32} className="text-[#00D179] animate-spin" />
           </div>
         ) : (
-          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-6 md:grid-cols-3">
+          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-3">
             {tiers.map((tier, index) => (
               <motion.div
                 key={tier.label}

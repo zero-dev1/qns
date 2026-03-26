@@ -276,7 +276,7 @@ export default function RegistrationPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-1 bg-[#0A0A0A] rounded-xl p-1 mb-6">
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4 bg-[#0A0A0A] rounded-xl p-1 mb-6">
             {durations.map((d, i) => (
               <motion.button
                 key={d.label}

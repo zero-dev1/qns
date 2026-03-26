@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowLeftRight, Landmark, Rocket, Gamepad2, Store } from 'lucide-react';
+import { ArrowLeftRight, Landmark, Rocket, Gamepad2, Store, CheckSquare } from 'lucide-react';
 
 const dapps = [
   {
@@ -19,7 +19,7 @@ const dapps = [
   {
     name: 'Quorum',
     description: 'Vote on governance proposals as yourname.qf.',
-    icon: Landmark,
+    icon: CheckSquare,
     status: 'Coming Soon' as const,
     color: '#00D179',
   },

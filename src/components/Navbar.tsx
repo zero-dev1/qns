@@ -110,7 +110,7 @@ export default function Navbar() {
             </div>
           </Link>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-6">
             <Link
               to="/my-names"
               className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
@@ -286,6 +286,8 @@ export default function Navbar() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
             onClick={() => setShowAccountInfo(false)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowAccountInfo(false); }}
+            tabIndex={-1}
           >
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.95 }}

@@ -59,6 +59,12 @@ export default function SearchInput({
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
             onFocus={onFocus}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                onInputChange('');
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
             onBlur={onBlur}
             placeholder="Search for a name"
             className="flex-1 bg-transparent outline-none text-white font-satoshi px-5 py-4 text-lg transition-all duration-150"

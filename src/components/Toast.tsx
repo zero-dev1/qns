@@ -50,7 +50,7 @@ export default function Toast({ message, type, onClose, duration = 3000 }: Toast
       }`}
     >
       <div
-        className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-lg ${colors[type]}`}
+        className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-lg pointer-events-auto max-w-[90vw] ${colors[type]}`}
       >
         <div className="flex items-center gap-3">
           {icons[type]}

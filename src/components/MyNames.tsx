@@ -442,7 +442,7 @@ export default function MyNames() {
       {(['avatar'] as const).map((key) => (
         <div key={key} className="group">
           <label className="block text-xs text-[#555] mb-1.5 capitalize">{key}</label>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <input
               type="text"
               value={editValues[item.name]?.[key] ?? ''}
@@ -461,7 +461,7 @@ export default function MyNames() {
                 savingField === `${item.name}-${key}` ||
                 (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
               }
-              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer shrink-0"
+              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer sm:shrink-0 w-full sm:w-auto"
             >
               {savingField === `${item.name}-${key}` ? '...' : 'Save'}
             </button>
@@ -476,7 +476,7 @@ export default function MyNames() {
       {(['bio'] as const).map((key) => (
         <div key={key} className="group">
           <label className="block text-xs text-[#555] mb-1.5 capitalize">{key}</label>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <input
               type="text"
               value={editValues[item.name]?.[key] ?? ''}
@@ -495,7 +495,7 @@ export default function MyNames() {
                 savingField === `${item.name}-${key}` ||
                 (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
               }
-              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer shrink-0"
+              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer sm:shrink-0 w-full sm:w-auto"
             >
               {savingField === `${item.name}-${key}` ? '...' : 'Save'}
             </button>
@@ -510,7 +510,7 @@ export default function MyNames() {
       {(['twitter', 'telegram', 'github', 'url'] as const).map((key) => (
         <div key={key} className="group">
           <label className="block text-xs text-[#555] mb-1.5 capitalize">{key === 'url' ? 'Website' : key}</label>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <input
               type="text"
               value={editValues[item.name]?.[key] ?? ''}
@@ -529,7 +529,7 @@ export default function MyNames() {
                 savingField === `${item.name}-${key}` ||
                 (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
               }
-              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer shrink-0"
+              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer sm:shrink-0 w-full sm:w-auto"
             >
               {savingField === `${item.name}-${key}` ? '...' : 'Save'}
             </button>
@@ -555,7 +555,11 @@ export default function MyNames() {
         )}
 
         {transferModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div 
+  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+  onKeyDown={(e) => { if (e.key === 'Escape') setTransferModal(null); }}
+  tabIndex={-1}
+>
             <div className="bg-[#141414] border border-[#1E1E1E] rounded-xl p-6 max-w-md w-full animate-scale-in">
               {!transferSuccess ? (
                 <>
@@ -646,7 +650,11 @@ export default function MyNames() {
         )}
 
         {shareModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div 
+  className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+  onKeyDown={(e) => { if (e.key === 'Escape') setShareModal(null); }}
+  tabIndex={-1}
+>
             <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl p-6 max-w-sm w-full animate-fade-in">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-clash font-medium text-xl text-white">

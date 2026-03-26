@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 
-const exampleNames = ['satoshi', 'vitalik', 'degen', 'alpha', 'moon', 'whale', 'rocket', 'genesis'];
+const exampleNames = ['legend', 'pioneer', 'builder', 'voyager', 'cosmic', 'onchain', 'diamond', 'rocket'];
 
 export default function CTA() {
   const handleScrollToSearch = () => {

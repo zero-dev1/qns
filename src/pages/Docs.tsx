@@ -1,38 +1,23 @@
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, FileCode, Globe, ArrowRightLeft } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Copy, Check, Book, Code, Globe, Key, FileText } from 'lucide-react';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import {
   QNS_REGISTRY_ADDRESS,
-  QNS_REGISTRAR_ADDRESS,
   QNS_RESOLVER_ADDRESS,
+  QNS_REGISTRAR_ADDRESS,
 } from '../config/contracts';
 
-const RESOLVER_ABI = [
-  {
-    type: 'function',
-    name: 'addr',
-    inputs: [{ name: 'node', type: 'bytes32' }],
-    outputs: [{ name: '', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'reverseResolve',
-    inputs: [{ name: '_addr', type: 'address' }],
-    outputs: [{ name: '', type: 'string' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'text',
-    inputs: [
-      { name: 'node', type: 'bytes32' },
-      { name: 'key', type: 'string' },
-    ],
-    outputs: [{ name: '', type: 'string' }],
-    stateMutability: 'view',
-  },
+const sections = [
+  { id: 'overview', label: 'Overview', icon: Book },
+  { id: 'contracts', label: 'Contract Addresses', icon: Key },
+  { id: 'how-it-works', label: 'How It Works', icon: Globe },
+  { id: 'text-records', label: 'Text Records', icon: FileText },
+  { id: 'integrate-js', label: 'JavaScript / TypeScript', icon: Code },
+  { id: 'integrate-sol', label: 'Solidity', icon: Code },
 ];
+
 
 const PAPI_EXAMPLE = `import { encodeFunctionData, decodeFunctionResult, keccak256, toHex, encodePacked } from 'viem';
 import { getTypedApi, Binary } from 'polkadot-api';
@@ -183,276 +168,218 @@ contract MyContract {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
   return (
     <button
       onClick={handleCopy}
-      className="p-2 rounded-lg text-[#6A6A6A] hover:text-[#00D179] hover:bg-[#1E1E1E] transition-all duration-200"
-      title="Copy"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-[#555] hover:text-[#00D179] hover:bg-white/[0.04] transition-all duration-200 cursor-pointer"
     >
-      {copied ? <Check size={16} /> : <Copy size={16} />}
+      {copied ? <Check size={12} className="text-[#00D179]" /> : <Copy size={12} />}
+      {copied ? 'Copied' : 'Copy'}
     </button>
+  );
+}
+
+function CodeBlock({ code, language = 'typescript' }: { code: string; language?: string }) {
+  return (
+    <div className="relative rounded-xl border border-white/[0.06] bg-[#0A0A0A] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.04]">
+        <span className="text-[10px] uppercase tracking-[0.15em] text-[#444]">{language}</span>
+        <CopyButton text={code} />
+      </div>
+      <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
+        <code className="text-[#999] font-mono text-[13px]">{code}</code>
+      </pre>
+    </div>
   );
 }
 
 function AddressRow({ label, address }: { label: string; address: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <button
-      onClick={handleCopy}
-      className="w-full flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-[#1E1E1E] last:border-0 text-left cursor-pointer hover:bg-[#1E1E1E]/30 transition-colors px-1 -mx-1 rounded"
-    >
-      <span className="text-sm text-[#8A8A8A] mb-1 sm:mb-0">{label}</span>
-      <div className="flex items-center gap-3">
-        <code className="text-sm text-[#00D179] font-mono break-all">{address}</code>
-        <span className="text-xs text-[#00D179] whitespace-nowrap">
-          {copied ? 'Copied!' : ''}
-        </span>
-      </div>
-    </button>
-  );
-}
-
-function CodeBlock({ code, language }: { code: string; language: string }) {
-  return (
-    <div className="relative group">
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <CopyButton text={code} />
-      </div>
-      <pre className="bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg p-4 overflow-x-auto">
-        <code className="text-sm font-mono text-[#E0E0E0]">{code}</code>
-      </pre>
-      <div className="absolute top-3 left-4 text-xs text-[#6A6A6A] uppercase tracking-wider">
-        {language}
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-white/[0.04] last:border-0">
+      <span className="text-sm text-[#666]">{label}</span>
+      <div className="flex items-center gap-2">
+        <code className="text-sm font-mono text-[#00D179] break-all">{address}</code>
+        <CopyButton text={address} />
       </div>
     </div>
   );
 }
 
-function Section({
-  id,
-  title,
-  icon: Icon,
-  children,
-}: {
-  id: string;
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-24">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-[#00D179]/10 flex items-center justify-center">
-          <Icon size={20} className="text-[#00D179]" />
-        </div>
-        <h2 className="font-clash font-semibold text-2xl text-white">{title}</h2>
-      </div>
-      <div className="pl-[52px]">{children}</div>
-    </section>
-  );
-}
-
 export default function DocsPage() {
+  const [activeSection, setActiveSection] = useState('overview');
+  const location = useLocation();
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  // Scroll spy — highlight active section in sidebar
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: '-20% 0px -70% 0px', threshold: 0 }
+    );
+
+    sections.forEach(({ id }) => {
+      const el = document.getElementById(id);
+      if (el) {
+        sectionRefs.current[id] = el;
+        observer.observe(el);
+      }
+    });
+
+    return () => observer.disconnect();
   }, []);
 
+  // Handle hash navigation
+  useEffect(() => {
+    const hash = location.hash.replace('#', '');
+    if (hash) {
+      const el = document.getElementById(hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [location.hash]);
+
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-md border-b border-[#1E1E1E]">
-        <div className="max-w-[1120px] mx-auto px-6 h-16 flex items-center justify-between">
-          <Link
-            to="/"
-            className="font-clash font-semibold text-xl text-white tracking-tight hover:opacity-80 transition-opacity"
-          >
-            QNS<span className="text-[#00D179]">.</span>
-          </Link>
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-[#0A0A0A]">
+        <div className="max-w-[1120px] mx-auto px-6 py-12 md:py-20">
+          <div className="flex gap-12">
+            {/* Sidebar — desktop only */}
+            <nav className="hidden lg:block w-[200px] shrink-0">
+              <div className="sticky top-24 space-y-1">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[#444] mb-4 px-3">Documentation</p>
+                {sections.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => scrollTo(id)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                      activeSection === id
+                        ? 'text-[#00D179] bg-[#00D179]/[0.06]'
+                        : 'text-[#555] hover:text-white hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </nav>
 
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
-          >
-            <ArrowLeft size={16} />
-            Back to home
-          </Link>
-        </div>
-      </nav>
+            {/* Main content */}
+            <main className="flex-1 min-w-0 max-w-3xl">
+              {/* Mobile section nav */}
+              <div className="lg:hidden mb-8 -mx-6 px-6 overflow-x-auto no-scrollbar">
+                <div className="flex gap-2 min-w-max">
+                  {sections.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => scrollTo(id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                        activeSection === id
+                          ? 'bg-[#00D179]/10 text-[#00D179] border border-[#00D179]/20'
+                          : 'bg-white/[0.03] text-[#555] border border-white/[0.06]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-      {/* Main Content */}
-      <main className="pt-24 pb-20 px-6">
-        <div className="max-w-[1120px] mx-auto">
-          {/* Header */}
-          <div className="mb-12">
-            <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-2">
-              Developer Resources
-            </p>
-            <h1 className="font-clash font-semibold text-4xl text-white mb-4">
-              QNS Documentation
-            </h1>
-            <p className="text-[#8A8A8A] max-w-2xl">
-              Integrate Quantum Name Service into your applications. Resolve .qf names to 
-              addresses and perform reverse lookups with minimal code.
-            </p>
-          </div>
+              {/* Overview Section */}
+              <section id="overview" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">Overview</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  Integrate Quantum Name Service into your applications. Resolve .qf names to 
+                  addresses and perform reverse lookups with minimal code.
+                </p>
+                <div className="bg-[#00D179]/5 border border-[#00D179]/20 rounded-lg p-4">
+                  <p className="text-sm text-[#666]">
+                    <strong className="text-white">QNS</strong> is the identity layer for QF Network, 
+                    providing human-readable names that map to blockchain addresses.
+                  </p>
+                </div>
+              </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-12">
-            {/* Sidebar Navigation */}
-            <aside className="hidden lg:block">
-              <nav className="sticky top-28 space-y-1">
-                <a
-                  href="#contracts"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <Globe size={16} />
-                  Contract Addresses
-                </a>
-                <a
-                  href="#abi"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <FileCode size={16} />
-                  Resolver ABI
-                </a>
-                <a
-                  href="#how-it-works"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <ArrowRightLeft size={16} />
-                  How It Works
-                </a>
-                <a
-                  href="#text-records"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <FileCode size={16} />
-                  Text Records
-                </a>
-                <a
-                  href="#papi"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <span className="w-4 text-center text-xs">JS</span>
-                  JavaScript / TypeScript
-                </a>
-                <a
-                  href="#solidity"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[#8A8A8A] hover:text-white hover:bg-[#141414] transition-all"
-                >
-                  <span className="w-4 text-center text-xs">SOL</span>
-                  Solidity Integration
-                </a>
-              </nav>
-            </aside>
-
-            {/* Content */}
-            <div className="space-y-16">
               {/* Contract Addresses */}
-              <Section id="contracts" title="Contract Addresses" icon={Globe}>
-                <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-5">
+              <section id="contracts" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">Contract Addresses</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  Core QNS smart contract addresses on QF Network.
+                </p>
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6">
                   <AddressRow label="QNS Registry" address={QNS_REGISTRY_ADDRESS} />
                   <AddressRow label="QNS Registrar" address={QNS_REGISTRAR_ADDRESS} />
                   <AddressRow label="QNS Resolver" address={QNS_RESOLVER_ADDRESS} />
                 </div>
-                <p className="text-sm text-[#6A6A6A] mt-3">
-                  These addresses are also available as environment variables:{' '}
-                  <code className="text-[#8A8A8A]">VITE_QNS_RESOLVER_ADDRESS</code>, etc.
+                <p className="text-sm text-[#666] mt-4">
+                  These addresses are also available as environment variables for your builds.
                 </p>
-              </Section>
-
-              {/* Resolver ABI */}
-              <Section id="abi" title="Resolver ABI" icon={FileCode}>
-                <p className="text-[#8A8A8A] mb-4">
-                  The QNS Resolver provides two core functions for name resolution. 
-                  Use <code className="text-[#00D179]">addr()</code> for forward lookups 
-                  and <code className="text-[#00D179]">reverseResolve()</code> for reverse lookups.
-                </p>
-                <div className="relative group bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-5">
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <CopyButton text={JSON.stringify(RESOLVER_ABI, null, 2)} />
-                  </div>
-                  <pre className="text-sm font-mono text-[#E0E0E0] overflow-x-auto">
-                    {JSON.stringify(RESOLVER_ABI, null, 2)}
-                  </pre>
-                </div>
-              </Section>
+              </section>
 
               {/* How It Works */}
-              <Section id="how-it-works" title="How QNS Resolution Works" icon={ArrowRightLeft}>
-                <div className="space-y-4 text-[#8A8A8A]">
-                  <p>
-                    QNS (Quantum Name Service) maps human-readable names like{' '}
-                    <span className="text-[#00D179]">alice.qf</span> to blockchain addresses. 
-                    The resolution process is straightforward:
-                  </p>
+              <section id="how-it-works" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">How It Works</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  QNS maps human-readable names like <code className="text-[#00D179]">alice.qf</code> to blockchain addresses.
+                </p>
+                <div className="space-y-4 text-[#666]">
                   <ol className="space-y-3 ml-5 list-decimal marker:text-[#00D179]">
                     <li>
                       <strong className="text-white">Forward Resolution:</strong> Call{' '}
-                      <code className="text-[#00D179] bg-[#141414] px-1.5 py-0.5 rounded text-sm">
-                        addr(namehash(&quot;alice.qf&quot;))
+                      <code className="text-[#00D179] bg-white/[0.06] px-1.5 py-0.5 rounded text-sm">
+                        addr(namehash("alice.qf"))
                       </code>{' '}
-                      to get the associated address. Returns{' '}
-                      <code className="text-[#E5484D]">0x0000...</code> if not found.
+                      to get the associated address.
                     </li>
                     <li>
                       <strong className="text-white">Reverse Resolution:</strong> Call{' '}
-                      <code className="text-[#00D179] bg-[#141414] px-1.5 py-0.5 rounded text-sm">
+                      <code className="text-[#00D179] bg-white/[0.06] px-1.5 py-0.5 rounded text-sm">
                         reverseResolve(0x1234...)
                       </code>{' '}
-                      to get the primary name for an address. Returns empty string if not set.
+                      to get the primary name for an address.
                     </li>
                     <li>
-                      <strong className="text-white">Namehash:</strong> Internally, names are 
-                      converted to node hashes using EIP-137 namehash algorithm before storage.
+                      <strong className="text-white">Namehash:</strong> Names are converted to node hashes using EIP-137 algorithm.
                     </li>
                   </ol>
-                  <div className="bg-[#00D179]/5 border border-[#00D179]/20 rounded-lg p-4 mt-4">
-                    <p className="text-sm">
-                      <strong className="text-white">Note:</strong> Always validate that 
-                      forward resolution returns a non-zero address before using the result. 
-                      For reverse resolution, consider verifying the name still resolves back 
-                      to the original address to prevent spoofing.
-                    </p>
-                  </div>
-                  <div className="bg-[#141414] border border-[#1E1E1E] rounded-lg p-4 mt-4">
+                  <div className="bg-[#00D179]/5 border border-[#00D179]/20 rounded-lg p-4">
                     <p className="text-sm">
                       <strong className="text-white">QF Network Architecture:</strong>{' '}
-                      QF Network uses Substrate + pallet-revive, so interaction is via{' '}
-                      <code className="text-[#00D179]">polkadot-api</code> rather than standard EVM RPC. 
-                      Users connect with Polkadot wallets (Talisman, SubWallet) and a one-time{' '}
-                      <code className="text-[#00D179]">map_account</code> links their SS58 address 
-                      to an on-chain EVM address.
+                      Uses Substrate + pallet-revive. Interact via{' '}
+                      <code className="text-[#00D179]">polkadot-api</code> rather than standard EVM RPC.
                     </p>
                   </div>
                 </div>
-              </Section>
+              </section>
 
               {/* Text Records */}
-              <Section id="text-records" title="Text Records" icon={FileCode}>
-                <p className="text-[#8A8A] mb-4">
-                  QNS names can store profile metadata as text records. These are useful for displaying 
-                  user profiles, avatars, and social links in dApps.
+              <section id="text-records" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">Text Records</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  QNS names can store profile metadata as text records for avatars, bios, and social links.
                 </p>
                 <div className="space-y-4">
                   <div>
                     <h4 className="text-white font-medium mb-2">Supported Keys</h4>
                     <div className="flex flex-wrap gap-2 mb-4">
                       {['avatar', 'bio', 'twitter', 'github', 'url', 'telegram'].map(key => (
-                        <code key={key} className="bg-[#141414] text-[#00D179] px-2 py-1 rounded text-sm">
+                        <code key={key} className="bg-white/[0.06] text-[#00D179] px-2 py-1 rounded text-sm">
                           {key}
                         </code>
                       ))}
@@ -460,8 +387,8 @@ export default function DocsPage() {
                   </div>
                   <div>
                     <h4 className="text-white font-medium mb-2">Reading Text Records</h4>
-                    <p className="text-[#8A8A] mb-3">
-                      Use the resolver's <code className="text-[#00D179]">text(node, key)</code> function to read metadata:
+                    <p className="text-[#666] mb-3">
+                      Use the resolver's <code className="text-[#00D179]">text(node, key)</code> function:
                     </p>
                     <CodeBlock 
                       code={`// Read text records for a QNS name
@@ -476,58 +403,31 @@ console.log(\`Twitter: \${twitter}\`);`}
                       language="JavaScript" 
                     />
                   </div>
-                  <div className="bg-[#141414] border border-[#1E1E1E] rounded-lg p-4">
-                    <p className="text-sm text-[#8A8A]">
-                      <strong className="text-white">Note:</strong> Text records are set by the name owner 
-                      and can be updated at any time. Always validate the data before displaying it in your application. 
-                      Empty strings are returned for keys that haven't been set.
-                    </p>
-                  </div>
                 </div>
-              </Section>
+              </section>
 
-              {/* JavaScript / TypeScript Example */}
-              <Section id="papi" title="JavaScript / TypeScript" icon={FileCode}>
-                <p className="text-[#8A8A8A] mb-4">
-                  Use polkadot-api (PAPI) to interact with QNS contracts on QF Network. 
-                  viem is used only for ABI encoding/decoding — not for RPC calls.
+              {/* JavaScript / TypeScript */}
+              <section id="integrate-js" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">JavaScript / TypeScript</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  Use polkadot-api (PAPI) to interact with QNS contracts on QF Network. viem is used for ABI encoding/decoding.
                 </p>
                 <CodeBlock code={PAPI_EXAMPLE} language="TypeScript" />
-              </Section>
+              </section>
 
-              {/* Solidity Example */}
-              <Section id="solidity" title="Solidity Integration" icon={FileCode}>
-                <p className="text-[#8A8A8A] mb-4">
-                  Integrate QNS resolution directly into your smart contracts. 
-                  Perfect for accepting payments to names or displaying user identities. 
-                  On-chain contract-to-contract calls work the same way regardless of frontend.
+              {/* Solidity */}
+              <section id="integrate-sol" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">Solidity</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  Integrate QNS resolution directly into your smart contracts for accepting payments to names.
                 </p>
                 <CodeBlock code={SOLIDITY_EXAMPLE} language="Solidity" />
-              </Section>
-
-              {/* Footer */}
-              <div className="pt-8 border-t border-[#1E1E1E]">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-[#6A6A6A]">
-                    Need help? Check out the{' '}
-                    <a 
-                      href="https://github.com/QuantumFusion-network" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-[#00D179] hover:underline"
-                    >
-                      GitHub
-                    </a>.
-                  </p>
-                  <span className="font-clash font-semibold text-white">
-                    QNS<span className="text-[#00D179]">.</span>
-                  </span>
-                </div>
-              </div>
-            </div>
+              </section>
+            </main>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+      <Footer />
+    </>
   );
 }

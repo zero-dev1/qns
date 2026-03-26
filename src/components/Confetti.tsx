@@ -18,9 +18,11 @@ export default function Confetti({ active }: { active: boolean }) {
     if (!active) return;
 
     const colors = ['#00D179', '#E5484D', '#F5A623', '#8A8A8A', '#FFFFFF'];
+    const isMobile = window.matchMedia('(pointer: coarse)').matches;
+    const pieceCount = isMobile ? 20 : 40;
     const newPieces: ConfettiPiece[] = [];
     
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < pieceCount; i++) {
       newPieces.push({
         id: i,
         x: 50 + (Math.random() - 0.5) * 20,
@@ -68,11 +70,15 @@ export default function Confetti({ active }: { active: boolean }) {
       <style>{`
         @keyframes confetti-fall {
           0% {
-            transform: translateY(0) rotate(0deg);
+            transform: translateX(0) translateY(0) rotate(0deg);
             opacity: 1;
           }
+          50% {
+            transform: translateX(calc(var(--velocity-x) * 15)) translateY(calc(var(--velocity-y) * 10)) rotate(calc(var(--rotation-speed) * 15));
+            opacity: 0.8;
+          }
           100% {
-            transform: translateY(100vh) rotate(720deg);
+            transform: translateX(calc(var(--velocity-x) * 20)) translateY(80vh) rotate(calc(var(--rotation-speed) * 40));
             opacity: 0;
           }
         }

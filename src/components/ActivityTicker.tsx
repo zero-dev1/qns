@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 interface RecentName {
   name: string;
@@ -66,7 +67,9 @@ export default function ActivityTicker() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
             >
-              <span className="text-white font-medium">{current.name}</span>
+              <Link to={`/name/${current.name}`} className="text-white font-medium hover:text-[#00D179] transition-colors">
+  {current.name}
+</Link>
               <span className="text-[#00D179]">.qf</span>
               <span className="text-[#444] mx-1.5">·</span>
               <span>claimed {current.isPermanent ? 'permanently' : ''} {timeAgo(current.timestamp)}</span>

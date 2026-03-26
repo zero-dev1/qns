@@ -486,8 +486,27 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#00D179] animate-spin" />
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md rounded-2xl border border-white/[0.06] bg-black overflow-hidden animate-pulse">
+          {/* Header skeleton */}
+          <div className="h-32 bg-gradient-to-b from-white/[0.03] to-transparent" />
+          <div className="px-6 pb-6">
+            {/* Avatar skeleton */}
+            <div className="flex justify-center -mt-6 mb-4">
+              <div className="w-24 h-24 rounded-full bg-white/[0.06]" />
+            </div>
+            {/* Name skeleton */}
+            <div className="h-7 w-40 mx-auto rounded bg-white/[0.06] mb-3" />
+            {/* Bio skeleton */}
+            <div className="h-4 w-56 mx-auto rounded bg-white/[0.04] mb-2" />
+            <div className="h-4 w-44 mx-auto rounded bg-white/[0.04] mb-6" />
+            {/* Badge skeleton */}
+            <div className="flex justify-center gap-2">
+              <div className="h-6 w-20 rounded-full bg-white/[0.04]" />
+              <div className="h-6 w-16 rounded-full bg-white/[0.04]" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -589,7 +608,7 @@ export default function ProfilePage() {
           </div>
           {/* Name in header - below icons */}
           <div className="absolute inset-0 flex items-center justify-center pt-8">
-            <h1 className="text-3xl font-bold text-white">
+            <h1 className="text-3xl font-bold text-white truncate px-12">
               {profile.name}
               <span className="text-[#00D179]">.qf</span>
             </h1>
@@ -711,6 +730,8 @@ export default function ProfilePage() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
             onClick={closeGiftModal}
+            onKeyDown={(e) => { if (e.key === 'Escape') closeGiftModal(); }}
+            tabIndex={-1}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
