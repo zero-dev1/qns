@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Twitter } from 'lucide-react';
+import { Twitter, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWalletStore } from '../../stores/walletStore';
 import { useNamesStore } from '../../stores/namesStore';
@@ -281,7 +281,9 @@ export default function RegistrationPanel({
   };
 
   const handleShareOnX = () => {
-    const text = `Just claimed ${selectedName}.qf on @dotqfns — registered in seconds on QF Network. The fastest name service in crypto.`;
+    const burnAmt = regPrice ? formatQF(regPrice * 5n / 100n) : null;
+    const burnClause = burnAmt ? ` ${burnAmt} QF burned from supply forever.` : '';
+    const text = `Just claimed ${selectedName}.qf on @dotqfns —${burnClause} Registered in seconds on QF Network.`;
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
   };
@@ -501,6 +503,17 @@ export default function RegistrationPanel({
               >
                 Let's make it yours in every way
               </motion.p>
+              {regPrice && (
+                <motion.p
+                  className="text-sm text-[#E5484D]/80 mt-2 flex items-center justify-center gap-1.5"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7, duration: 0.5 }}
+                >
+                  <Flame size={14} className="text-[#E5484D]" />
+                  {formatQF(regPrice * 5n / 100n)} QF burned from circulation
+                </motion.p>
+              )}
               {/* Progress dots */}
               <div className="flex justify-center gap-2 mt-6">
                 {[0,1,2,3].map(i => (

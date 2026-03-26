@@ -1,16 +1,90 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Copy, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { motion, useInView } from 'framer-motion';
+import { Flame, Copy, Check } from 'lucide-react';
 import { useCopy } from '../../hooks/useCopy';
 import { hapticTap } from '../../utils/haptics';
+import { getBurnStats, BURN_ADDRESS_EVM } from '../../utils/qns';
+import type { BurnStats } from '../../utils/qns';
+
+function AnimatedNumber({
+  value,
+  suffix = '',
+  shouldAnimate,
+}: {
+  value: number;
+  suffix?: string;
+  shouldAnimate: boolean;
+}) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (!shouldAnimate || value === 0) return;
+
+    const duration = 1200;
+    const steps = 40;
+    const stepDuration = duration / steps;
+    let current = 0;
+
+    const interval = setInterval(() => {
+      current += 1;
+      const progress = current / steps;
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * value));
+
+      if (current >= steps) {
+        setDisplay(value);
+        clearInterval(interval);
+      }
+    }, stepDuration);
+
+    return () => clearInterval(interval);
+  }, [value, shouldAnimate]);
+
+  // Format with commas for display
+  const formatted = display.toLocaleString('en-US', {
+    maximumFractionDigits: display >= 100 ? 0 : 2,
+  });
+
+  return (
+    <span>
+      {formatted}{suffix}
+    </span>
+  );
+}
 
 export default function BurnMechanic() {
   const { copy } = useCopy();
   const [burnAddressCopied, setBurnAddressCopied] = useState(false);
-  const burnAddress = '0x000000000000000000000000000000000000dEaD';
+  const [burnStats, setBurnStats] = useState<BurnStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, amount: 0.5 });
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const stats = await getBurnStats();
+        setBurnStats(stats);
+      } catch (error) {
+        console.error('Failed to load burn stats:', error);
+        // Set fallback values
+        setBurnStats({
+          totalBurned: 0,
+          qnsBurned: 0,
+          totalRegistrations: 0,
+          burnPercent: 5,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStats();
+  }, []);
 
   const handleCopyBurnAddress = () => {
-    copy(burnAddress, false); // Don't show toast for this since we have visual feedback
+    copy(BURN_ADDRESS_EVM, false); // Don't show toast for this since we have visual feedback
     hapticTap();
     setBurnAddressCopied(true);
     setTimeout(() => setBurnAddressCopied(false), 2000);
@@ -18,49 +92,95 @@ export default function BurnMechanic() {
 
   return (
     <motion.div
+      ref={ref}
       className="mt-12 max-w-[520px] mx-auto"
       initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.35 }}
+      animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, ease: [0.25, 0.4, 0.25, 1] }}
     >
-      <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-[#E5484D]/10">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <path d="M8 11h8"/>
-              <path d="M8 15h6"/>
-            </svg>
+      <div className="bg-[#111] border border-white/[0.06] border-t-[#E5484D]/20 rounded-2xl p-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(229,72,77,0.04),transparent_70%)] pointer-events-none" />
+        
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-lg bg-[#E5484D]/10">
+              <Flame size={20} className="text-[#E5484D]" />
+            </div>
+            <h3 className="font-clash text-lg font-semibold text-white">Deflationary by Design</h3>
           </div>
-          <h3 className="font-clash text-lg font-semibold text-white">Deflationary by Design</h3>
-        </div>
-        
-        <p className="text-[#8A8A8A] text-sm mb-4 leading-relaxed">
-          Every <span className="text-[#00D179]">.qf</span> registration burns <span className="text-[#E5484D] font-medium">5%</span> of the fee permanently. 
-          Reducing QF supply with every name claimed.
-        </p>
-        
-        <div className="bg-[#0A0A0A] rounded-xl p-3 border border-[#1E1E1A]">
-          <p className="text-[#555555] text-xs mb-1 text-center">Burn Address</p>
-          <motion.button
-            onClick={handleCopyBurnAddress}
-            className="flex items-center justify-center gap-2 group transition-all duration-200 hover:bg-[#1a1a1a] rounded-lg p-1 -m-1 w-full"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <code className="text-[#00D179] font-mono text-sm text-center">
-              0x0000...dEaD
-            </code>
-            {burnAddressCopied ? (
-              <Check size={14} className="text-[#00D179] flex-shrink-0" />
-            ) : (
-              <Copy size={14} className="text-[#8A8A8A] group-hover:text-[#00D179] flex-shrink-0 transition-colors" />
-            )}
-          </motion.button>
-          {burnAddressCopied && (
-            <p className="text-[#00D179] text-xs mt-1 animate-fade-in text-center">Copied!</p>
-          )}
+          
+          <p className="text-[#8A8A8A] text-sm mb-6 leading-relaxed">
+            Every <span className="text-[#00D179]">.qf</span> registration burns{' '}
+            <span className="text-[#E5484D] font-medium">
+              {loading ? '—' : `${burnStats?.burnPercent || 5}%`}
+            </span>{' '}
+            of the fee permanently. The supply gets scarcer with every name claimed.
+          </p>
+          
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-4 mb-5">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#E5484D] mb-1">
+                {loading ? (
+                  '—'
+                ) : (
+                  <>
+                    <AnimatedNumber 
+                      value={burnStats?.qnsBurned || 0} 
+                      suffix="" 
+                      shouldAnimate={isInView}
+                    />
+                    <span className="text-[#E5484D]/60 text-xl ml-1">QF</span>
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-[#555] uppercase tracking-wider">QNS Burned</p>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-xl font-bold text-white mb-1">
+                {loading ? '—' : `${burnStats?.burnPercent || 5}%`}
+              </div>
+              <p className="text-xs text-[#555] uppercase tracking-wider">Burn Rate</p>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-xl font-bold text-white mb-1">
+                {loading ? (
+                  '—'
+                ) : (
+                  <AnimatedNumber 
+                    value={burnStats?.totalRegistrations || 0} 
+                    suffix="" 
+                    shouldAnimate={isInView}
+                  />
+                )}
+              </div>
+              <p className="text-xs text-[#555] uppercase tracking-wider">Names Registered</p>
+            </div>
+          </div>
+          
+          {/* Burn Address Section */}
+          <div className="border-t border-white/[0.04] pt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[#555]">Burn Address</p>
+              <motion.button
+                onClick={handleCopyBurnAddress}
+                className="flex items-center gap-2 group transition-all duration-200 hover:bg-white/[0.05] rounded-lg p-2 -m-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <code className="text-[#E5484D]/60 font-mono text-xs">
+                  0x0000...dEaD
+                </code>
+                {burnAddressCopied ? (
+                  <Check size={14} className="text-[#00D179] flex-shrink-0" />
+                ) : (
+                  <Copy size={14} className="text-[#8A8A8A] group-hover:text-white flex-shrink-0 transition-colors" />
+                )}
+              </motion.button>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>

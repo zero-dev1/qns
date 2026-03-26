@@ -207,7 +207,9 @@ export default function Pricing() {
                     </div>
                   )}
 
-                  <p className="mb-6 font-mono text-sm text-[#00D179]">{tier.example}</p>
+                  <p className={`font-mono text-sm text-[#00D179] ${tier.highlighted ? 'mb-6 mt-6' : 'mb-6'}`}>
+                    {tier.example}
+                  </p>
                   <p className="mb-1 text-lg font-semibold text-white">{tier.label}</p>
                   <p className="mb-8 text-sm text-gray-500">{tier.range}</p>
 

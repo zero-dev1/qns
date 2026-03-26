@@ -642,3 +642,56 @@ export async function isReserved(name: string): Promise<boolean> {
     return false;
   }
 }
+
+export const BURN_ADDRESS_SS58 = '5C4hrfjw9DjXZTzV3MwzrrAr9PUr9y8SHgV3cmVGNUWRiJL5';
+const QFPAY_ROUTER = '5Ew9dLGRMLr3J5icw9vSG64w62hdxcvrDAvjKqx9T1KG1uKc';
+const QF_EXPLORER_API = 'https://qf-explorer.mathswins.co.uk/api';
+
+export const BURN_ADDRESS_EVM = '0x000000000000000000000000000000000000dEaD';
+
+export interface BurnStats {
+  totalBurned: number;      // All QF burned (all sources)
+  qnsBurned: number;        // QF burned via QNS registrations only
+  totalRegistrations: number;
+  burnPercent: number;       // e.g. 5
+}
+
+export async function getBurnStats(): Promise<BurnStats> {
+  // Fetch burn data from QFTools explorer API and on-chain in parallel
+  const [transfersRes, totalRegs, burnPct] = await Promise.allSettled([
+    fetch(`${QF_EXPLORER_API}/txs/${BURN_ADDRESS_SS58}?limit=200`).then(r => r.json()),
+    getTotalRegistrations(),
+    getBurnPercentContract(),
+  ]);
+
+  let totalBurned = 0;
+  let qnsBurned = 0;
+
+  if (transfersRes.status === 'fulfilled' && transfersRes.value?.transfers?.items) {
+    const items = transfersRes.value.transfers.items as Array<{
+      from: string;
+      to: string;
+      amountQF: string;
+    }>;
+
+    for (const tx of items) {
+      if (tx.to === BURN_ADDRESS_SS58) {
+        const amount = parseFloat(tx.amountQF);
+        totalBurned += amount;
+        if (tx.from !== QFPAY_ROUTER) {
+          qnsBurned += amount;
+        }
+      }
+    }
+  }
+
+  const totalRegistrations = totalRegs.status === 'fulfilled' && totalRegs.value
+    ? Number(totalRegs.value)
+    : 0;
+
+  const burnPercent = burnPct.status === 'fulfilled' && burnPct.value
+    ? Number(burnPct.value)
+    : 5;
+
+  return { totalBurned, qnsBurned, totalRegistrations, burnPercent };
+}
