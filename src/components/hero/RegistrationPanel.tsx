@@ -7,8 +7,7 @@ import { useNamesStore } from '../../stores/namesStore';
 import { useToast } from '../../contexts/ToastContext';
 import { hapticSuccess, hapticError } from '../../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../../utils/errorHelpers';
-import { getPrice, registerName, getQFBalance, formatQF, setTextRecord } from '../../utils/qns';
-import Confetti from '../Confetti';
+import { getPrice, registerName, getQFBalance, getSubstrateQFBalance, formatQF, setTextRecord } from '../../utils/qns';
 import type { TxState, TxErrorType } from '../../types/search';
 
 const durations = [
@@ -59,11 +58,28 @@ export default function RegistrationPanel({
 
   // Fetch user balance when wallet connects
   useEffect(() => {
-    if (ss58Address) {
-      getQFBalance(ss58Address).then(setUserBalance).catch(() => setUserBalance(null));
-    } else {
-      setUserBalance(null);
-    }
+    const fetchBalance = async () => {
+      try {
+        // Prefer SS58 path (Substrate native) — this is the reliable source
+        if (ss58Address) {
+          const bal = await getSubstrateQFBalance(ss58Address);
+          if (bal > 0n) {
+            setUserBalance(bal);
+            return;
+          }
+        }
+        // Fallback to EVM path
+        if (address) {
+          const bal = await getQFBalance(address);
+          setUserBalance(bal);
+          return;
+        }
+        setUserBalance(null);
+      } catch {
+        setUserBalance(null);
+      }
+    };
+    fetchBalance();
   }, [ss58Address, address]);
 
   // Auto-advance onboarding flow
@@ -401,24 +417,51 @@ export default function RegistrationPanel({
         <div className="text-center py-8 animate-fade-in">
           {onboardingStep === 'celebrate' && (
             <div className="text-center py-8 animate-fade-in">
-              <Confetti active={true} />
-              <motion.div
-                className="mb-4"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-              >
-                <div className="w-16 h-16 mx-auto rounded-full bg-[#00D179] flex items-center justify-center">
-                  <motion.svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"
-                    initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4, delay: 0.2 }}>
-                    <motion.path d="M20 6L9 17l-5-5" />
+              {/* Refined success — single checkmark with subtle ring pulse */}
+              <div className="relative flex items-center justify-center mb-6">
+                {/* Single expanding ring — fades out */}
+                <motion.div
+                  className="absolute w-[72px] h-[72px] rounded-full border-2 border-[#00D179]/30"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1.6, opacity: 0 }}
+                  transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
+                />
+                {/* Checkmark circle */}
+                <motion.div
+                  className="relative w-[72px] h-[72px] rounded-full bg-[#00D179] flex items-center justify-center"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                >
+                  <motion.svg
+                    width="36" height="36" viewBox="0 0 24 24" fill="none"
+                    stroke="white" strokeWidth="3" strokeLinecap="round"
+                  >
+                    <motion.path
+                      d="M20 6L9 17l-5-5"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ duration: 0.4, delay: 0.2 }}
+                    />
                   </motion.svg>
-                </div>
-              </motion.div>
-              <p className="font-clash font-semibold text-2xl text-white mb-1">
+                </motion.div>
+              </div>
+              <motion.p
+                className="font-clash font-semibold text-2xl text-white mb-1"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35, duration: 0.4 }}
+              >
                 {selectedName}<span className="text-[#00D179]">.qf</span> is yours
-              </p>
-              <p className="text-[#555] text-sm">Let's make it yours in every way</p>
+              </motion.p>
+              <motion.p
+                className="text-[#555] text-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.4 }}
+              >
+                Let's make it yours in every way
+              </motion.p>
               {/* Progress dots */}
               <div className="flex justify-center gap-2 mt-6">
                 {[0,1,2,3].map(i => (

@@ -156,6 +156,15 @@ export default function Hero() {
     if (showTooltip) {
       setShowTooltip(false);
     }
+    // If clearing (e.g. ESC), cancel any pending debounced search immediately
+    if (!value.trim()) {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      setResult({ status: 'idle', name: '' });
+      setSearchPrice(null);
+    }
   };
 
   useEffect(() => {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Loader2 } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
-import { calculatePrice, getQFBalance, getContractPrices, formatQF } from '../utils/qns';
+import { calculatePrice, getQFBalance, getSubstrateQFBalance, getContractPrices, formatQF } from '../utils/qns';
 
 interface RenewModalProps {
   name: string;
@@ -65,10 +65,26 @@ export default function RenewModal({ name, currentExpiry, nameLength, onClose, o
       if (!address || !ss58Address) return;
       
       try {
-        const [contractPrices, balance] = await Promise.all([
+        const [contractPrices] = await Promise.all([
           getContractPrices(),
-          getQFBalance(ss58Address)
         ]);
+
+        // Fetch balance: SS58-first (Substrate native), EVM fallback
+        let balance = 0n;
+        try {
+          if (ss58Address) {
+            const substrateBal = await getSubstrateQFBalance(ss58Address);
+            if (substrateBal > 0n) {
+              balance = substrateBal;
+            } else if (address) {
+              balance = await getQFBalance(address);
+            }
+          } else if (address) {
+            balance = await getQFBalance(address);
+          }
+        } catch {
+          balance = 0n;
+        }
         
         setPrices({
           price3Char: contractPrices.price3Char,

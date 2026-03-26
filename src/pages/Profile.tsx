@@ -554,7 +554,7 @@ export default function ProfilePage() {
       {/* Back to home link */}
       <Link
         to="/"
-        className="fixed top-6 left-6 flex items-center gap-2 text-sm text-gray-500 hover:text-white transition-colors z-50"
+        className="fixed top-6 left-6 flex items-center gap-2 text-sm text-gray-500 hover:text-white transition-colors z-30"
       >
         <ArrowLeft size={16} />
         Back to home

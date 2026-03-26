@@ -64,6 +64,18 @@ export default function WalletModal() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showWalletModal, setShowWalletModal]);
 
+  // Auto-focus modal backdrop for ESC key handling
+  useEffect(() => {
+    if (showWalletModal) {
+      // Small delay to let animation start
+      const timer = setTimeout(() => {
+        const backdrop = document.querySelector('[data-wallet-modal-backdrop]') as HTMLElement;
+        backdrop?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [showWalletModal]);
+
   const handleWalletSelect = async (walletType: 'talisman' | 'subwallet') => {
     try {
       clearWalletError();
@@ -94,6 +106,9 @@ export default function WalletModal() {
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={() => setShowWalletModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowWalletModal(false); }}
+          tabIndex={-1}
+          data-wallet-modal-backdrop
         >
           <motion.div
             ref={modalRef}

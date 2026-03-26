@@ -113,9 +113,23 @@ export default function Navbar() {
           <div className="flex items-center gap-3 md:gap-6">
             <Link
               to="/my-names"
-              className="text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
+              className={`text-sm transition-colors duration-200 ${
+                location.pathname === '/my-names'
+                  ? 'text-white'
+                  : 'text-[#8A8A8A] hover:text-white'
+              }`}
             >
               My Names
+            </Link>
+            <Link
+              to="/docs"
+              className={`hidden sm:inline text-sm transition-colors duration-200 ${
+                location.pathname === '/docs'
+                  ? 'text-white'
+                  : 'text-[#8A8A8A] hover:text-white'
+              }`}
+            >
+              Docs
             </Link>
 
             {/* Command palette shortcut hint — desktop only */}

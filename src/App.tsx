@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -14,6 +15,7 @@ import Footer from './components/Footer';
 import MyNamesPage from './pages/MyNames';
 import ProfilePage from './pages/Profile';
 import DocsPage from './pages/Docs';
+import NotFoundPage from './pages/NotFound';
 import AdminLayout from './components/admin/AdminLayout';
 import { ToastProvider } from './contexts/ToastContext';
 import PageTransition from './components/PageTransition';
@@ -45,44 +47,58 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <Routes location={location}>
-      <Route
-        path="/"
-        element={<LandingPage />}
-      />
-      <Route
-        path="/my-names"
-        element={
-          <PageTransition pathKey={location.pathname}>
-            <MyNamesPage />
-          </PageTransition>
-        }
-      />
-      <Route
-        path="/name/:name"
-        element={
-          <PageTransition pathKey={location.pathname}>
-            <ProfilePage />
-          </PageTransition>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <PageTransition pathKey={location.pathname}>
-            <AdminLayout />
-          </PageTransition>
-        }
-      />
-      <Route
-        path="/docs"
-        element={
-          <PageTransition pathKey={location.pathname}>
-            <DocsPage />
-          </PageTransition>
-        }
-      />
-    </Routes>
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route
+          path="/"
+          element={
+            <PageTransition pathKey="landing">
+              <LandingPage />
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/my-names"
+          element={
+            <PageTransition pathKey={location.pathname}>
+              <MyNamesPage />
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/name/:name"
+          element={
+            <PageTransition pathKey={location.pathname}>
+              <ProfilePage />
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <PageTransition pathKey={location.pathname}>
+              <AdminLayout />
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/docs"
+          element={
+            <PageTransition pathKey={location.pathname}>
+              <DocsPage />
+            </PageTransition>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <PageTransition pathKey="404">
+              <NotFoundPage />
+            </PageTransition>
+          }
+        />
+      </Routes>
+    </AnimatePresence>
   );
 }
 
