@@ -6,6 +6,9 @@ import Hero from './components/Hero';
 import HowItWorks from './components/HowItWorks';
 import Ecosystem from './components/Ecosystem';
 import Pricing from './components/Pricing';
+import ActivityTicker from './components/ActivityTicker';
+import StatsBar from './components/StatsBar';
+import SectionDivider from './components/SectionDivider';
 import CTA from './components/CTA';
 import Footer from './components/Footer';
 import MyNamesPage from './pages/MyNames';
@@ -23,9 +26,13 @@ function LandingPage() {
       <Navbar />
       <main>
         <Hero />
+        <ActivityTicker />
         <HowItWorks />
+        <SectionDivider />
         <Ecosystem />
+        <SectionDivider />
         <Pricing />
+        <StatsBar />
         <CTA />
         <Footer />
       </main>

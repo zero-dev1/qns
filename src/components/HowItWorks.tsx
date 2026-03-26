@@ -1,78 +1,86 @@
 import { motion } from 'framer-motion';
+import { Search, UserCircle, Globe } from 'lucide-react';
 
-const cards = [
+const steps = [
   {
     num: '01',
-    title: 'Claim your name',
-    description:
-      'Search for any name, pick your duration, and register in a single transaction. Done in seconds.',
+    icon: Search,
+    title: 'Search & claim',
+    description: 'Type any name. See instantly if it\'s available. Register in one transaction — confirmed in seconds, not minutes.',
+    detail: 'From 100 QF/year',
   },
   {
     num: '02',
-    title: 'Set your profile',
-    description:
-      'Add an avatar, bio, and social links. Your .qf name becomes your onchain identity.',
+    icon: UserCircle,
+    title: 'Build your identity',
+    description: 'Add your avatar, bio, and social links. Your .qf name becomes your on-chain profile that follows you everywhere.',
+    detail: 'Avatar · Bio · Socials',
   },
   {
     num: '03',
-    title: 'Use it everywhere',
-    description:
-      'Every dApp on QF Network recognizes your name. Send, receive, and interact with a name instead of an address.',
+    icon: Globe,
+    title: 'Use it across QF',
+    description: 'Every dApp on QF Network resolves your name. Send payments, vote in governance, trade on the DEX — all as yourname.qf.',
+    detail: 'One name, every dApp',
   },
 ];
 
 export default function HowItWorks() {
   return (
     <section className="py-24 md:py-32">
-      <div className="max-w-6xl mx-auto px-6 text-center">
-        {/* Label */}
+      <div className="max-w-[1120px] mx-auto px-6">
         <motion.p
+          className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-xs tracking-[0.3em] text-[#00D179] uppercase"
         >
-          How It Works
+          HOW IT WORKS
         </motion.p>
 
-        {/* Title - use Clash Display font like other sections */}
         <motion.h2
+          className="font-clash text-center text-4xl font-bold text-white md:text-5xl"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="text-4xl md:text-5xl font-bold text-white mt-4 font-clash"
         >
-          Three simple steps
+          Three steps. Sixty seconds.
         </motion.h2>
 
-        {/* 3 cards in a row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
-          {cards.map((card, i) => (
+        <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-3">
+          {steps.map((step, i) => (
             <motion.div
-              key={i}
+              key={step.num}
+              className="group relative rounded-2xl border border-white/[0.06] bg-[#111] overflow-hidden transition-all duration-300 hover:border-[#00D179]/20"
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.15 }}
-              className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden text-left hover:border-[#00D179]/20 transition-all duration-300"
+              transition={{ duration: 0.5, delay: i * 0.12 }}
             >
-              {/* Emerald gradient header band */}
-              <div className="h-2 bg-gradient-to-r from-[#00D179]/30 via-[#00D179]/10 to-transparent" />
-              <div className="p-8">
-                {/* Step number */}
-                <span className="text-5xl font-bold text-[#00D179]">
-                  {card.num}
+              {/* Top accent line */}
+              <div className="h-[2px] bg-gradient-to-r from-[#00D179]/40 via-[#00D179]/10 to-transparent" />
+
+              <div className="p-7">
+                {/* Step number + Icon row */}
+                <div className="flex items-center justify-between mb-6">
+                  <span className="font-clash text-4xl font-bold text-[#00D179]/20 group-hover:text-[#00D179]/40 transition-colors duration-300">
+                    {step.num}
+                  </span>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.03] text-[#444] group-hover:bg-[#00D179]/10 group-hover:text-[#00D179] transition-all duration-300">
+                    <step.icon size={20} />
+                  </div>
+                </div>
+
+                {/* Content */}
+                <h3 className="font-clash font-semibold text-xl text-white mb-3">{step.title}</h3>
+                <p className="text-sm text-[#666] leading-relaxed mb-5">{step.description}</p>
+
+                {/* Detail pill */}
+                <span className="inline-flex text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] text-[#555] border border-white/[0.06]">
+                  {step.detail}
                 </span>
-                {/* Title */}
-                <h3 className="text-xl font-semibold text-white mt-4">
-                  {card.title}
-                </h3>
-                {/* Description */}
-                <p className="text-gray-400 mt-3 leading-relaxed text-sm">
-                  {card.description}
-                </p>
               </div>
             </motion.div>
           ))}
