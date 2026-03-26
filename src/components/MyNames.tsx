@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { X, Twitter, Copy, Check } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
 import {
@@ -10,6 +11,7 @@ import {
   getNamesOwnedByAddress,
 } from '../utils/qns';
 import { detectAddressFormat, getAddressFormatLabel, ss58ToEvmAddress } from '../utils/address';
+import RenewModal from './RenewModal';
 
 interface OwnedName {
   name: string;
@@ -47,6 +49,7 @@ export default function MyNames() {
   // Share modal state
   const [shareModal, setShareModal] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [renewModal, setRenewModal] = useState<{ name: string; expiry: bigint; length: number } | null>(null);
 
   const loadNames = useCallback(async () => {
     if (!address) return;
@@ -134,20 +137,6 @@ export default function MyNames() {
       // tx failed
     } finally {
       setSavingField(null);
-    }
-  };
-
-  const handleRenew = async (name: string) => {
-    if (!address) return;
-    setRenewingName(name);
-    const signerAddress = ss58Address || address;
-    try {
-      await renewName(name, 1, signerAddress);
-      await refreshNames();
-    } catch {
-      // tx failed — toast already shown by lower layers
-    } finally {
-      setRenewingName(null);
     }
   };
 
@@ -329,7 +318,7 @@ export default function MyNames() {
                   <div className="flex flex-wrap gap-2 mt-3">
                     {!item.isPermanent && (
                       <button
-                        onClick={() => handleRenew(item.name)}
+                        onClick={() => setRenewModal({ name: item.name, expiry: item.expires, length: item.name.length })}
                         disabled={renewingName === item.name}
                         className="px-3 py-1.5 text-xs rounded-lg border border-[#00D179] text-[#00D179] hover:bg-[#00D17915] transition-colors duration-200 disabled:opacity-50 cursor-pointer"
                       >
@@ -529,6 +518,31 @@ export default function MyNames() {
             </div>
           </div>
         )}
+
+        <AnimatePresence>
+          {renewModal && (
+            <RenewModal
+              name={renewModal.name}
+              currentExpiry={renewModal.expiry}
+              nameLength={renewModal.length}
+              onClose={() => setRenewModal(null)}
+              onConfirm={async (years) => {
+                setRenewModal(null);
+                setRenewingName(renewModal.name);
+                const signerAddress = ss58Address || address;
+                if (!signerAddress) return;
+                try {
+                  await renewName(renewModal.name, years, signerAddress);
+                  await refreshNames();
+                } catch {
+                  // Error handled by lower layers
+                } finally {
+                  setRenewingName(null);
+                }
+              }}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </section>
   );
