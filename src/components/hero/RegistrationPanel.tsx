@@ -7,7 +7,7 @@ import { useNamesStore } from '../../stores/namesStore';
 import { useToast } from '../../contexts/ToastContext';
 import { hapticSuccess, hapticError } from '../../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../../utils/errorHelpers';
-import { getPrice, registerName, getQFBalance, getSubstrateQFBalance, formatQF, setTextRecord } from '../../utils/qns';
+import { getPrice, registerName, getQFBalance, getSubstrateQFBalance, formatQF, setMultipleTextRecords } from '../../utils/qns';
 import type { TxState, TxErrorType } from '../../types/search';
 
 const durations = [
@@ -44,6 +44,36 @@ export default function RegistrationPanel({
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bioText, setBioText] = useState('');
   const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savingRecords, setSavingRecords] = useState(false);
+
+  const batchSaveRecords = async () => {
+    if (!selectedName || !address) return;
+
+    const keys: string[] = [];
+    const values: string[] = [];
+
+    if (avatarUrl.trim()) {
+      keys.push('avatar');
+      values.push(avatarUrl.trim());
+    }
+    if (bioText.trim()) {
+      keys.push('bio');
+      values.push(bioText.trim());
+    }
+
+    // Nothing to save — skip silently
+    if (keys.length === 0) return;
+
+    setSavingRecords(true);
+    try {
+      const signerAddress = ss58Address || address;
+      await setMultipleTextRecords(selectedName, keys, values, signerAddress);
+    } catch {
+      // Silent fail — don't block onboarding. User can edit later in My Names.
+    } finally {
+      setSavingRecords(false);
+    }
+  };
 
   const duration = durations[selectedDuration];
 
@@ -118,17 +148,6 @@ export default function RegistrationPanel({
     // For multi-year, estimate annual based on 1 year price
     const annualPrice = regPrice / BigInt(duration.years);
     return `${formatQF(annualPrice)} QF × ${duration.years} years = ${qf} QF`;
-  };
-
-  const saveTextRecord = async (key: string, value: string) => {
-    if (!selectedName || !address) return;
-    try {
-      const signerAddress = ss58Address || address;
-      await setTextRecord(selectedName, key, value, signerAddress);
-    } catch {
-      // Silent fail — don't block onboarding for a text record save failure
-      // The user can always edit later in My Names
-    }
   };
 
   const handleRegister = async () => {
@@ -341,14 +360,16 @@ export default function RegistrationPanel({
 
           <motion.button
             onClick={handleRegister}
-            disabled={!address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)}
+            disabled={address ? (regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)) : false}
             className={`w-full py-3.5 font-bold rounded-xl transition-all duration-200 text-base cursor-pointer ${
-              !address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)
-                ? 'bg-[#333333] text-[#666666] cursor-not-allowed'
-                : 'bg-[#00D179] hover:bg-[#00B868] text-black'
+              !address
+                ? 'bg-[#00D179] hover:bg-[#00B868] text-black'
+                : (regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance))
+                  ? 'bg-[#333333] text-[#666666] cursor-not-allowed'
+                  : 'bg-[#00D179] hover:bg-[#00B868] text-black'
             }`}
-            whileHover={!address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance) ? {} : { scale: 1.02 }}
-            whileTap={!address || regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance) ? {} : { scale: 0.98 }}
+            whileHover={address && (regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)) ? {} : { scale: 1.02 }}
+            whileTap={address && (regPriceLoading || regPrice === null || (userBalance !== null && regPrice > userBalance)) ? {} : { scale: 0.98 }}
           >
             {!address ? 'Connect Wallet' :
              regPriceLoading ? 'Loading price...' :
@@ -492,10 +513,9 @@ export default function RegistrationPanel({
               )}
               <div className="flex gap-3 mt-6">
                 <button onClick={() => {
-                  if (avatarUrl.trim()) saveTextRecord('avatar', avatarUrl.trim());
                   setOnboardingStep('bio');
                 }} className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer">
-                  {avatarUrl.trim() ? 'Save & Continue' : 'Skip'}
+                  {avatarUrl.trim() ? 'Continue' : 'Skip'}
                 </button>
               </div>
               {/* Progress dots */}
@@ -523,11 +543,13 @@ export default function RegistrationPanel({
                 <span className="absolute bottom-3 right-3 text-[11px] text-[#333]">{bioText.length}/160</span>
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={() => {
-                  if (bioText.trim()) saveTextRecord('bio', bioText.trim());
+                <button onClick={async () => {
+                  await batchSaveRecords();
                   setOnboardingStep('share');
-                }} className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer">
-                  {bioText.trim() ? 'Save & Continue' : 'Skip'}
+                }}
+                  disabled={savingRecords}
+                  className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                  {savingRecords ? 'Saving...' : (avatarUrl.trim() || bioText.trim()) ? 'Save & Continue' : 'Skip'}
                 </button>
               </div>
               <div className="flex justify-center gap-2 mt-6">

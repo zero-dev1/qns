@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, User, FileText, Settings, ArrowRight, Loader2 } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
+import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import { validateNameLocal, checkAvailability } from '../utils/qns';
 
 interface CommandItem {
@@ -15,7 +16,6 @@ interface CommandItem {
 }
 
 export default function CommandPalette() {
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchResult, setSearchResult] = useState<{ name: string; available: boolean } | null>(null);
@@ -24,21 +24,22 @@ export default function CommandPalette() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
   const { address, connect, qnsName } = useWalletStore();
+  const { isOpen: open, toggle, close: closePalette } = useCommandPaletteStore();
 
   // Keyboard shortcut to open
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setOpen((prev) => !prev);
+        toggle();
       }
-      if (e.key === 'Escape') {
-        setOpen(false);
+      if (e.key === 'Escape' && open) {
+        closePalette();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [open, toggle, closePalette]);
 
   // Focus input when opened
   useEffect(() => {
@@ -86,9 +87,9 @@ export default function CommandPalette() {
   }, [query]);
 
   const close = useCallback(() => {
-    setOpen(false);
+    closePalette();
     setQuery('');
-  }, []);
+  }, [closePalette]);
 
   // Build items list
   const items: CommandItem[] = [];

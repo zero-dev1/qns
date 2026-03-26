@@ -3,8 +3,9 @@ import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import {
-  ArrowLeft,
   Twitter,
   Loader2,
   Check,
@@ -997,25 +998,7 @@ export default function MyNamesPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-md border-b border-[#1E1E1E]">
-        <div className="max-w-[1120px] mx-auto px-6 h-16 flex items-center justify-between">
-          <Link
-            to="/"
-            className="font-clash font-semibold text-xl text-white tracking-tight hover:opacity-80 transition-opacity"
-          >
-            QNS<span className="text-[#00D179]">.</span>
-          </Link>
-
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-sm text-[#8A8A8A] hover:text-white transition-colors duration-200"
-          >
-            <ArrowLeft size={16} />
-            Back to home
-          </Link>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Main Content */}
       <main className="pt-24 pb-20 px-6">
@@ -1056,10 +1039,34 @@ export default function MyNamesPage() {
           )}
 
           {address && loading && (
-            <div className="text-center py-20">
-              <Loader2 className="w-8 h-8 text-[#00D179] animate-spin mx-auto" />
+  <div className="flex flex-col gap-6">
+    {[0, 1].map((i) => (
+      <div key={i} className="rounded-2xl border border-white/5 bg-[#111] overflow-hidden animate-pulse">
+        <div className="h-20 bg-gradient-to-r from-white/[0.03] via-white/[0.02] to-transparent" />
+        <div className="px-6 pb-6">
+          <div className="-mt-8 flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-white/[0.06] border-4 border-[#111] shrink-0" />
+            <div className="flex-1 pt-2 space-y-2">
+              <div className="h-6 w-36 rounded bg-white/[0.06]" />
+              <div className="h-3 w-24 rounded bg-white/[0.04]" />
             </div>
-          )}
+          </div>
+          <div className="h-4 w-48 rounded bg-white/[0.04] mt-4" />
+          <div className="border-t border-white/5 mt-4 pt-4">
+            <div className="flex justify-between">
+              {[0, 1, 2, 3, 4].map((j) => (
+                <div key={j} className="flex flex-col items-center gap-1.5">
+                  <div className="w-5 h-5 rounded bg-white/[0.04]" />
+                  <div className="w-8 h-2 rounded bg-white/[0.03]" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 
           {address && !loading && names.length === 0 && (
             <motion.div
@@ -1583,6 +1590,7 @@ export default function MyNamesPage() {
           animation: shimmer 4s infinite;
         }
       `}</style>
+      <Footer />
     </div>
   );
 }

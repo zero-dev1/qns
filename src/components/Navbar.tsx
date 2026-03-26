@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
 import { useConnectionStore } from '../stores/connectionStore';
+import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Copy, LogOut, Wallet, X, Info, Search } from 'lucide-react';
 import { getSubstrateQFBalance, formatQF } from '../utils/qns';
@@ -22,6 +23,7 @@ export default function Navbar() {
   const { isConnected, isConnecting } = useConnectionStore();
   const ownedNames = useNamesStore((state) => state.ownedNames);
   const refreshNames = useNamesStore((state) => state.refreshNames);
+  const openCommandPalette = useCommandPaletteStore((s) => s.open);
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
@@ -134,10 +136,7 @@ export default function Navbar() {
 
             {/* Command palette shortcut hint — desktop only */}
             <button
-              onClick={() => {
-                // Dispatch the same keyboard event the palette listens for
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
-              }}
+              onClick={openCommandPalette}
               className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] text-[11px] text-[#444] hover:text-[#666] hover:border-white/[0.1] transition-all duration-200 cursor-pointer"
               title="Search (⌘K)"
             >

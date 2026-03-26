@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
-import { Gift, Share2, Check, ArrowLeft, Loader2, Twitter, Send, X } from 'lucide-react';
+import { Gift, Share2, Check, Loader2, Twitter, Send, X } from 'lucide-react';
 import { parseEther } from 'viem';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import {
   getPublicClient,
   getRegistration,
@@ -100,7 +102,9 @@ export default function ProfilePage() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const { qnsName } = useWalletStore();
-  const showVisitorCTA = !qnsName; // Show if visitor has no .qf name
+  // Show CTA for anyone who isn't the profile owner (including disconnected visitors)
+const isOwnProfile = qnsName && name && qnsName.toLowerCase() === name.toLowerCase().replace(/\.qf$/, '');
+const showVisitorCTA = !isOwnProfile;
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,31 +142,6 @@ export default function ProfilePage() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Add shimmer animation styles
-  useEffect(() => {
-    const styleId = 'profile-shimmer-styles';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        .permanent-badge {
-          background-image: linear-gradient(110deg, transparent 30%, rgba(0, 209, 121, 0.15) 50%, transparent 70%);
-          background-size: 200% 100%;
-          animation: shimmer 4s infinite;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    return () => {
-      const existingStyle = document.getElementById(styleId);
-      if (existingStyle) existingStyle.remove();
-    };
   }, []);
 
   useEffect(() => {
@@ -360,12 +339,24 @@ export default function ProfilePage() {
       return;
     }
 
-    // Check balance
+    // Check balance — SS58-first, EVM fallback
     if (!balanceAddress) {
       setGiftError('No wallet connected');
       return;
     }
-    const balance = await getQFBalance(balanceAddress);
+    let balance = 0n;
+    try {
+      if (ss58Address) {
+        balance = await getSubstrateQFBalance(ss58Address);
+        if (balance === 0n && senderAddress) {
+          balance = await getQFBalance(senderAddress);
+        }
+      } else if (senderAddress) {
+        balance = await getQFBalance(senderAddress);
+      }
+    } catch {
+      balance = 0n;
+    }
     const requiredAmount = parseEther(giftAmount);
     const gasBuffer = 500000000000000000n; // 0.5 QF
     
@@ -486,62 +477,62 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md rounded-2xl border border-white/[0.06] bg-black overflow-hidden animate-pulse">
-          {/* Header skeleton */}
-          <div className="h-32 bg-gradient-to-b from-white/[0.03] to-transparent" />
-          <div className="px-6 pb-6">
-            {/* Avatar skeleton */}
-            <div className="flex justify-center -mt-6 mb-4">
-              <div className="w-24 h-24 rounded-full bg-white/[0.06]" />
-            </div>
-            {/* Name skeleton */}
-            <div className="h-7 w-40 mx-auto rounded bg-white/[0.06] mb-3" />
-            {/* Bio skeleton */}
-            <div className="h-4 w-56 mx-auto rounded bg-white/[0.04] mb-2" />
-            <div className="h-4 w-44 mx-auto rounded bg-white/[0.04] mb-6" />
-            {/* Badge skeleton */}
-            <div className="flex justify-center gap-2">
-              <div className="h-6 w-20 rounded-full bg-white/[0.04]" />
-              <div className="h-6 w-16 rounded-full bg-white/[0.04]" />
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12 pt-24">
+          <div className="w-full max-w-md rounded-2xl border border-white/[0.06] bg-black overflow-hidden animate-pulse">
+            {/* Header skeleton */}
+            <div className="h-32 bg-gradient-to-b from-white/[0.03] to-transparent" />
+            <div className="px-6 pb-6">
+              {/* Avatar skeleton */}
+              <div className="flex justify-center -mt-6 mb-4">
+                <div className="w-24 h-24 rounded-full bg-white/[0.06]" />
+              </div>
+              {/* Name skeleton */}
+              <div className="h-7 w-40 mx-auto rounded bg-white/[0.06] mb-3" />
+              {/* Bio skeleton */}
+              <div className="h-4 w-56 mx-auto rounded bg-white/[0.04] mb-2" />
+              <div className="h-4 w-44 mx-auto rounded bg-white/[0.04] mb-6" />
+              {/* Badge skeleton */}
+              <div className="flex justify-center gap-2">
+                <div className="h-6 w-20 rounded-full bg-white/[0.04]" />
+                <div className="h-6 w-16 rounded-full bg-white/[0.04]" />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+        <Footer />
+      </>
     );
   }
 
   if (error || !profile?.exists) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
-        <div className="text-center max-w-sm">
-          {/* Show the name prominently even though it's unclaimed */}
-          {name && !error && (
-            <p className="font-clash font-semibold text-2xl text-white mb-2">
-              {name.replace(/\.qf$/, '')}<span className="text-[#00D179]">.qf</span>
-            </p>
-          )}
-          <p className="text-[#555] mb-6">{error || 'This name hasn\'t been claimed yet'}</p>
-          
-          {/* If name is valid and unclaimed, offer to register it */}
-          {!error && name && (
-            <Link
-              to={`/?search=${encodeURIComponent(name.replace(/\.qf$/, ''))}`}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors duration-200"
-            >
-              Register {name.replace(/\.qf$/, '')}<span>.qf</span>
-            </Link>
-          )}
-          
-          <Link
-            to="/"
-            className="block mt-4 text-sm text-[#555] hover:text-white transition-colors"
-          >
-            <ArrowLeft size={14} className="inline mr-1" />
-            Back to home
-          </Link>
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 pt-24">
+          <div className="text-center max-w-sm">
+            {/* Show the name prominently even though it's unclaimed */}
+            {name && !error && (
+              <p className="font-clash font-semibold text-2xl text-white mb-2">
+                {name.replace(/\.qf$/, '')}<span className="text-[#00D179]">.qf</span>
+              </p>
+            )}
+            <p className="text-[#555] mb-6">{error || 'This name hasn\'t been claimed yet'}</p>
+            
+            {/* If name is valid and unclaimed, offer to register it */}
+            {!error && name && (
+              <Link
+                to={`/?search=${encodeURIComponent(name.replace(/\.qf$/, ''))}`}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors duration-200"
+              >
+                Register {name.replace(/\.qf$/, '')}<span>.qf</span>
+              </Link>
+            )}
+          </div>
         </div>
-      </div>
+        <Footer />
+      </>
     );
   }
 
@@ -550,16 +541,9 @@ export default function ProfilePage() {
   const hasSocials = profile.twitter || profile.telegram;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12">
-      {/* Back to home link */}
-      <Link
-        to="/"
-        className="fixed top-6 left-6 flex items-center gap-2 text-sm text-gray-500 hover:text-white transition-colors z-30"
-      >
-        <ArrowLeft size={16} />
-        Back to home
-      </Link>
-
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12 pt-24">
       {/* Profile Card */}
       <motion.div
         ref={cardRef}
@@ -900,6 +884,8 @@ export default function ProfilePage() {
         )}
       </AnimatePresence>
 
-    </div>
+      </div>
+      <Footer />
+    </>
   );
 }

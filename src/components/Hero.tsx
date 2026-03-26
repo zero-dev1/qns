@@ -58,16 +58,15 @@ export default function Hero() {
     }
   }, []);
 
-  // Check for search query param on mount and trigger search
+  // Check for search query param on mount AND when it changes (e.g. from CommandPalette)
   useEffect(() => {
     const searchParam = searchParams.get('search');
     if (searchParam) {
       const cleanName = searchParam.toLowerCase().replace(/\.qf$/, '').trim();
       setInput(cleanName);
-      // Trigger search after a short delay to ensure state is updated
       setTimeout(() => search(cleanName), 100);
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     const hasVisited = localStorage.getItem('qns-has-visited');
