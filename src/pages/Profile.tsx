@@ -10,6 +10,7 @@ import {
   namehash,
   getWalletClient,
   getQFBalance,
+  getSubstrateQFBalance,
   formatQF,
 } from '../utils/qns';
 import { useWalletStore } from '../stores/walletStore';
@@ -296,10 +297,14 @@ export default function ProfilePage() {
   // Fetch balance when modal opens or address changes
   useEffect(() => {
     if (giftModalOpen && balanceAddress) {
-      getQFBalance(balanceAddress).then((bal) => {
-        if (bal === 0n && senderAddress && ss58Address && balanceAddress !== ss58Address) {
-          // Fallback: try SS58 path
-          return getQFBalance(ss58Address).then(setSenderBalance);
+      const fetchBal = ss58Address 
+        ? getSubstrateQFBalance(ss58Address)
+        : getQFBalance(senderAddress!);
+      
+      fetchBal.then((bal) => {
+        if (bal === 0n && senderAddress && ss58Address) {
+          // Fallback: try the other path
+          return getQFBalance(senderAddress).then(setSenderBalance);
         }
         setSenderBalance(bal);
       }).catch(console.error);

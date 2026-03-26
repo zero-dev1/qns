@@ -218,116 +218,9 @@ await callContract('QNSRegistry', registryAddress, contracts.QNSRegistry.abi, 's
 // ============================================
 // RESERVED NAMES LIST
 // ============================================
-const RESERVED_NAMES = [
-  // ===== PROTOCOL & INFRASTRUCTURE =====
-  "qflink", "qfpad", "qfclash", "qfstream", "nucleusx", "quantumnotary",
-  "quantum", "fusion", "quantumfusion", "dapp", "bridge", "governance",
-  "admin", "treasury", "validator", "node", "swap", "stake", "pool",
-  "vault", "dao", "nft", "token", "wallet", "vector", "nucleus",
-  "protocol", "network", "chain", "testnet", "mainnet", "explorer",
-  "faucet", "docs", "api", "sdk", "cli", "hub", "portal", "gateway",
-  "relay", "oracle", "index", "registry", "resolver", "registrar",
-  "contract", "deploy", "genesis", "block", "epoch", "shard",
-
-  // ===== FOUNDER =====
-  "main", "labs", "ben", "memechi",
-
-  // ===== YOUR KOL LIST (provided) =====
-  "abu", "alaoui", "altstein", "anthony", "ariff", "bitomoney", "bob",
-  "bullishbear", "crayola", "crypto44", "cryptofella", "gideon", "jopp",
-  "cryptomanic", "cryptomonk", "cryptonova", "rishad", "cryptocaesar",
-  "ctgymrat", "degenkenn", "dippy", "drew", "druya", "ezmoney", "fattony",
-  "gemdetector", "goomba", "hawk", "hwmedia", "intrepid", "justiinape",
-  "karamata", "kito", "lawless", "layeralpha", "lsd", "matteo", "gorgonite",
-  "mezcez", "moneylord", "goodie", "musa", "nite", "nilsb", "noach",
-  "panamax", "paw", "roshi", "rush", "satoshiflipper", "sharky", "soef",
-  "sykodelic", "tang", "tareeq", "teddy", "alchemist", "altcoinsensei",
-  "uponlygreg", "web3princess",
-
-  // ===== QF CALLERS (confirmed on X) =====
-  "swampmonkey", "kenobi", "dtcrypto", "axeledger", "singularity",
-  "chadpumpiano", "octgems", "axe",
-
-  // ===== NAMED BIG KOLs =====
-  "drprofit", "cryptogodjohn", "becker",
-
-  // ===== TOP-TIER CRYPTO KOLs =====
-  "pentoshi", "ansem", "bluntz", "hsaka", "cobie", "lookonchain",
-  "watcherguru", "saylor", "vitalik", "donalt", "raoul", "arthurhays",
-  "zhusu", "eliz", "murad", "kaleo", "crediblecrypto", "cryptotony",
-  "bitboy", "larkdavis", "cryptobanter", "rektcapital", "cryptobirb",
-  "altcoingordon", "cryptowizard", "nebraskagooner", "degenpoet",
-  "inversebrah", "gainzy", "cryptoyoda", "cryptomanran", "satoshi",
-  "incomeshark", "shark", "whale", "bull",
-
-  // ===== GEOGRAPHIC & POLITICAL =====
-  "usa", "uae", "dubai", "london", "newyork", "tokyo", "singapore",
-  "hongkong", "europe", "africa", "asia", "australia", "canada",
-  "germany", "france", "india", "china", "korea", "japan", "brazil",
-  "mexico", "nigeria", "kenya", "egypt", "saudi", "qatar", "bahrain",
-  "kuwait", "oman", "jordan", "turkey", "russia", "ukraine",
-  "president", "potus", "congress", "senate", "government", "royal",
-  "kingdom", "embassy", "united", "nations", "olympic", "fifa",
-  "minister", "chancellor", "governor", "mayor",
-
-  // ===== HIGH-VALUE GENERIC =====
-  "bitcoin", "ethereum", "solana", "polkadot", "polygon", "avalanche",
-  "cardano", "ripple", "dogecoin", "shiba", "pepe", "meme", "memecoin",
-  "official", "verified", "founder", "ceo", "cto", "developer",
-  "engineer", "investor", "whale", "alpha", "sigma", "chad", "degen",
-  "hodl", "moon", "lambo", "pump", "bull", "bear",
-
-  // ===== FINANCE & DEFI =====
-  "exchange", "market", "trade", "defi", "liquidity", "amm", "dex",
-  "cex", "fee", "reward", "airdrop", "vest", "mint", "burn", "lend",
-  "borrow", "yield", "farm", "harvest", "compound", "leverage",
-  "margin", "futures", "options", "perps", "spot",
-
-  // ===== IDENTITY & SOCIAL =====
-  "name", "identity", "profile", "avatar", "bio", "link", "follow",
-  "verified", "badge", "creator", "influencer", "artist", "musician",
-  "gamer", "streamer", "trader", "analyst", "researcher",
-
-  // ===== BRANDS & PLATFORMS (prevent impersonation) =====
-  "binance", "coinbase", "kraken", "metamask", "uniswap", "opensea",
-  "aave", "curve", "maker", "lido", "chainlink", "compound", "dydx",
-  "ledger", "trezor", "phantom", "rabby", "rainbow",
-  "google", "apple", "amazon", "microsoft", "meta", "tesla",
-  "twitter", "discord", "telegram", "reddit", "youtube", "tiktok",
-
-  // ===== COMMON FIRST NAMES (high demand) =====
-  "alice", "james", "john", "michael", "sarah", "david", "emma",
-  "alex", "max", "sam", "chris", "dan", "tom", "jack", "nick",
-  "ryan", "mark", "paul", "luke", "adam", "jason", "kevin",
-  "brian", "eric", "matt", "mike", "steve", "peter", "joe",
-  "maria", "anna", "lisa", "kate", "jane", "rachel", "laura",
-  "emily", "sophie", "olivia", "ella", "mia", "noah", "leo",
-  "omar", "ali", "ahmed", "hassan", "mohammed", "fatima", "aisha",
-
-  // ===== UTILITY & SYSTEM =====
-  "home", "root", "test", "demo", "info", "contact", "terms",
-  "privacy", "search", "register", "renew", "manage", "settings",
-  "app", "web", "welcome", "help", "support", "status", "blog",
-  "news", "media", "press", "team", "about", "careers", "jobs",
-
-  // ===== ADDITIONAL RESERVED NAMES =====
-  "overdose", "cryptogideon", "cryptojopp", "doomly", "user", "boolean",
-  "prince", "ahku", "revo", "pblius", "denis", "alisher", "krzysztof",
-  "aleksandra", "lygin", "kit", "52f", "key", "diskword", "ahnu",
-  "quorum", "provd", "qns", "deployer",
-
-  // ===== EXCHANGE & PLATFORM NAMES =====
-  "dappstore", "bybit", "okx", "kucoin", "mexc", "nils",
-
-  // ===== ADDITIONAL PROTOCOL NAMES =====
-  "dapplab", "qfnetwork", "qfvote", "qfpay", "qfswap", "manifesto",
-  "foundation", "staking", "spin", "ecosystem", "council", "grants",
-  "fund", "reserve", "core", "dev", "mail", "security", "audit",
-  "vote", "token", "coin", "claim", "rewards", "launchpad", "incubator"
-];
-
-// Deduplicate reserved names
-const reservedNames = [...new Set(RESERVED_NAMES)];
+const reservedJson = JSON.parse(readFileSync('reserved-names.json', 'utf-8'));
+const reservedNames = [...new Set(reservedJson.names)];
+console.log(`Loaded ${reservedNames.length} reserved names from reserved-names.json`);
 
 // ============================================
 // STEP 4: RESERVE NAMES
@@ -413,6 +306,3 @@ const deployments = {
 writeFileSync(deploymentsPath, JSON.stringify(deployments, null, 2));
 console.log(`✅ QNS addresses written to ${deploymentsPath}`);
 console.log(JSON.stringify(deployments.contracts, null, 2));
-
-// Export for potential external use
-export { RESERVED_NAMES };
