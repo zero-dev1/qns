@@ -5,10 +5,11 @@ import { useNamesStore } from '../stores/namesStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Copy, LogOut, Wallet, X, Info, Search } from 'lucide-react';
+import { Copy, LogOut, Wallet, X, Info, Search, User } from 'lucide-react';
 import { getSubstrateQFBalance, formatQF } from '../utils/qns';
 import { useCopy } from '../hooks/useCopy';
 import { truncateAddress } from '../utils/address';
+import Avatar from './Avatar';
 
 export default function Navbar() {
   const { 
@@ -28,8 +29,12 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { copy, copied } = useCopy();
+
+  // Platform detection for keyboard shortcuts
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
 
   // Stable callback for refreshNames to avoid useEffect re-runs
   const doRefreshNames = useCallback((addr: `0x${string}`) => {
@@ -67,6 +72,19 @@ export default function Navbar() {
   useEffect(() => {
     setDropdownOpen(false);
   }, [location.pathname]);
+
+  // Fetch avatar for the pill when qnsName changes
+  useEffect(() => {
+    if (!qnsName) {
+      setAvatarUrl(null);
+      return;
+    }
+    import('../utils/qns').then(({ getTextRecord }) => {
+      getTextRecord(qnsName, 'avatar').then((url) => {
+        setAvatarUrl(url || null);
+      }).catch(() => setAvatarUrl(null));
+    });
+  }, [qnsName]);
 
   const copyAddress = (addr: string | null) => {
     if (addr) {
@@ -115,7 +133,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3 md:gap-6">
             <Link
               to="/my-names"
-              className={`text-sm transition-colors duration-200 ${
+              className={`hidden md:inline text-sm transition-colors duration-200 ${
                 location.pathname === '/my-names'
                   ? 'text-white'
                   : 'text-[#8A8A8A] hover:text-white'
@@ -134,28 +152,57 @@ export default function Navbar() {
               Docs
             </Link>
 
+            {/* Mobile search icon — opens CommandPalette */}
+            <button
+              onClick={openCommandPalette}
+              className="md:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] text-[#555] hover:text-white hover:border-white/[0.12] transition-all duration-200 cursor-pointer"
+              aria-label="Search"
+            >
+              <Search size={16} />
+            </button>
+
             {/* Command palette shortcut hint — desktop only */}
             <button
               onClick={openCommandPalette}
               className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] text-[11px] text-[#444] hover:text-[#666] hover:border-white/[0.1] transition-all duration-200 cursor-pointer"
-              title="Search (⌘K)"
+              title={`Search (${isMac ? '⌘' : 'Ctrl+'}K)`}
             >
               <Search size={12} />
-              <kbd className="font-mono">⌘K</kbd>
+              <kbd className="font-mono">{isMac ? '⌘' : 'Ctrl+'}K</kbd>
             </button>
 
             {address ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="px-4 py-2 rounded-xl border border-[#00D179] text-white text-sm font-medium hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
+                  className="flex items-center gap-2.5 pl-1.5 pr-3.5 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] hover:border-[#00D179]/30 hover:bg-white/[0.06] transition-all duration-200 cursor-pointer"
                 >
                   {qnsName ? (
-                    <span>
-                      {qnsName}<span className="text-[#00D179]">.qf</span>
-                    </span>
+                    <>
+                      <div className="relative">
+                        <Avatar
+                          url={avatarUrl || undefined}
+                          name={qnsName}
+                          size={28}
+                        />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#00D179] border-2 border-[#0A0A0A]" />
+                      </div>
+                      <span className="hidden md:inline font-clash text-sm font-medium text-white">
+                        {qnsName}<span className="text-[#00D179]">.qf</span>
+                      </span>
+                    </>
                   ) : (
-                    displayName
+                    <>
+                      <div className="relative">
+                        <div className="w-7 h-7 rounded-full bg-white/[0.08] flex items-center justify-center">
+                          <User size={14} className="text-[#555]" />
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#00D179] border-2 border-[#0A0A0A]" />
+                      </div>
+                      <span className="hidden md:inline text-sm text-[#8A8A8A]">
+                        {displayName}
+                      </span>
+                    </>
                   )}
                 </button>
 
@@ -281,9 +328,10 @@ export default function Navbar() {
               <button
                 onClick={connect}
                 disabled={connecting}
-                className="px-4 py-2 rounded-xl border border-[#00D179] text-white text-sm font-medium hover:bg-[#00D17915] transition-all duration-200 disabled:opacity-50 cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/[0.1] bg-white/[0.04] text-sm text-[#8A8A8A] hover:border-[#00D179]/30 hover:text-white transition-all duration-200 disabled:opacity-50 cursor-pointer"
               >
-                {connecting ? 'Connecting...' : 'Connect Wallet'}
+                <Wallet size={15} />
+                <span className="hidden md:inline">{connecting ? 'Connecting...' : 'Connect'}</span>
               </button>
             )}
           </div>

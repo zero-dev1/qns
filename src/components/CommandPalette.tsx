@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, User, FileText, Settings, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, User, FileText, Settings, ArrowRight, Loader2, X } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
 import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import { validateNameLocal, checkAvailability } from '../utils/qns';
@@ -235,12 +235,19 @@ export default function CommandPalette() {
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Search names, navigate, or run commands..."
-                  className="flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-[#333]"
+                  className="flex-1 bg-transparent py-4 text-base md:text-sm text-white outline-none placeholder:text-[#333]"
                 />
                 {searching && <Loader2 size={16} className="text-[#00D179] animate-spin shrink-0" />}
                 <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-[#444] bg-white/[0.04] border border-white/[0.06]">
                   ESC
                 </kbd>
+                <button
+                  onClick={close}
+                  className="sm:hidden flex items-center justify-center w-8 h-8 rounded-lg text-[#555] hover:text-white transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
               {/* Results */}
@@ -252,7 +259,7 @@ export default function CommandPalette() {
                 {allItems.map((item, i) => (
                   <button
                     key={item.id}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 cursor-pointer ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-100 cursor-pointer ${
                       i === selectedIndex ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]'
                     }`}
                     onClick={item.action}

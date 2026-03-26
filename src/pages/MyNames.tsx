@@ -40,6 +40,7 @@ import { useCopy } from '../hooks/useCopy';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import RenewModal from '../components/RenewModal';
+import Avatar from '../components/Avatar';
 
 interface OwnedName {
   name: string;
@@ -89,38 +90,6 @@ const ClockIcon = () => (
     <polyline points="12 6 12 12 16 14" />
   </svg>
 );
-
-// Avatar component
-const Avatar = ({ url, name, size = 40 }: { url?: string; name: string; size?: number }) => {
-  const [imageError, setImageError] = useState(false);
-  const initials = name.slice(0, 2).toUpperCase();
-  const textSizeClass = size >= 56 ? 'text-lg' : 'text-sm';
-
-  useEffect(() => {
-    setImageError(false);
-  }, [url]);
-
-  if (url && !imageError) {
-    return (
-      <img
-        src={url}
-        alt={name}
-        className="rounded-full object-cover"
-        style={{ width: size, height: size }}
-        onError={() => setImageError(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      className={`flex items-center justify-center rounded-full bg-gradient-to-br from-[#00D179] to-[#00A060] font-bold text-white ${textSizeClass}`}
-      style={{ width: size, height: size }}
-    >
-      {initials}
-    </div>
-  );
-};
 
 // Card animation variants
 const cardVariants = {
@@ -1303,7 +1272,7 @@ export default function MyNamesPage() {
                           }))
                         }
                         placeholder={PLACEHOLDERS[key]}
-                        className="w-full rounded-xl border border-white/5 bg-[#090909] px-4 py-3 text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 placeholder:text-[#555555]"
+                        className="w-full rounded-xl border border-white/5 bg-[#090909] px-4 py-3 text-base md:text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 placeholder:text-[#555555]"
                       />
                     </div>
                   ))}
@@ -1385,7 +1354,7 @@ export default function MyNamesPage() {
                         value={transferRecipient}
                         onChange={(e) => setTransferRecipient(e.target.value)}
                         placeholder="5... (Substrate), 0x... (EVM), or name.qf"
-                        className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 text-white text-sm outline-none focus:border-[#00D179]/50 transition-colors duration-200 font-mono placeholder:text-gray-600"
+                        className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 text-white text-base md:text-sm outline-none focus:border-[#00D179]/50 transition-colors duration-200 font-mono placeholder:text-gray-600"
                       />
                     </div>
 

@@ -41,6 +41,7 @@ export default function RegistrationPanel({
   const [regPriceLoading, setRegPriceLoading] = useState(false);
   const [userBalance, setUserBalance] = useState<bigint | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<'celebrate' | 'avatar' | 'bio' | 'share'>('celebrate');
+  const [stepDirection, setStepDirection] = useState<'forward' | 'back'>('forward');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bioText, setBioText] = useState('');
   const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,6 +74,11 @@ export default function RegistrationPanel({
     } finally {
       setSavingRecords(false);
     }
+  };
+
+  const goToStep = (target: 'celebrate' | 'avatar' | 'bio' | 'share', direction: 'forward' | 'back') => {
+    setStepDirection(direction);
+    setOnboardingStep(target);
   };
 
   const duration = durations[selectedDuration];
@@ -115,7 +121,7 @@ export default function RegistrationPanel({
   // Auto-advance onboarding flow
   useEffect(() => {
     if (txState === 'success' && onboardingStep === 'celebrate') {
-      const timer = setTimeout(() => setOnboardingStep('avatar'), 2500);
+      const timer = setTimeout(() => goToStep('avatar', 'forward'), 2500);
       return () => clearTimeout(timer);
     }
   }, [txState, onboardingStep]);
@@ -279,6 +285,18 @@ export default function RegistrationPanel({
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
   };
+
+  const StepBackArrow = ({ onClick }: { onClick: () => void }) => (
+    <button
+      onClick={onClick}
+      className="absolute top-0 left-0 p-1 text-[#555] hover:text-white transition-colors cursor-pointer z-10"
+      aria-label="Go back"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 12H5M12 19l-7-7 7-7" />
+      </svg>
+    </button>
+  );
 
   return (
     <div className="mt-0 bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6">
@@ -493,7 +511,8 @@ export default function RegistrationPanel({
           )}
 
           {onboardingStep === 'avatar' && (
-            <motion.div className="py-6 animate-fade-in" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+            <motion.div className="relative py-6" initial={{ opacity: 0, x: stepDirection === 'forward' ? 20 : -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+              <StepBackArrow onClick={() => goToStep('celebrate', 'back')} />
               <p className="text-[10px] uppercase tracking-[0.2em] text-[#00D179] mb-3">Step 1 of 3</p>
               <h3 className="font-clash font-semibold text-xl text-white mb-1">Add your avatar</h3>
               <p className="text-sm text-[#555] mb-5">Paste a URL to your profile image</p>
@@ -502,7 +521,7 @@ export default function RegistrationPanel({
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://example.com/avatar.png"
-                className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#00D179]/50 transition-colors duration-200 placeholder:text-[#333]"
+                className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl px-4 py-3 text-base md:text-sm text-white outline-none focus:border-[#00D179]/50 transition-colors duration-200 placeholder:text-[#333]"
               />
               {/* Avatar preview */}
               {avatarUrl && (
@@ -513,7 +532,7 @@ export default function RegistrationPanel({
               )}
               <div className="flex gap-3 mt-6">
                 <button onClick={() => {
-                  setOnboardingStep('bio');
+                  goToStep('bio', 'forward');
                 }} className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer">
                   {avatarUrl.trim() ? 'Continue' : 'Skip'}
                 </button>
@@ -528,7 +547,8 @@ export default function RegistrationPanel({
           )}
 
           {onboardingStep === 'bio' && (
-            <motion.div className="py-6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+            <motion.div className="relative py-6" initial={{ opacity: 0, x: stepDirection === 'forward' ? 20 : -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+              <StepBackArrow onClick={() => goToStep('avatar', 'back')} />
               <p className="text-[10px] uppercase tracking-[0.2em] text-[#00D179] mb-3">Step 2 of 3</p>
               <h3 className="font-clash font-semibold text-xl text-white mb-1">Write your bio</h3>
               <p className="text-sm text-[#555] mb-5">Tell the network who you are</p>
@@ -538,14 +558,14 @@ export default function RegistrationPanel({
                   onChange={(e) => setBioText(e.target.value.slice(0, 160))}
                   placeholder="Builder, explorer, degen..."
                   rows={3}
-                  className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#00D179]/50 transition-colors duration-200 placeholder:text-[#333] resize-none"
+                  className="w-full bg-[#0A0A0A] border border-[#1E1E1E] rounded-xl px-4 py-3 text-base md:text-sm text-white outline-none focus:border-[#00D179]/50 transition-colors duration-200 placeholder:text-[#333] resize-none"
                 />
                 <span className="absolute bottom-3 right-3 text-[11px] text-[#333]">{bioText.length}/160</span>
               </div>
               <div className="flex gap-3 mt-6">
                 <button onClick={async () => {
                   await batchSaveRecords();
-                  setOnboardingStep('share');
+                  goToStep('share', 'forward');
                 }}
                   disabled={savingRecords}
                   className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
@@ -561,7 +581,8 @@ export default function RegistrationPanel({
           )}
 
           {onboardingStep === 'share' && (
-            <motion.div className="py-6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+            <motion.div className="relative py-6" initial={{ opacity: 0, x: stepDirection === 'forward' ? 20 : -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+              <StepBackArrow onClick={() => goToStep('bio', 'back')} />
               <p className="text-[10px] uppercase tracking-[0.2em] text-[#00D179] mb-3">You're all set</p>
               
               {/* Completed profile preview */}

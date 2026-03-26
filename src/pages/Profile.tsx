@@ -25,6 +25,7 @@ import { hapticTap } from '../utils/haptics';
 import { DAPP_LAB_NAMES, TEAM_NAMES } from '../utils/badges';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import { useToast } from '../contexts/ToastContext';
+import Avatar from '../components/Avatar';
 
 interface ProfileData {
   name: string;
@@ -38,45 +39,6 @@ interface ProfileData {
   isPermanent: boolean;
   exists: boolean;
 }
-
-// Avatar component with fallback to initials
-const Avatar = ({
-  url,
-  name,
-  size = 96,
-}: {
-  url?: string;
-  name: string;
-  size?: number;
-}) => {
-  const [imageError, setImageError] = useState(false);
-  const initials = name.slice(0, 2).toUpperCase();
-
-  useEffect(() => {
-    setImageError(false);
-  }, [url]);
-
-  if (url && !imageError) {
-    return (
-      <img
-        src={url}
-        alt={name}
-        className="rounded-full object-cover"
-        style={{ width: size, height: size }}
-        onError={() => setImageError(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="flex items-center justify-center rounded-full bg-gradient-to-br from-[#00D179] to-[#00A060] font-bold text-white text-2xl"
-      style={{ width: size, height: size }}
-    >
-      {initials}
-    </div>
-  );
-};
 
 // Social link configurations
 const SOCIAL_CONFIG = {
@@ -788,7 +750,7 @@ const showVisitorCTA = !isOwnProfile;
                               placeholder="Enter amount"
                               min="0"
                               step="0.01"
-                              className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 pr-12 text-sm text-white outline-none transition-all duration-200 focus:border-[#00D179]/50 focus:ring-1 focus:ring-[#00D179]/20 placeholder:text-gray-600"
+                              className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 pr-12 text-base md:text-sm text-white outline-none transition-all duration-200 focus:border-[#00D179]/50 focus:ring-1 focus:ring-[#00D179]/20 placeholder:text-gray-600"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">
                               QF

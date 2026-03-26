@@ -3,21 +3,13 @@ import { useWalletStore } from '../stores/walletStore';
 import { useAdminStore } from '../stores/adminStore';
 
 const productLinks = [
-  { label: 'Register', to: '/', internal: true },
   { label: 'My Names', to: '/my-names', internal: true },
   { label: 'Docs', to: '/docs', internal: true },
 ];
 
-const ecosystemLinks = [
-  { label: 'QF Network', href: 'https://qfnetwork.xyz' },
-  { label: 'Bridge', href: 'https://bridge.qfnetwork.xyz' },
-  { label: 'Explorer', href: 'https://explorer.qfnetwork.xyz' },
-];
-
 const communityLinks = [
   { label: 'Twitter / X', href: 'https://x.com/dotqfns' },
-  { label: 'QF Twitter', href: 'https://x.com/theqfnetwork' },
-  { label: 'Telegram', href: 'https://t.me/qfnetwork' },
+  { label: 'QF Network', href: 'https://x.com/theqfnetwork' },
 ];
 
 export default function Footer() {
@@ -28,7 +20,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-white/[0.04] mt-10">
       <div className="max-w-[1120px] mx-auto px-6 py-14">
-        <div className="grid grid-cols-2 gap-10 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-10 md:grid-cols-3">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <span className="font-clash font-semibold text-xl text-white">
@@ -57,24 +49,6 @@ export default function Footer() {
                   Admin
                 </Link>
               )}
-            </div>
-          </div>
-
-          {/* Ecosystem */}
-          <div>
-            <p className="text-[11px] font-medium tracking-[0.15em] text-[#555] uppercase mb-4">Ecosystem</p>
-            <div className="flex flex-col gap-2.5">
-              {ecosystemLinks.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-[#666] hover:text-white transition-colors duration-200"
-                >
-                  {link.label}
-                </a>
-              ))}
             </div>
           </div>
 
