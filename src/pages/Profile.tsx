@@ -296,7 +296,13 @@ export default function ProfilePage() {
   // Fetch balance when modal opens or address changes
   useEffect(() => {
     if (giftModalOpen && balanceAddress) {
-      getQFBalance(balanceAddress).then(setSenderBalance).catch(console.error);
+      getQFBalance(balanceAddress).then((bal) => {
+        if (bal === 0n && senderAddress && ss58Address && balanceAddress !== ss58Address) {
+          // Fallback: try SS58 path
+          return getQFBalance(ss58Address).then(setSenderBalance);
+        }
+        setSenderBalance(bal);
+      }).catch(console.error);
     }
   }, [giftModalOpen, balanceAddress]);
 

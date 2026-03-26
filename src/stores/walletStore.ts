@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { truncateAddress } from '../utils/qns';
-import { ensureAccountMapped, METADATA_HASH_ERROR, USER_CANCELLED } from '../utils/accountMapping';
+import { ensureAccountMapped, METADATA_HASH_ERROR, USER_CANCELLED, INSUFFICIENT_BALANCE_FOR_MAPPING } from '../utils/accountMapping';
 import {
   connectSubstrateWallet,
   disconnectWallet,
@@ -120,6 +120,19 @@ export const useWalletStore = create<WalletState>()(
                 showWalletModal: false,
               });
               // They can still browse; writes will fail with a clear message.
+              return;
+            }
+
+            if (msg === INSUFFICIENT_BALANCE_FOR_MAPPING || msg.includes('INSUFFICIENT_BALANCE')) {
+              // Connect anyway but mark unmapped, show clear message
+              set({
+                accountMapped: false,
+                showWalletModal: false,
+              });
+              setError(
+                'Your wallet needs a small amount of QF to complete account setup. ' +
+                'Bridge some QF tokens, then reconnect.'
+              );
               return;
             }
 

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -14,6 +15,7 @@ import AdminLayout from './components/admin/AdminLayout';
 import { ToastProvider } from './contexts/ToastContext';
 import PageTransition from './components/PageTransition';
 import WalletModal from './components/WalletModal';
+import { initializeConnectionWatcher, cleanupConnectionWatcher } from './stores/connectionStore';
 
 function LandingPage() {
   return (
@@ -77,6 +79,16 @@ function AnimatedRoutes() {
 }
 
 function App() {
+  useEffect(() => {
+    // Initialize connection watcher on app mount
+    initializeConnectionWatcher();
+    
+    // Cleanup on unmount
+    return () => {
+      cleanupConnectionWatcher();
+    };
+  }, []);
+
   return (
     <ToastProvider>
       <BrowserRouter>

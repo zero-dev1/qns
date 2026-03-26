@@ -27,7 +27,7 @@ export type SearchResult = {
   owner?: string;
 };
 
-type TxState = 'idle' | 'pending' | 'success' | 'failed';
+type TxState = 'idle' | 'pending' | 'confirming' | 'success' | 'failed';
 
 type TxErrorType = 'insufficient_balance' | 'generic';
 
@@ -75,6 +75,7 @@ export default function Hero() {
   // Search input focus state for glow effect
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [pulseSearchGlow, setPulseSearchGlow] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const duration = durations[selectedDuration];
   
@@ -115,6 +116,13 @@ export default function Hero() {
       setUserBalance(null);
     }
   }, [ss58Address, address]);
+
+  // Auto-focus search input on desktop (pointer: fine = mouse/trackpad)
+  useEffect(() => {
+    if (window.matchMedia('(pointer: fine)').matches) {
+      inputRef.current?.focus();
+    }
+  }, []);
 
   // Check for search query param on mount and trigger search
   useEffect(() => {
@@ -278,7 +286,9 @@ export default function Hero() {
       const { confirmation } = await registerName(selectedName, duration.years, duration.permanent, signerAddress);
 
       // === INSTANT SUCCESS (on broadcast) ===
-      setTxState('success');
+      setTxState('confirming');
+      hapticSuccess(); // chime plays during the animation
+      
       const now = BigInt(Math.floor(Date.now() / 1000));
       const oneYearSecs = 365n * 24n * 60n * 60n;
       const newName = {
@@ -291,9 +301,13 @@ export default function Hero() {
       // Snapshot before optimistic add
       const previousNames = [...existingStoreNames];
       setOwnedNames([...existingStoreNames, newName]);
-      hapticSuccess();
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
       refreshName().catch(() => {});
+
+      // After 600ms, transition to full success
+      setTimeout(() => {
+        setTxState('success');
+      }, 600);
 
       // === BACKGROUND CONFIRMATION ===
       confirmation.then((result) => {
@@ -491,6 +505,7 @@ export default function Hero() {
                       } ${isSearchFocused ? 'search-bar-focus-glow' : ''} ${pulseSearchGlow ? 'search-bar-available-pulse' : ''} focus-within:border-[#00D179] search-bar-shell`}
                     >
                       <input
+                        ref={inputRef}
                         type="text"
                         value={input}
                         onChange={(e) => handleInputChange(e.target.value)}
@@ -761,6 +776,36 @@ export default function Hero() {
                     </div>
                     <p className="text-white font-satoshi font-medium mb-1">Registering on QF Network</p>
                     <p className="text-[#555555] text-sm font-satoshi">Powered by sub-second blocks</p>
+                  </div>
+                )}
+
+                {/* Confirming State */}
+                {txState === 'confirming' && (
+                  <div className="text-center py-8 animate-fade-in">
+                    <div className="relative inline-block mb-5">
+                      {/* Expanding pulse ring */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-[#00D179]/20 animate-ping" />
+                      </div>
+                      {/* Checkmark circle */}
+                      <motion.div
+                        className="relative w-12 h-12 bg-[#00D179] rounded-full flex items-center justify-center"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                      >
+                        <motion.svg
+                          width="24" height="24" viewBox="0 0 24 24" fill="none"
+                          stroke="white" strokeWidth="3" strokeLinecap="round"
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.3, delay: 0.15 }}
+                        >
+                          <motion.path d="M20 6L9 17l-5-5" />
+                        </motion.svg>
+                      </motion.div>
+                    </div>
+                    <p className="text-[#00D179] font-medium">Confirmed</p>
                   </div>
                 )}
 

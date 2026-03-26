@@ -7,6 +7,7 @@ const STORAGE_KEY = 'qns_mapped_accounts-v2';
 // Sentinel error messages used by walletStore to branch UX
 export const METADATA_HASH_ERROR = 'METADATA_HASH_ERROR';
 export const USER_CANCELLED = 'USER_CANCELLED';
+export const INSUFFICIENT_BALANCE_FOR_MAPPING = 'INSUFFICIENT_BALANCE_FOR_MAPPING';
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
@@ -117,6 +118,12 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
     // CannotLookup → CheckMetadataHash misconfiguration
     if (msg.includes('CannotLookup')) {
       throw new Error(METADATA_HASH_ERROR);
+    }
+
+    // Insufficient balance for mapping transaction
+    if (msg.includes('InsufficientBalance') || msg.includes('Inability to pay') || 
+        msg.includes('1010:') || msg.includes('insufficient')) {
+      throw new Error(INSUFFICIENT_BALANCE_FOR_MAPPING);
     }
 
     throw err;

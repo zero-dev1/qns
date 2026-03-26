@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
+import { useConnectionStore } from '../stores/connectionStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Copy, LogOut, Wallet, X, Info } from 'lucide-react';
 import { getSubstrateQFBalance, formatQF } from '../utils/qns';
@@ -18,6 +19,7 @@ export default function Navbar() {
     connect, 
     disconnect
   } = useWalletStore();
+  const { isConnected, isConnecting } = useConnectionStore();
   const ownedNames = useNamesStore((state) => state.ownedNames);
   const refreshNames = useNamesStore((state) => state.refreshNames);
   const location = useLocation();
@@ -93,9 +95,19 @@ export default function Navbar() {
         <div className="max-w-[1120px] mx-auto px-6 h-16 flex items-center justify-between">
           <Link
             to="/"
-            className="font-clash font-semibold text-xl text-white tracking-tight hover:opacity-80 transition-opacity"
+            className="font-clash font-semibold text-xl text-white tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2"
           >
             QNS<span className="text-[#00D179]">.</span>
+            {/* Connection Status Indicator */}
+            <div className="flex items-center gap-1">
+              {isConnecting ? (
+                <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" title="Connecting to QF Network..." />
+              ) : isConnected ? (
+                <div className="w-2 h-2 rounded-full bg-[#00D179]" title="Connected to QF Network" />
+              ) : (
+                <div className="w-2 h-2 rounded-full bg-gray-500" title="Connecting to QF Network..." />
+              )}
+            </div>
           </Link>
 
           <div className="flex items-center gap-6">

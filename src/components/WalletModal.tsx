@@ -163,7 +163,7 @@ export default function WalletModal() {
             {/* Footer */}
             <div className="px-6 py-4 border-t border-white/5 bg-white/[0.01]">
               <p className="text-xs text-center text-[#8A8A8A]">
-                New to QF Network?{' '}
+                New to QF Network? Get{' '}
                 <a 
                   href="#" 
                   className="text-[#00D179] hover:underline"
@@ -172,7 +172,18 @@ export default function WalletModal() {
                     window.open('https://talisman.xyz', '_blank');
                   }}
                 >
-                  Get a wallet
+                  Talisman
+                </a>{' '}
+                or{' '}
+                <a 
+                  href="#" 
+                  className="text-[#00D179] hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.open('https://subwallet.app', '_blank');
+                  }}
+                >
+                  SubWallet
                 </a>
               </p>
             </div>

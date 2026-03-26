@@ -1,7 +1,7 @@
 {
   "description": "Reserved names for QNS mainnet deployment - These names cannot be registered by the public",
   "source": "deploy-evm.mjs",
-  "count": 488,
+  "count": 444,
   "names": [
     "qflink", "qfpad", "qfclash", "qfstream", "nucleusx", "quantumnotary",
     "quantum", "fusion", "quantumfusion", "dapp", "bridge", "governance",
@@ -57,13 +57,11 @@
     "ledger", "trezor", "phantom", "rabby", "rainbow",
     "google", "apple", "amazon", "microsoft", "meta", "tesla",
     "twitter", "discord", "telegram", "reddit", "youtube", "tiktok",
-    "alice", "james", "john", "michael", "sarah", "david", "emma",
-    "alex", "max", "sam", "chris", "dan", "tom", "jack", "nick",
+    "alex", "sam", "chris", "dan", "tom", "jack", "nick",
     "ryan", "mark", "paul", "luke", "adam", "jason", "kevin",
     "brian", "eric", "matt", "mike", "steve", "peter", "joe",
     "maria", "anna", "lisa", "kate", "jane", "rachel", "laura",
     "emily", "sophie", "olivia", "ella", "mia", "noah", "leo",
-    "omar", "ali", "ahmed", "hassan", "mohammed", "fatima", "aisha",
     "home", "root", "test", "demo", "info", "contact", "terms",
     "privacy", "search", "register", "renew", "manage", "settings",
     "app", "web", "welcome", "help", "support", "status", "blog",
