@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { X, Twitter, Copy, Check } from 'lucide-react';
 import { useWalletStore } from '../stores/walletStore';
 import {
@@ -31,8 +32,34 @@ const PLACEHOLDERS: Record<typeof TEXT_KEYS[number], string> = {
   telegram: '@username or https://t.me/username',
 };
 
+function ProfileCompletion({ textRecords }: { textRecords?: Record<string, string> }) {
+  if (!textRecords) return null;
+  
+  const fields = ['avatar', 'bio', 'twitter', 'telegram'];
+  const filled = fields.filter(f => textRecords[f] && textRecords[f].trim() !== '').length;
+  const total = fields.length;
+  const percentage = Math.round((filled / total) * 100);
+  
+  if (percentage === 100) return null; // Don't show when complete
+  
+  return (
+    <div className="flex items-center gap-2.5 mt-3">
+      {/* Mini progress bar */}
+      <div className="flex-1 max-w-[120px] h-1 rounded-full bg-white/[0.06] overflow-hidden">
+        <div
+          className="h-full rounded-full bg-[#00D179] transition-all duration-500"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <span className="text-[11px] text-[#444]">
+        {filled}/{total} profile fields
+      </span>
+    </div>
+  );
+}
+
 export default function MyNames() {
-  const { address, ss58Address, connect } = useWalletStore();
+  const { address, ss58Address, connect, qnsName } = useWalletStore();
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null);
@@ -101,6 +128,16 @@ export default function MyNames() {
   useEffect(() => {
     loadNames();
   }, [loadNames]);
+
+  // Eagerly load text records for all names to show completion
+  useEffect(() => {
+    if (names.length === 0) return;
+    names.forEach((item) => {
+      if (!textRecords[item.name]) {
+        loadTextRecords(item.name);
+      }
+    });
+  }, [names]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTextRecords = async (name: string) => {
     const records: Record<string, string> = {};
@@ -264,38 +301,69 @@ export default function MyNames() {
         </p>
 
         {!address && (
-          <div className="text-center py-12">
-            <p className="text-[#8A8A8A] mb-4 font-satoshi">
-              Connect your wallet to manage your <span className="text-[#00D179]">.qf</span> names
-            </p>
-            <button
-              onClick={connect}
-              className="px-6 py-3 rounded-xl border border-[#00D179] text-white font-medium hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
-            >
-              Connect Wallet
-            </button>
-          </div>
-        )}
+  <div className="text-center py-16">
+    <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5" strokeLinecap="round">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <path d="M2 10h20" />
+      </svg>
+    </div>
+    <p className="text-white font-medium mb-1">Connect to manage your names</p>
+    <p className="text-[#555] text-sm mb-6">
+      View, edit, renew, and share your <span className="text-[#00D179]">.qf</span> names
+    </p>
+    <button
+      onClick={connect}
+      className="px-6 py-3 rounded-xl border border-[#00D179]/30 text-white font-medium hover:bg-[#00D179]/10 transition-all duration-200 cursor-pointer"
+    >
+      Connect Wallet
+    </button>
+  </div>
+)}
 
         {address && loading && (
-          <div className="text-center py-12">
-            <div className="inline-block w-6 h-6 border-2 border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin" />
+  <div className="space-y-4">
+    {[1, 2].map((i) => (
+      <div key={i} className="bg-[#111] border border-white/[0.06] rounded-2xl p-6 md:p-8 animate-pulse">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-5 w-32 rounded bg-white/[0.06] mb-3" />
+            <div className="flex items-center gap-3">
+              <div className="h-4 w-16 rounded-full bg-white/[0.04]" />
+              <div className="h-3 w-28 rounded bg-white/[0.04]" />
+            </div>
           </div>
-        )}
+          <div className="flex gap-2">
+            <div className="h-7 w-16 rounded-lg bg-white/[0.04]" />
+            <div className="h-7 w-14 rounded-lg bg-white/[0.04]" />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 
         {address && !loading && names.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-[#8A8A8A] mb-4 font-satoshi">
-              You don't have any <span className="text-[#00D179]">.qf</span> names yet
-            </p>
-            <button
-              onClick={scrollToHero}
-              className="px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-bold transition-colors duration-200 cursor-pointer"
-            >
-              Register your first name
-            </button>
-          </div>
-        )}
+  <div className="text-center py-16">
+    {/* Preview card */}
+    <div className="max-w-[280px] mx-auto mb-8 rounded-2xl border border-white/[0.06] bg-[#111] p-6 opacity-40">
+      <div className="w-12 h-12 mx-auto rounded-full bg-gradient-to-br from-[#00D179]/30 to-[#00A060]/30 mb-3" />
+      <div className="h-4 w-24 mx-auto rounded bg-white/[0.06] mb-2" />
+      <div className="h-3 w-36 mx-auto rounded bg-white/[0.04]" />
+    </div>
+    
+    <p className="text-white font-medium mb-1">Your identity starts here</p>
+    <p className="text-[#555] text-sm mb-6 max-w-[300px] mx-auto">
+      Register a <span className="text-[#00D179]">.qf</span> name to get your profile, send and receive payments, and be recognized across every dApp.
+    </p>
+    <button
+      onClick={scrollToHero}
+      className="px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold transition-colors duration-200 cursor-pointer"
+    >
+      Register your first name
+    </button>
+  </div>
+)}
 
         {address && !loading && names.length > 0 && (
           <div className="space-y-4">
@@ -308,11 +376,19 @@ export default function MyNames() {
                   <div>
                     <h3 className="font-satoshi font-bold text-xl text-white">
                       {item.name}<span className="text-[#00D179]">.qf</span>
+                      {qnsName === item.name && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-[#00D179] bg-[#00D179]/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-[#00D179]" />
+                          Primary
+                        </span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-3 mt-1.5">
                       {getStatusBadge(item)}
                       <span className="text-sm text-[#8A8A8A]">{formatExpiry(item)}</span>
                     </div>
+                    {/* Profile completion indicator */}
+                    <ProfileCompletion textRecords={textRecords[item.name]} />
                   </div>
 
                   <div className="flex flex-wrap gap-2 mt-3">
@@ -353,41 +429,126 @@ export default function MyNames() {
                 </div>
 
                 {expandedProfile === item.name && (
-                  <div className="mt-5 pt-5 border-t border-[#1E1E1E] space-y-3 animate-fade-in">
-                    {TEXT_KEYS.map((key) => (
-                      <div key={key} className="flex items-center gap-3">
-                        <label className="w-20 text-sm text-[#8A8A8A] capitalize shrink-0">
-                          {key}
-                        </label>
-                        <input
-                          type="text"
-                          value={editValues[item.name]?.[key] ?? ''}
-                          onChange={(e) =>
-                            setEditValues((prev) => ({
-                              ...prev,
-                              [item.name]: {
-                                ...prev[item.name],
-                                [key]: e.target.value,
-                              },
-                            }))
-                          }
-                          placeholder={PLACEHOLDERS[key]}
-                          className="flex-1 bg-[#0A0A0A] border border-[#1E1E1E] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#00D179] transition-colors duration-200"
-                        />
-                        <button
-                          onClick={() => handleSaveField(item.name, key)}
-                          disabled={
-                            savingField === `${item.name}-${key}` ||
-                            (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
-                          }
-                          className="px-3 py-2 text-xs rounded-lg bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-30 transition-colors duration-200 cursor-pointer"
-                        >
-                          {savingField === `${item.name}-${key}` ? '...' : 'Save'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+  <motion.div
+    className="mt-5 pt-5 border-t border-white/[0.06]"
+    initial={{ opacity: 0, height: 0 }}
+    animate={{ opacity: 1, height: 'auto' }}
+    exit={{ opacity: 0, height: 0 }}
+    transition={{ duration: 0.25 }}
+  >
+    {/* Visual identity section */}
+    <p className="text-[10px] uppercase tracking-[0.15em] text-[#444] mb-4">Visual Identity</p>
+    <div className="space-y-3 mb-6">
+      {(['avatar'] as const).map((key) => (
+        <div key={key} className="group">
+          <label className="block text-xs text-[#555] mb-1.5 capitalize">{key}</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={editValues[item.name]?.[key] ?? ''}
+              onChange={(e) =>
+                setEditValues((prev) => ({
+                  ...prev,
+                  [item.name]: { ...prev[item.name], [key]: e.target.value },
+                }))
+              }
+              placeholder={PLACEHOLDERS[key]}
+              className="flex-1 bg-[#0A0A0A] border border-white/[0.06] rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-[#00D179]/40 transition-colors duration-200 placeholder:text-[#2a2a2a]"
+            />
+            <button
+              onClick={() => handleSaveField(item.name, key)}
+              disabled={
+                savingField === `${item.name}-${key}` ||
+                (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
+              }
+              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer shrink-0"
+            >
+              {savingField === `${item.name}-${key}` ? '...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Bio section */}
+    <p className="text-[10px] uppercase tracking-[0.15em] text-[#444] mb-4">About</p>
+    <div className="space-y-3 mb-6">
+      {(['bio'] as const).map((key) => (
+        <div key={key} className="group">
+          <label className="block text-xs text-[#555] mb-1.5 capitalize">{key}</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={editValues[item.name]?.[key] ?? ''}
+              onChange={(e) =>
+                setEditValues((prev) => ({
+                  ...prev,
+                  [item.name]: { ...prev[item.name], [key]: e.target.value },
+                }))
+              }
+              placeholder={PLACEHOLDERS[key]}
+              className="flex-1 bg-[#0A0A0A] border border-white/[0.06] rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-[#00D179]/40 transition-colors duration-200 placeholder:text-[#2a2a2a]"
+            />
+            <button
+              onClick={() => handleSaveField(item.name, key)}
+              disabled={
+                savingField === `${item.name}-${key}` ||
+                (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
+              }
+              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer shrink-0"
+            >
+              {savingField === `${item.name}-${key}` ? '...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Social links section */}
+    <p className="text-[10px] uppercase tracking-[0.15em] text-[#444] mb-4">Social Links</p>
+    <div className="space-y-3">
+      {(['twitter', 'telegram', 'github', 'url'] as const).map((key) => (
+        <div key={key} className="group">
+          <label className="block text-xs text-[#555] mb-1.5 capitalize">{key === 'url' ? 'Website' : key}</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={editValues[item.name]?.[key] ?? ''}
+              onChange={(e) =>
+                setEditValues((prev) => ({
+                  ...prev,
+                  [item.name]: { ...prev[item.name], [key]: e.target.value },
+                }))
+              }
+              placeholder={PLACEHOLDERS[key]}
+              className="flex-1 bg-[#0A0A0A] border border-white/[0.06] rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-[#00D179]/40 transition-colors duration-200 placeholder:text-[#2a2a2a]"
+            />
+            <button
+              onClick={() => handleSaveField(item.name, key)}
+              disabled={
+                savingField === `${item.name}-${key}` ||
+                (editValues[item.name]?.[key] ?? '') === (textRecords[item.name]?.[key] ?? '')
+              }
+              className="px-4 py-2.5 text-xs rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium disabled:opacity-20 disabled:cursor-default transition-all duration-200 cursor-pointer shrink-0"
+            >
+              {savingField === `${item.name}-${key}` ? '...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* View profile link */}
+    <div className="mt-6 pt-4 border-t border-white/[0.04]">
+      <Link
+        to={`/name/${item.name}`}
+        className="text-sm text-[#00D179] hover:text-[#00B868] transition-colors"
+      >
+        View public profile →
+      </Link>
+    </div>
+  </motion.div>
+)}
               </div>
             ))}
           </div>

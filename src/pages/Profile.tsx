@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
 import { Gift, Share2, Check, ArrowLeft, Loader2, Twitter, Send, X } from 'lucide-react';
 import { parseEther } from 'viem';
@@ -98,6 +98,9 @@ const SOCIAL_CONFIG = {
 
 export default function ProfilePage() {
   const { name } = useParams<{ name: string }>();
+  const navigate = useNavigate();
+  const { qnsName } = useWalletStore();
+  const showVisitorCTA = !qnsName; // Show if visitor has no .qf name
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -296,20 +299,32 @@ export default function ProfilePage() {
 
   // Fetch balance when modal opens or address changes
   useEffect(() => {
-    if (giftModalOpen && balanceAddress) {
-      const fetchBal = ss58Address 
-        ? getSubstrateQFBalance(ss58Address)
-        : getQFBalance(senderAddress!);
-      
-      fetchBal.then((bal) => {
-        if (bal === 0n && senderAddress && ss58Address) {
-          // Fallback: try the other path
-          return getQFBalance(senderAddress).then(setSenderBalance);
+    if (!giftModalOpen) return;
+    
+    const fetchBalance = async () => {
+      try {
+        // Prefer SS58 path (Substrate native) — this is the reliable source
+        if (ss58Address) {
+          const bal = await getSubstrateQFBalance(ss58Address);
+          if (bal > 0n) {
+            setSenderBalance(bal);
+            return;
+          }
         }
-        setSenderBalance(bal);
-      }).catch(console.error);
-    }
-  }, [giftModalOpen, balanceAddress]);
+        // Fallback to EVM path
+        if (senderAddress) {
+          const bal = await getQFBalance(senderAddress);
+          setSenderBalance(bal);
+          return;
+        }
+        setSenderBalance(0n);
+      } catch {
+        setSenderBalance(0n);
+      }
+    };
+    
+    fetchBalance();
+  }, [giftModalOpen, ss58Address, senderAddress]);
 
   // Gift modal handlers
   const openGiftModal = async () => {
@@ -479,11 +494,31 @@ export default function ProfilePage() {
 
   if (error || !profile?.exists) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-gray-500 mb-4">{error || 'This name has not been claimed yet'}</p>
-          <Link to="/" className="inline-flex items-center gap-2 text-[#00D179] hover:text-[#00B868] transition-colors">
-            <ArrowLeft size={16} />
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          {/* Show the name prominently even though it's unclaimed */}
+          {name && !error && (
+            <p className="font-clash font-semibold text-2xl text-white mb-2">
+              {name.replace(/\.qf$/, '')}<span className="text-[#00D179]">.qf</span>
+            </p>
+          )}
+          <p className="text-[#555] mb-6">{error || 'This name hasn\'t been claimed yet'}</p>
+          
+          {/* If name is valid and unclaimed, offer to register it */}
+          {!error && name && (
+            <Link
+              to={`/?search=${encodeURIComponent(name.replace(/\.qf$/, ''))}`}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors duration-200"
+            >
+              Register {name.replace(/\.qf$/, '')}<span>.qf</span>
+            </Link>
+          )}
+          
+          <Link
+            to="/"
+            className="block mt-4 text-sm text-[#555] hover:text-white transition-colors"
+          >
+            <ArrowLeft size={14} className="inline mr-1" />
             Back to home
           </Link>
         </div>
@@ -644,6 +679,29 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
+      {/* Visitor CTA — nudge viewers to register their own */}
+      {showVisitorCTA && profile?.exists && (
+        <motion.div
+          className="mt-8 w-full max-w-md"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
+        >
+          <div className="rounded-2xl border border-white/[0.06] bg-[#111]/80 backdrop-blur-sm p-6 text-center">
+            <p className="text-[#666] text-sm mb-1">Want your own identity on QF Network?</p>
+            <p className="text-white font-medium mb-4">
+              Claim your <span className="text-[#00D179]">.qf</span> name in seconds
+            </p>
+            <button
+              onClick={() => navigate('/')}
+              className="px-6 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors duration-200 cursor-pointer"
+            >
+              Register a name
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Gift Modal */}
       <AnimatePresence>
         {giftModalOpen && profile && (
@@ -799,6 +857,13 @@ export default function ProfilePage() {
                         <Twitter size={18} />
                         Share on X
                       </button>
+                      <Link
+                        to={`/name/${profile.name}`}
+                        onClick={closeGiftModal}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/[0.08] text-[#666] hover:text-white hover:border-white/[0.15] transition-all duration-200 text-sm"
+                      >
+                        View {profile.name}<span className="text-[#00D179]">.qf</span> profile
+                      </Link>
                       <button
                         onClick={closeGiftModal}
                         className="text-sm text-gray-500 hover:text-white transition-colors duration-200 py-2"

@@ -18,6 +18,7 @@ import AdminLayout from './components/admin/AdminLayout';
 import { ToastProvider } from './contexts/ToastContext';
 import PageTransition from './components/PageTransition';
 import WalletModal from './components/WalletModal';
+import CommandPalette from './components/CommandPalette';
 import { initializeConnectionWatcher, cleanupConnectionWatcher } from './stores/connectionStore';
 
 function LandingPage() {
@@ -99,6 +100,7 @@ function App() {
   return (
     <ToastProvider>
       <BrowserRouter>
+        <CommandPalette />
         <ScrollToTop />
         <AnimatedRoutes />
         <WalletModal />

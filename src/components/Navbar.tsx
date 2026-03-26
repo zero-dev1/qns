@@ -4,7 +4,7 @@ import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Copy, LogOut, Wallet, X, Info } from 'lucide-react';
+import { Copy, LogOut, Wallet, X, Info, Search } from 'lucide-react';
 import { getSubstrateQFBalance, formatQF } from '../utils/qns';
 import { useCopy } from '../hooks/useCopy';
 import { truncateAddress } from '../utils/address';
@@ -117,6 +117,19 @@ export default function Navbar() {
             >
               My Names
             </Link>
+
+            {/* Command palette shortcut hint — desktop only */}
+            <button
+              onClick={() => {
+                // Dispatch the same keyboard event the palette listens for
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+              }}
+              className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] text-[11px] text-[#444] hover:text-[#666] hover:border-white/[0.1] transition-all duration-200 cursor-pointer"
+              title="Search (⌘K)"
+            >
+              <Search size={12} />
+              <kbd className="font-mono">⌘K</kbd>
+            </button>
 
             {address ? (
               <div className="relative" ref={dropdownRef}>
