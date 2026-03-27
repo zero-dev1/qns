@@ -75,7 +75,7 @@ const showVisitorCTA = !isOwnProfile;
   const { showToast } = useToast();
   
   // Gift modal state
-  const { address: senderAddress, ss58Address, connect, connecting } = useWalletStore();
+  const { address: senderAddress, ss58Address, connect, connecting, providerType } = useWalletStore();
   const [giftModalOpen, setGiftModalOpen] = useState(false);
   const [giftAmount, setGiftAmount] = useState('');
   const [senderBalance, setSenderBalance] = useState<bigint>(0n);
@@ -236,15 +236,21 @@ const showVisitorCTA = !isOwnProfile;
   };
 
   // Get the address to use for balance queries
-  const balanceAddress = ss58Address || senderAddress;
+  const balanceAddress = providerType === 'evm' ? senderAddress : (ss58Address || senderAddress);
 
   // Fetch balance when modal opens or address changes
   useEffect(() => {
     if (!giftModalOpen) return;
-    
+
     const fetchBalance = async () => {
       try {
-        // Prefer SS58 path (Substrate native) — this is the reliable source
+        if (providerType === 'evm' && senderAddress) {
+          const { evmGetBalance } = await import('../utils/evmContractCall');
+          const bal = await evmGetBalance(senderAddress);
+          setSenderBalance(bal);
+          return;
+        }
+        // Substrate: SS58-first, EVM fallback
         if (ss58Address) {
           const bal = await getSubstrateQFBalance(ss58Address);
           if (bal > 0n) {
@@ -252,7 +258,6 @@ const showVisitorCTA = !isOwnProfile;
             return;
           }
         }
-        // Fallback to EVM path
         if (senderAddress) {
           const bal = await getQFBalance(senderAddress);
           setSenderBalance(bal);
@@ -263,9 +268,9 @@ const showVisitorCTA = !isOwnProfile;
         setSenderBalance(0n);
       }
     };
-    
+
     fetchBalance();
-  }, [giftModalOpen, ss58Address, senderAddress]);
+  }, [giftModalOpen, ss58Address, senderAddress, providerType]);
 
   // Gift modal handlers
   const openGiftModal = async () => {
@@ -291,24 +296,27 @@ const showVisitorCTA = !isOwnProfile;
 
   const handleSendGift = async () => {
     if (!senderAddress || !profile?.address || !giftAmount) return;
-    
+
     // Early return if button should be disabled
     if (sendDisabled) return;
-    
+
     const amount = parseFloat(giftAmount);
     if (isNaN(amount) || amount <= 0) {
       setGiftError('Please enter a valid amount');
       return;
     }
 
-    // Check balance — SS58-first, EVM fallback
+    // Check balance
     if (!balanceAddress) {
       setGiftError('No wallet connected');
       return;
     }
     let balance = 0n;
     try {
-      if (ss58Address) {
+      if (providerType === 'evm') {
+        const { evmGetBalance } = await import('../utils/evmContractCall');
+        balance = await evmGetBalance(senderAddress);
+      } else if (ss58Address) {
         balance = await getSubstrateQFBalance(ss58Address);
         if (balance === 0n && senderAddress) {
           balance = await getQFBalance(senderAddress);
@@ -321,7 +329,7 @@ const showVisitorCTA = !isOwnProfile;
     }
     const requiredAmount = parseEther(giftAmount);
     const gasBuffer = 500000000000000000n; // 0.5 QF
-    
+
     if (balance < requiredAmount + gasBuffer) {
       setGiftError('Insufficient QF balance');
       return;
@@ -331,22 +339,35 @@ const showVisitorCTA = !isOwnProfile;
     setGiftError(null);
 
     try {
-      const walletClient = getWalletClient();
-      if (!walletClient) throw new Error('No wallet connected');
+      let txHash: string | undefined;
+      let confirmation: Promise<{ confirmed: boolean; error?: string }>;
 
-      const signerAddress = ss58Address || senderAddress;
-      const { txHash, confirmation } = await walletClient.sendTransaction({
-        to: profile.address as `0x${string}`,
-        value: requiredAmount,
-        account: signerAddress,
-        verifyOnChain: async () => {
-          // For gifts, the confirmation event itself is sufficient.
-          // We can't easily verify balance changes without knowing the exact prior balance.
-          return true; // rely on PAPI event, not balance check
-        },
-      });
+      if (providerType === 'evm') {
+        // MetaMask: use EVM transfer
+        const { evmSendTransfer } = await import('../utils/evmContractCall');
+        const result = await evmSendTransfer(
+          profile.address,
+          requiredAmount,
+          async () => true // rely on receipt, not balance check
+        );
+        txHash = result.txHash;
+        confirmation = result.confirmation;
+      } else {
+        // Substrate: use PAPI transfer
+        const walletClient = getWalletClient();
+        if (!walletClient) throw new Error('No wallet connected');
+        const signerAddress = ss58Address || senderAddress;
+        const result = await walletClient.sendTransaction({
+          to: profile.address as `0x${string}`,
+          value: requiredAmount,
+          account: signerAddress,
+          verifyOnChain: async () => true,
+        });
+        txHash = result.txHash;
+        confirmation = result.confirmation;
+      }
 
-      setTxHash(txHash);
+      setTxHash(txHash || null);
       setGiftSuccess(true);
 
       // Background confirmation
@@ -356,28 +377,25 @@ const showVisitorCTA = !isOwnProfile;
           setGiftError('Gift submitted but not yet confirmed on-chain. It may still arrive shortly.');
           return;
         }
-        // Check if this is a retryable error
         if (result.error && isRetryableError(result.error)) {
           setGiftSuccess(false);
           setGiftError(RETRY_MESSAGE_SHORT);
           showToast(RETRY_MESSAGE_SHORT, 'warning');
           return;
         }
-        // Hard failure
         setGiftSuccess(false);
         setGiftError(`Gift failed on-chain: ${result.error}. Your balance was not deducted.`);
       });
     } catch (err: any) {
       console.error('Gift send error:', err);
       const msg = err?.message ?? String(err);
-      
-      // Check if this is a retryable error
+
       if (isRetryableError(msg)) {
         setGiftError(RETRY_MESSAGE_SHORT);
         showToast(RETRY_MESSAGE_SHORT, 'warning');
         return;
       }
-      
+
       if (msg.includes('rejected') || msg.includes('Rejected') || msg.includes('Cancelled') || msg.includes('cancelled')) {
         setGiftError('Transaction cancelled.');
       } else {

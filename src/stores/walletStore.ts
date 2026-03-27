@@ -312,26 +312,27 @@ export const useWalletStore = create<WalletState>()(
       },
 
       refreshName: async () => {
-        const { address } = get();
+        const { address, qnsName: existingName } = get();
         if (!address) return;
         try {
           const { resolveReverse } = await import('../utils/qns');
           const name = await resolveReverse(address);
           if (name) {
+            // Chain returned a name — update
             set({ qnsName: name, displayName: name });
-          } else {
+          } else if (!existingName) {
+            // No name on chain AND no optimistic name — show truncated address
             const { ss58Address } = get();
             set({
               qnsName: null,
               displayName: ss58Address ? truncateAddress(ss58Address) : truncateAddress(address),
             });
           }
+          // If name is null but existingName is set, do nothing —
+          // the optimistic name persists until disconnect or until
+          // the chain eventually confirms the reverse record.
         } catch {
-          const { ss58Address } = get();
-          set({
-            qnsName: null,
-            displayName: ss58Address ? truncateAddress(ss58Address) : truncateAddress(address),
-          });
+          // On error, preserve whatever we have — don't clear optimistic state
         }
       },
 

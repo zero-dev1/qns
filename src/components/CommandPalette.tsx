@@ -157,7 +157,7 @@ export default function CommandPalette() {
     actionItems.push({
       id: 'connect',
       label: 'Connect Wallet',
-      description: 'Connect Talisman or SubWallet',
+      description: 'Talisman, SubWallet, or MetaMask',
       icon: <Settings size={16} />,
       action: () => { close(); connect(); },
       category: 'action',

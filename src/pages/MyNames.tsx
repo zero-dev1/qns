@@ -388,12 +388,15 @@ const NameCard = ({
 };
 
 export default function MyNamesPage() {
-  const { address, ss58Address, connect, refreshName } = useWalletStore();
+  const { address, ss58Address, connect, refreshName, providerType } = useWalletStore();
   const { refreshNames } = useNamesStore();
   const { showToast } = useToast();
   const { copy } = useCopy();
   const [searchParams] = useSearchParams();
   const expandName = searchParams.get('expand');
+
+  // Compute the correct signer address based on provider type
+  const signerAddress = providerType === 'evm' ? address : (ss58Address || address);
 
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
@@ -618,7 +621,7 @@ export default function MyNamesPage() {
       // Call setMultipleTexts if there are changes
       if (keys.length > 0) {
         try {
-          const signerAddress = ss58Address || address;
+          if (!signerAddress) throw new Error('No wallet connected');
           const { confirmation } = await setMultipleTextRecords(name, keys, values, signerAddress);
 
           // Optimistic update
@@ -670,7 +673,8 @@ export default function MyNamesPage() {
     if (!address) return;
     setSettingPrimary(name);
     try {
-      const { confirmation } = await setPrimaryName(name, address, ss58Address || address);
+      if (!signerAddress) throw new Error('No wallet connected');
+      const { confirmation } = await setPrimaryName(name, address, signerAddress);
 
       // Optimistic
       setPrimaryNameState(name);
@@ -732,8 +736,8 @@ export default function MyNamesPage() {
     if (!address) return;
     setRenewingName(name);
     setRenewError(null);
-    const signerAddress = ss58Address || address;
     try {
+      if (!signerAddress) throw new Error('No wallet connected');
       const { confirmation } = await renewName(name, years, signerAddress);
 
       // Optimistic update immediately
@@ -845,7 +849,7 @@ export default function MyNamesPage() {
         return;
       }
 
-      const signerAddress = ss58Address || address;
+      if (!signerAddress) throw new Error('No wallet connected');
       const { confirmation } = await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
 
       // Optimistic removal

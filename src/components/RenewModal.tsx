@@ -56,23 +56,31 @@ export default function RenewModal({ name, currentExpiry, nameLength, onClose, o
   });
   const [userBalance, setUserBalance] = useState<bigint>(0n);
   const [loading, setLoading] = useState(true);
-  const { address, ss58Address } = useWalletStore();
+  const { address, ss58Address, providerType } = useWalletStore();
 
   const gasBuffer = 500000000000000000n; // 0.5 QF
 
   useEffect(() => {
     const loadData = async () => {
-      if (!address || !ss58Address) return;
-      
+      // Need at least an address to proceed
+      if (!address) return;
+      // Substrate users must also have ss58Address
+      if (providerType !== 'evm' && !ss58Address) return;
+
       try {
         const [contractPrices] = await Promise.all([
           getContractPrices(),
         ]);
 
-        // Fetch balance: SS58-first (Substrate native), EVM fallback
+        // Fetch balance based on provider type
         let balance = 0n;
         try {
-          if (ss58Address) {
+          if (providerType === 'evm') {
+            // MetaMask: use EVM balance directly
+            const { evmGetBalance } = await import('../utils/evmContractCall');
+            balance = await evmGetBalance(address);
+          } else if (ss58Address) {
+            // Substrate: SS58-first, EVM fallback
             const substrateBal = await getSubstrateQFBalance(ss58Address);
             if (substrateBal > 0n) {
               balance = substrateBal;
@@ -85,7 +93,7 @@ export default function RenewModal({ name, currentExpiry, nameLength, onClose, o
         } catch {
           balance = 0n;
         }
-        
+
         setPrices({
           price3Char: contractPrices.price3Char,
           price4Char: contractPrices.price4Char,
@@ -93,10 +101,10 @@ export default function RenewModal({ name, currentExpiry, nameLength, onClose, o
           permanentMultiplier: contractPrices.permanentMultiplier,
         });
         setUserBalance(balance);
-        
-        // Select the most expensive option the user can afford, or nothing if they can't afford any
+
+        // Select the most expensive option the user can afford
         const options = [5, 3, 2, 1];
-        let selected = 0; // 0 means nothing selected
+        let selected = 0;
         for (const years of options) {
           const cost = calculatePrice(nameLength, years, false, contractPrices);
           if (balance >= cost + gasBuffer) {
@@ -111,9 +119,9 @@ export default function RenewModal({ name, currentExpiry, nameLength, onClose, o
         setLoading(false);
       }
     };
-    
+
     loadData();
-  }, [address, ss58Address, nameLength]);
+  }, [address, ss58Address, providerType, nameLength]);
 
   const canAffordOption = (years: number) => {
     const cost = calculatePrice(nameLength, years, false, prices);
