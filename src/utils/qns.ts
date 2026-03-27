@@ -8,6 +8,20 @@ import {
   QNS_RESOLVER_ABI,
 } from '../config/contracts';
 
+/**
+ * Returns the current provider type from the wallet store.
+ * Used to route calls to either PAPI (substrate) or viem (evm).
+ */
+async function getProviderType(): Promise<'substrate' | 'evm' | null> {
+  try {
+    // Dynamic import to avoid circular dependency issues at module load time
+    const { useWalletStore } = await import('../stores/walletStore');
+    return useWalletStore.getState().providerType;
+  } catch {
+    return null;
+  }
+}
+
 // Cast readonly ABIs to mutable any[] for ethers.js compatibility
 const REGISTRAR_ABI = QNS_REGISTRAR_ABI as unknown as any[];
 const RESOLVER_ABI = QNS_RESOLVER_ABI as unknown as any[];
@@ -349,6 +363,24 @@ export async function registerName(
   account: string
 ): Promise<TxResult> {
   const fee = await getPrice(name, years, permanent);
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS,
+      REGISTRAR_ABI,
+      'register',
+      [name, years, permanent],
+      BigInt(fee?.toString() || '0'),
+      async () => {
+        const available = await checkAvailability(name);
+        return !available;
+      }
+    );
+  }
+
+  // Substrate path (existing)
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'register',
     [name, years, permanent], account, BigInt(fee?.toString() || '0'),
@@ -367,6 +399,21 @@ export async function renewName(
 ): Promise<TxResult> {
   const fee = await getPrice(name, years, false);
   const regBefore = await getRegistration(name).catch(() => null);
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'renew',
+      [name, years], fee,
+      async () => {
+        const regAfter = await getRegistration(name);
+        if (!regAfter || !regBefore) return false;
+        return regAfter.expires > regBefore.expires;
+      }
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'renew',
     [name, years], account, fee,
@@ -388,6 +435,20 @@ export async function transferNameOnChain(
     const { deriveEVMAddress } = await import('./wallet');
     evmOwner = deriveEVMAddress(newOwner);
   }
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'transferName',
+      [name, evmOwner], 0n,
+      async () => {
+        const reg = await getRegistration(name);
+        return !!reg && reg.owner.toLowerCase() === evmOwner.toLowerCase();
+      }
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'transferName',
     [name, evmOwner], account, 0n,
@@ -414,7 +475,20 @@ export async function setTextRecord(
   account: string
 ): Promise<TxResult> {
   const node = namehash(`${name}.qf`);
-  
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setText',
+      [node, key, value], 0n,
+      async () => {
+        const stored = await getTextRecord(name, key);
+        return stored === value;
+      }
+    );
+  }
+
   return writeContract(
     QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setText',
     [node, key, value], account, 0n,
@@ -432,7 +506,20 @@ export async function setMultipleTextRecords(
   account: string
 ): Promise<TxResult> {
   const node = namehash(`${name}.qf`);
-  
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setMultipleTexts',
+      [node, keys, values], 0n,
+      keys.length > 0 ? async () => {
+        const stored = await getTextRecord(name, keys[0]);
+        return stored === values[0];
+      } : undefined
+    );
+  }
+
   return writeContract(
     QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setMultipleTexts',
     [node, keys, values], account, 0n,
@@ -449,7 +536,20 @@ export async function setPrimaryName(
   signerAddress: string
 ): Promise<TxResult> {
   const nameNode = namehash(`${name}.qf`);
-  
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setReverse',
+      [evmAddress, nameNode], 0n,
+      async () => {
+        const resolved = await resolveReverse(evmAddress);
+        return resolved === name;
+      }
+    );
+  }
+
   return writeContract(
     QNS_RESOLVER_ADDRESS, RESOLVER_ABI, 'setReverse',
     [evmAddress, nameNode], signerAddress, 0n,
@@ -526,6 +626,11 @@ export async function getQFBalance(address: string): Promise<bigint> {
 
 
 export async function getSubstrateQFBalance(ss58Address: string): Promise<bigint> {
+  // If the address looks like an EVM address, use EVM balance
+  if (ss58Address.startsWith('0x') && ss58Address.length === 42) {
+    const { evmGetBalance } = await import('./evmContractCall');
+    return evmGetBalance(ss58Address);
+  }
   return getQFBalance(ss58Address);
 }
 
@@ -535,6 +640,16 @@ export async function hasMinimumBalance(ss58Address: string, minBalance: bigint 
 }
 
 export async function reserveName(name: string, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'reserveName',
+      [name], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'reserveName',
     [name], account, 0n, undefined
@@ -542,6 +657,16 @@ export async function reserveName(name: string, account: string): Promise<TxResu
 }
 
 export async function unreserveName(name: string, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'unreserveName',
+      [name], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'unreserveName',
     [name], account, 0n, undefined
@@ -549,6 +674,16 @@ export async function unreserveName(name: string, account: string): Promise<TxRe
 }
 
 export async function assignReservedName(name: string, to: string, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'assignReservedName',
+      [name, to], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'assignReservedName',
     [name, to], account, 0n, undefined
@@ -561,6 +696,16 @@ export async function setPrice(
   new5Plus: bigint,
   account: string
 ): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setPrice',
+      [new3, new4, new5Plus], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setPrice',
     [new3, new4, new5Plus], account, 0n, undefined
@@ -568,6 +713,16 @@ export async function setPrice(
 }
 
 export async function setPermanentMultiplier(newMult: bigint, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setPermanentMultiplier',
+      [newMult], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setPermanentMultiplier',
     [newMult], account, 0n, undefined
@@ -575,6 +730,16 @@ export async function setPermanentMultiplier(newMult: bigint, account: string): 
 }
 
 export async function setBurnPercent(newPercent: bigint, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setBurnPercent',
+      [newPercent], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setBurnPercent',
     [newPercent], account, 0n, undefined
@@ -582,6 +747,16 @@ export async function setBurnPercent(newPercent: bigint, account: string): Promi
 }
 
 export async function setTreasury(newTreasury: string, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setTreasury',
+      [newTreasury], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setTreasury',
     [newTreasury], account, 0n, undefined
@@ -589,6 +764,16 @@ export async function setTreasury(newTreasury: string, account: string): Promise
 }
 
 export async function setBurnAddress(newBurn: string, account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setBurnAddress',
+      [newBurn], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'setBurnAddress',
     [newBurn], account, 0n, undefined
@@ -596,6 +781,16 @@ export async function setBurnAddress(newBurn: string, account: string): Promise<
 }
 
 export async function withdrawToTreasury(account: string): Promise<TxResult> {
+  const providerType = await getProviderType();
+
+  if (providerType === 'evm') {
+    const { evmWriteContract } = await import('./evmContractCall');
+    return evmWriteContract(
+      QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'withdrawToTreasury',
+      [], 0n, undefined
+    );
+  }
+
   return writeContract(
     QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'withdrawToTreasury',
     [], account, 0n, undefined

@@ -21,18 +21,31 @@ const SubWalletIcon = () => (
   </svg>
 );
 
+const MetaMaskIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20.5 3.5L13 9l1.5-3.5L20.5 3.5z" fill="#E2761B" stroke="#E2761B" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M3.5 3.5L11 9.1 9.5 5.5 3.5 3.5z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M17.5 16.5L15.5 19.5 20 21l1.5-4.5-4 0z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M2.5 16.5L4 21l4.5-1.5-2-3H2.5z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8.5 10.5l-1.5 2 5 .5-.5-5.5-3 3z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M15.5 10.5l3-3-.5 5.5 5-.5-1.5-2h-6z" fill="#E4761B" stroke="#E4761B" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 
 
 interface WalletOption {
-  id: 'talisman' | 'subwallet';
+  id: 'talisman' | 'subwallet' | 'metamask';
   name: string;
   icon: React.ReactNode;
+  description?: string;
 }
 
 export default function WalletModal() {
   const { 
     connecting, 
     connectWallet,
+    connectMetaMask,
     showWalletModal,
     setShowWalletModal,
     walletError,
@@ -44,8 +57,23 @@ export default function WalletModal() {
   // Get wallet options based on WALLET_MODE
   const getWalletOptions = (): WalletOption[] => {
     return [
-      { id: 'talisman', name: 'Talisman', icon: <TalismanIcon /> },
-      { id: 'subwallet', name: 'SubWallet', icon: <SubWalletIcon /> }
+      {
+        id: 'talisman',
+        name: 'Talisman',
+        icon: <TalismanIcon />,
+        description: 'Recommended for QF Network',
+      },
+      {
+        id: 'subwallet',
+        name: 'SubWallet',
+        icon: <SubWalletIcon />,
+      },
+      {
+        id: 'metamask',
+        name: 'MetaMask',
+        icon: <MetaMaskIcon />,
+        description: 'EVM wallet',
+      },
     ];
   };
 
@@ -76,21 +104,27 @@ export default function WalletModal() {
     }
   }, [showWalletModal]);
 
-  const handleWalletSelect = async (walletType: 'talisman' | 'subwallet') => {
+  const handleWalletSelect = async (walletType: 'talisman' | 'subwallet' | 'metamask') => {
     try {
       clearWalletError();
-      await connectWallet(walletType);
-      
-      // If connection failed on mobile, override with mobile-specific guidance
-      const currentError = useWalletStore.getState().walletError;
-      if (currentError && isMobile()) {
-        const walletName = walletType === 'talisman' ? 'Talisman' : 'SubWallet';
-        useWalletStore.getState().clearWalletError();
-        useWalletStore.setState({ 
-          walletError: `Open this dApp inside ${walletName}'s built-in browser to connect on mobile.` 
-        });
+      if (walletType === 'metamask') {
+        await connectMetaMask();
+      } else {
+        await connectWallet(walletType);
       }
-    } catch (err: any) {
+
+      // Mobile override for substrate wallets (MetaMask has its own mobile flow)
+      if (walletType !== 'metamask') {
+        const currentError = useWalletStore.getState().walletError;
+        if (currentError && isMobile()) {
+          const walletName = walletType === 'talisman' ? 'Talisman' : 'SubWallet';
+          useWalletStore.getState().clearWalletError();
+          useWalletStore.setState({ 
+            walletError: `Open this dApp inside ${walletName}'s built-in browser to connect on mobile.` 
+          });
+        }
+      }
+    } catch {
       // Error handled in store
     }
   };
@@ -165,6 +199,9 @@ export default function WalletModal() {
                   </div>
                   <div className="flex-1 text-left">
                     <span className="font-medium">{wallet.name}</span>
+                    {wallet.description && (
+                      <p className="text-xs text-[#8A8A8A] mt-0.5">{wallet.description}</p>
+                    )}
                   </div>
                   <div className="text-[#8A8A8A] group-hover:text-[#00D179] transition-colors">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -178,7 +215,7 @@ export default function WalletModal() {
             {/* Footer */}
             <div className="px-6 py-4 border-t border-white/5 bg-white/[0.01]">
               <p className="text-xs text-center text-[#8A8A8A]">
-                New to QF Network? Get{' '}
+                For the fastest experience on QF Network, we recommend{' '}
                 <a 
                   href="#" 
                   className="text-[#00D179] hover:underline"
@@ -188,17 +225,6 @@ export default function WalletModal() {
                   }}
                 >
                   Talisman
-                </a>{' '}
-                or{' '}
-                <a 
-                  href="#" 
-                  className="text-[#00D179] hover:underline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.open('https://subwallet.app', '_blank');
-                  }}
-                >
-                  SubWallet
                 </a>
               </p>
             </div>

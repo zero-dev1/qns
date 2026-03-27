@@ -29,7 +29,7 @@ export default function RegistrationPanel({
   onRegisterSuccess,
 }: RegistrationPanelProps) {
   const navigate = useNavigate();
-  const { address, ss58Address, connect, refreshName } = useWalletStore();
+  const { address, ss58Address, connect, refreshName, providerType } = useWalletStore();
   const { setOwnedNames, ownedNames: existingStoreNames } = useNamesStore();
   const { showToast } = useToast();
 
@@ -67,7 +67,7 @@ export default function RegistrationPanel({
 
     setSavingRecords(true);
     try {
-      const signerAddress = ss58Address || address;
+      const signerAddress = providerType === 'evm' ? address : (ss58Address || address);
       await setMultipleTextRecords(selectedName, keys, values, signerAddress);
     } catch {
       // Silent fail — don't block onboarding. User can edit later in My Names.
@@ -96,7 +96,13 @@ export default function RegistrationPanel({
   useEffect(() => {
     const fetchBalance = async () => {
       try {
-        // Prefer SS58 path (Substrate native) — this is the reliable source
+        if (providerType === 'evm' && address) {
+          const { evmGetBalance } = await import('../../utils/evmContractCall');
+          const bal = await evmGetBalance(address);
+          setUserBalance(bal);
+          return;
+        }
+        // Existing SS58-first path for Substrate users
         if (ss58Address) {
           const bal = await getSubstrateQFBalance(ss58Address);
           if (bal > 0n) {
@@ -104,7 +110,6 @@ export default function RegistrationPanel({
             return;
           }
         }
-        // Fallback to EVM path
         if (address) {
           const bal = await getQFBalance(address);
           setUserBalance(bal);
@@ -116,7 +121,7 @@ export default function RegistrationPanel({
       }
     };
     fetchBalance();
-  }, [ss58Address, address]);
+  }, [ss58Address, address, providerType]);
 
   // Auto-advance onboarding flow
   useEffect(() => {
@@ -169,7 +174,7 @@ export default function RegistrationPanel({
       errorDismissTimerRef.current = null;
     }
     try {
-      const signerAddress = ss58Address || address;
+      const signerAddress = providerType === 'evm' ? address : (ss58Address || address);
       const { confirmation } = await registerName(selectedName, duration.years, duration.permanent, signerAddress);
 
       // === INSTANT SUCCESS (on broadcast) ===

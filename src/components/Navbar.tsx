@@ -19,7 +19,8 @@ export default function Navbar() {
     qnsName, 
     connecting, 
     connect, 
-    disconnect
+    disconnect,
+    providerType
   } = useWalletStore();
   const { isConnected, isConnecting } = useConnectionStore();
   const ownedNames = useNamesStore((state) => state.ownedNames);
@@ -44,18 +45,20 @@ export default function Navbar() {
   // Fetch balance and names when dropdown opens or address changes
   useEffect(() => {
     if (dropdownOpen && address) {
-      // For substrate wallets, fetch substrate balance
-      if (ss58Address) {
+      if (providerType === 'evm') {
+        import('../utils/evmContractCall').then(({ evmGetBalance }) => {
+          evmGetBalance(address).then(setBalance);
+        });
+      } else if (ss58Address) {
         getSubstrateQFBalance(ss58Address).then(setBalance);
       } else {
-        // For EVM wallets, fetch EVM balance
         import('../utils/qns').then(({ getQFBalance }) => {
           getQFBalance(address).then(setBalance);
         });
       }
       doRefreshNames(address);
     }
-  }, [dropdownOpen, address, ss58Address, doRefreshNames]);
+  }, [dropdownOpen, address, ss58Address, providerType, doRefreshNames]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -234,10 +237,10 @@ export default function Navbar() {
                         <p className="mb-2 text-xs text-[#8A8A8A]">Wallet Address</p>
                         <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
                           <code className="min-w-0 flex-1 truncate text-sm font-mono text-gray-400">
-                            {ss58Address || address}
+                            {providerType === 'evm' ? address : (ss58Address || address)}
                           </code>
                           <button
-                            onClick={() => copyAddress(ss58Address || address)}
+                            onClick={() => copyAddress(providerType === 'evm' ? address : (ss58Address || address))}
                             className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer"
                             title="Copy address"
                           >
@@ -245,7 +248,7 @@ export default function Navbar() {
                             {copied ? 'Copied!' : 'Copy'}
                           </button>
                         </div>
-                        {ss58Address && (
+                        {providerType === 'substrate' && ss58Address && (
                           <p className="mt-2 text-xs text-[#8A8A8A]">
                             EVM: {truncateAddress(address || '')}
                           </p>
@@ -265,7 +268,7 @@ export default function Navbar() {
                         )}
                       </div>
 
-                      {ss58Address && (
+                      {providerType === 'substrate' && ss58Address && (
                         <div className="border-t border-white/5 px-4 py-3">
                           <button
                             onClick={handleShowAccountInfo}
@@ -340,7 +343,7 @@ export default function Navbar() {
 
       {/* Account Info Modal */}
       <AnimatePresence>
-        {showAccountInfo && ss58Address && (
+        {showAccountInfo && ((providerType === 'substrate' && ss58Address) || (providerType === 'evm' && address)) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -377,28 +380,10 @@ export default function Navbar() {
 
               {/* Address Info */}
               <div className="p-6 space-y-6">
-                {/* Substrate Address */}
-                <div>
-                  <p className="mb-2 text-xs text-[#8A8A8A]">Your QF Address (Substrate)</p>
-                  <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-                    <code className="min-w-0 flex-1 break-all text-sm font-mono text-gray-400">
-                      {ss58Address}
-                    </code>
-                    <button
-                      onClick={() => copyAddress(ss58Address)}
-                      className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer border border-white/10"
-                      title="Copy Substrate address"
-                    >
-                      <Copy size={14} />
-                      {copied ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* EVM Address */}
-                {address && (
+                {/* For MetaMask users, only show EVM address */}
+                {providerType === 'evm' ? (
                   <div>
-                    <p className="mb-2 text-xs text-[#8A8A8A]">Your Derived EVM Address</p>
+                    <p className="mb-2 text-xs text-[#8A8A8A]">Your QF Address (EVM)</p>
                     <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
                       <code className="min-w-0 flex-1 break-all text-sm font-mono text-gray-400">
                         {address}
@@ -413,22 +398,64 @@ export default function Navbar() {
                       </button>
                     </div>
                   </div>
+                ) : (
+                  /* Existing Substrate + derived EVM address display */
+                  <>
+                    {/* Substrate Address */}
+                    <div>
+                      <p className="mb-2 text-xs text-[#8A8A8A]">Your QF Address (Substrate)</p>
+                      <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                        <code className="min-w-0 flex-1 break-all text-sm font-mono text-gray-400">
+                          {ss58Address}
+                        </code>
+                        <button
+                          onClick={() => copyAddress(ss58Address)}
+                          className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer border border-white/10"
+                          title="Copy Substrate address"
+                        >
+                          <Copy size={14} />
+                          {copied ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* EVM Address */}
+                    {address && (
+                      <div>
+                        <p className="mb-2 text-xs text-[#8A8A8A]">Your Derived EVM Address</p>
+                        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                          <code className="min-w-0 flex-1 break-all text-sm font-mono text-gray-400">
+                            {address}
+                          </code>
+                          <button
+                            onClick={() => copyAddress(address)}
+                            className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/5 hover:text-[#00D179] cursor-pointer border border-white/10"
+                            title="Copy EVM address"
+                          >
+                            <Copy size={14} />
+                            {copied ? 'Copied!' : 'Copy'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Info Note */}
-                <div className="rounded-xl bg-[#00D179]/5 border border-[#00D179]/20 p-4">
-                  <div className="flex items-start gap-3">
-                    <Info size={18} className="text-[#00D179] shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-gray-300">
-                        <span className="text-[#00D179] font-medium">Important:</span> Save your EVM address — you'll need it when MetaMask support launches.
-                      </p>
-                      <p className="text-xs text-[#8A8A8A] mt-2">
-                        Your Substrate address is your primary address. The EVM address is derived from it and can receive tokens from Ethereum-compatible wallets.
-                      </p>
+                {providerType === 'substrate' && (
+                  <div className="rounded-xl bg-[#00D179]/5 border border-[#00D179]/20 p-4">
+                    <div className="flex items-start gap-3">
+                      <Info size={18} className="text-[#00D179] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-300">
+                          <span className="text-[#00D179] font-medium">Important:</span> Save your EVM address — you'll need it when MetaMask support launches.
+                        </p>
+                        <p className="text-xs text-[#8A8A8A] mt-2">
+                          Your Substrate address is your primary address. The EVM address is derived from it and can receive tokens from Ethereum-compatible wallets.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Footer */}

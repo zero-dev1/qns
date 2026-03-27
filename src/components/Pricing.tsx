@@ -201,13 +201,16 @@ export default function Pricing() {
                     }`}
                   />
 
-                  {tier.highlighted && (
-                    <div className="pricing-shimmer absolute top-4 right-4 rounded-full bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
-                      MOST POPULAR
-                    </div>
-                  )}
+                  {/* Badge row — uniform height across all cards */}
+                  <div className="flex justify-end items-center h-7 mb-2">
+                    {tier.highlighted && (
+                      <div className="pricing-shimmer rounded-full bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
+                        MOST POPULAR
+                      </div>
+                    )}
+                  </div>
 
-                  <p className={`font-mono text-sm text-[#00D179] ${tier.highlighted ? 'mb-6 mt-6' : 'mb-6'}`}>
+                  <p className="font-mono text-sm text-[#00D179] mb-6">
                     {tier.example}
                   </p>
                   <p className="mb-1 text-lg font-semibold text-white">{tier.label}</p>
