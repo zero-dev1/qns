@@ -1,11 +1,9 @@
-import { getEvmPublicClient, getEvmWalletClient } from './evmProvider';
+import { getEvmPublicClient, getOrCreateEvmWalletClient, ensureQFNetwork } from './evmProvider';
 import { qfNetwork } from '../config/evmChain';
 import type { TxResult } from './contractCall';
 
 /**
  * Read from a contract via the ETH RPC endpoint (for MetaMask users).
- * Functionally identical to callContract() in contractCall.ts but uses
- * viem's publicClient instead of PAPI's ReviveApi.call().
  */
 export async function evmCallContract<T = any>(
   contractAddress: string,
@@ -25,10 +23,8 @@ export async function evmCallContract<T = any>(
 
 /**
  * Write to a contract via MetaMask signing.
- * Functionally identical to writeContract() in contractCall.ts but uses
- * viem's walletClient + MetaMask signing instead of PAPI extrinsics.
- *
- * Returns TxResult matching the same interface as the PAPI path.
+ * Uses lazy wallet client recovery — self-heals if the singleton was killed
+ * by a disconnect/reconnect race.
  */
 export async function evmWriteContract(
   contractAddress: string,
@@ -38,13 +34,23 @@ export async function evmWriteContract(
   value: bigint = 0n,
   verifyOnChain?: () => Promise<boolean>
 ): Promise<TxResult> {
-  const walletClient = getEvmWalletClient();
+  // Lazy recovery — reconstructs wallet client if it was killed
+  const walletClient = await getOrCreateEvmWalletClient();
   if (!walletClient) {
-    throw new Error('MetaMask not connected. Please connect your wallet.');
+    throw new Error('MetaMask not connected. Please reconnect your wallet.');
+  }
+
+  // Ensure we're on QF Network before writing
+  try {
+    await ensureQFNetwork();
+  } catch (err: any) {
+    if (err?.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    }
+    throw new Error('Please switch MetaMask to QF Network and try again.');
   }
 
   try {
-    // Send the transaction — MetaMask pops up for signing
     const txHash = await walletClient.writeContract({
       address: contractAddress as `0x${string}`,
       abi,
@@ -54,12 +60,10 @@ export async function evmWriteContract(
       chain: qfNetwork,
     });
 
-    // Build TxResult matching the PAPI interface
     const confirmation = new Promise<{ confirmed: boolean; error?: string }>(
       async (resolve) => {
         try {
           const publicClient = getEvmPublicClient();
-          // Wait for the transaction receipt
           const receipt = await publicClient.waitForTransactionReceipt({
             hash: txHash,
             timeout: 30_000,
@@ -71,7 +75,6 @@ export async function evmWriteContract(
             resolve({ confirmed: false, error: 'Transaction reverted' });
           }
         } catch (err: any) {
-          // Timeout or RPC error — try verifyOnChain if available
           if (verifyOnChain) {
             try {
               const onChain = await verifyOnChain();
@@ -92,7 +95,6 @@ export async function evmWriteContract(
     return { txHash, confirmation };
   } catch (err: any) {
     const msg = err?.message ?? '';
-    // MetaMask user rejection
     if (
       msg.includes('User denied') ||
       msg.includes('User rejected') ||
@@ -101,22 +103,35 @@ export async function evmWriteContract(
     ) {
       throw new Error('Transaction rejected by user');
     }
+    // Chain mismatch errors from viem
+    if (msg.includes('chain') && (msg.includes('mismatch') || msg.includes('switch'))) {
+      throw new Error('Please switch MetaMask to QF Network and try again.');
+    }
     throw new Error(`Transaction failed: ${msg}`);
   }
 }
 
 /**
  * Send a native QF transfer via MetaMask.
- * Equivalent to sendTransfer() in contractCall.ts.
+ * Uses lazy wallet client recovery.
  */
 export async function evmSendTransfer(
   toAddress: string,
   amount: bigint,
   verifyOnChain?: () => Promise<boolean>
 ): Promise<TxResult> {
-  const walletClient = getEvmWalletClient();
+  const walletClient = await getOrCreateEvmWalletClient();
   if (!walletClient) {
-    throw new Error('MetaMask not connected. Please connect your wallet.');
+    throw new Error('MetaMask not connected. Please reconnect your wallet.');
+  }
+
+  try {
+    await ensureQFNetwork();
+  } catch (err: any) {
+    if (err?.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    }
+    throw new Error('Please switch MetaMask to QF Network and try again.');
   }
 
   try {
@@ -160,7 +175,11 @@ export async function evmSendTransfer(
     return { txHash, confirmation };
   } catch (err: any) {
     const msg = err?.message ?? '';
-    if (msg.includes('User denied') || msg.includes('User rejected') || err.code === 4001) {
+    if (
+      msg.includes('User denied') ||
+      msg.includes('User rejected') ||
+      err.code === 4001
+    ) {
       throw new Error('Transaction rejected by user');
     }
     throw new Error(`Transfer failed: ${msg}`);

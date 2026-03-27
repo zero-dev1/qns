@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { truncateAddress } from '../utils/qns';
-import { ensureAccountMapped, METADATA_HASH_ERROR, USER_CANCELLED, INSUFFICIENT_BALANCE_FOR_MAPPING } from '../utils/accountMapping';
+import {
+  ensureAccountMapped,
+  METADATA_HASH_ERROR,
+  USER_CANCELLED,
+  INSUFFICIENT_BALANCE_FOR_MAPPING,
+} from '../utils/accountMapping';
 import {
   connectSubstrateWallet,
   disconnectWallet,
@@ -29,6 +34,9 @@ interface WalletState {
   /** True when connectWallet is being called from rehydration (suppress walletError) */
   _rehydrating: boolean;
 
+  /** Prevents double-fire of connectMetaMask during rehydration */
+  _mmConnecting: boolean;
+
   getBalanceAddress: () => string | null;
   connect: () => Promise<void>;
   connectWallet: (walletType: 'talisman' | 'subwallet') => Promise<void>;
@@ -37,6 +45,33 @@ interface WalletState {
   refreshName: () => Promise<void>;
   setShowWalletModal: (show: boolean) => void;
   clearWalletError: () => void;
+}
+
+/**
+ * Resolve QNS name for an EVM address with retry.
+ * Returns the name or null.
+ */
+async function resolveNameWithRetry(
+  evmAddr: string,
+  maxAttempts = 3,
+  delayMs = 2000
+): Promise<string | null> {
+  const { resolveReverse } = await import('../utils/qns');
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const name = await resolveReverse(evmAddr);
+      if (name) return name;
+    } catch {
+      // Swallow — will retry
+    }
+
+    // Don't delay after the last attempt
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return null;
 }
 
 export const useWalletStore = create<WalletState>()(
@@ -54,12 +89,11 @@ export const useWalletStore = create<WalletState>()(
       showWalletModal: false,
       walletError: null,
       _rehydrating: false,
+      _mmConnecting: false,
 
       getBalanceAddress: () => {
         const { providerType, address, ss58Address } = get();
-        // EVM users (MetaMask) use their 0x address for balance
         if (providerType === 'evm') return address;
-        // Substrate users use their SS58 address for balance
         return ss58Address;
       },
 
@@ -74,15 +108,24 @@ export const useWalletStore = create<WalletState>()(
             set({ walletError: error });
           }
         };
-        
+
         set({ connecting: true, walletError: null });
 
         try {
-          const walletName = walletType === 'talisman' ? 'talisman' : 'subwallet-js';
+          const walletName =
+            walletType === 'talisman' ? 'talisman' : 'subwallet-js';
           const connection = await Promise.race([
             connectSubstrateWallet(walletName),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Wallet connection timed out after 10 seconds. Please try again.')), 10_000)
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      'Wallet connection timed out after 10 seconds. Please try again.'
+                    )
+                  ),
+                10_000
+              )
             ),
           ]);
 
@@ -101,9 +144,11 @@ export const useWalletStore = create<WalletState>()(
 
           // Resolve QNS name in background (don't block connection)
           import('../utils/qns').then(({ resolveReverse }) =>
-            resolveReverse(evmAddr).then(name => {
-              if (name) set({ qnsName: name, displayName: name });
-            }).catch(() => {})
+            resolveReverse(evmAddr)
+              .then((name) => {
+                if (name) set({ qnsName: name, displayName: name });
+              })
+              .catch(() => {})
           );
 
           // ── Single mapping attempt ──
@@ -113,44 +158,46 @@ export const useWalletStore = create<WalletState>()(
           } catch (mapErr: any) {
             const msg = mapErr?.message ?? '';
 
-            if (msg === METADATA_HASH_ERROR || msg.includes('METADATA_HASH_ERROR')) {
-              // Talisman has CheckMetadataHash enabled for QF
+            if (
+              msg === METADATA_HASH_ERROR ||
+              msg.includes('METADATA_HASH_ERROR')
+            ) {
               setError(
                 'QF Network requires CheckMetadataHash to be disabled in your wallet. ' +
-                'In Talisman: Settings → Networks & Tokens → Manage Networks → find "QF Network" → ' +
-                'uncheck "Verify transaction with metadata hash". Then reconnect.',
+                  'In Talisman: Settings → Networks & Tokens → Manage Networks → find "QF Network" → ' +
+                  'uncheck "Verify transaction with metadata hash". Then reconnect.'
               );
               set({ accountMapped: false });
-              // Don't close modal – let user see the error
               return;
             }
 
             if (msg === USER_CANCELLED || msg.includes('USER_CANCELLED')) {
-              // User chose not to map. Connect anyway, but mark unmapped.
               set({
                 accountMapped: false,
                 showWalletModal: false,
               });
-              // They can still browse; writes will fail with a clear message.
               return;
             }
 
-            if (msg === INSUFFICIENT_BALANCE_FOR_MAPPING || msg.includes('INSUFFICIENT_BALANCE')) {
-              // Connect anyway but mark unmapped, show clear message
+            if (
+              msg === INSUFFICIENT_BALANCE_FOR_MAPPING ||
+              msg.includes('INSUFFICIENT_BALANCE')
+            ) {
               set({
                 accountMapped: false,
                 showWalletModal: false,
               });
               setError(
                 'Your wallet needs a small amount of QF to complete account setup. ' +
-                'Bridge some QF tokens, then reconnect.'
+                  'Bridge some QF tokens, then reconnect.'
               );
               return;
             }
 
-            // Generic mapping error — clean up to prevent zombie state
             disconnectWallet();
-            setError('Account setup incomplete — please try connecting again.');
+            setError(
+              'Account setup incomplete — please try connecting again.'
+            );
             set({
               accountMapped: false,
               address: null,
@@ -164,18 +211,27 @@ export const useWalletStore = create<WalletState>()(
           }
         } catch (error: any) {
           const msg = error.message || '';
-          if (msg.includes('No accounts found') || msg.includes('no accounts')) {
-            setError('No accounts found. Please create an account in your wallet extension.');
-          } else if (msg.includes('extension') || msg.includes('not installed') || msg.includes('Cannot read properties')) {
-            setError('Please install Talisman or SubWallet to use this dApp.');
+          if (
+            msg.includes('No accounts found') ||
+            msg.includes('no accounts')
+          ) {
+            setError(
+              'No accounts found. Please create an account in your wallet extension.'
+            );
+          } else if (
+            msg.includes('extension') ||
+            msg.includes('not installed') ||
+            msg.includes('Cannot read properties')
+          ) {
+            setError(
+              'Please install Talisman or SubWallet to use this dApp.'
+            );
           } else if (msg.includes('timed out')) {
             setError(msg);
           } else {
             setError(msg || 'Failed to connect wallet');
           }
-          // ── NEW: prevent zombie state ──
-          // Clear identity so navbar reflects reality
-          disconnectWallet(); // clears currentConnection in wallet.ts
+          disconnectWallet();
           set({
             address: null,
             ss58Address: null,
@@ -191,6 +247,10 @@ export const useWalletStore = create<WalletState>()(
       },
 
       connectMetaMask: async () => {
+        // Guard against double-fire (rehydration + watchMetaMaskChanges race)
+        if (get()._mmConnecting) return;
+        set({ _mmConnecting: true });
+
         const isRehydrating = get()._rehydrating;
         const setError = (error: string) => {
           if (!isRehydrating) set({ walletError: error });
@@ -201,73 +261,145 @@ export const useWalletStore = create<WalletState>()(
         try {
           if (!window.ethereum) {
             setError('MetaMask not detected. Please install MetaMask.');
-            set({ connecting: false });
+            set({ connecting: false, _mmConnecting: false });
             return;
           }
 
-          const { ensureQFNetwork, createEvmWalletClient } = await import('../utils/evmProvider');
+          const {
+            ensureQFNetwork,
+            createEvmWalletClient,
+            setReconnecting,
+          } = await import('../utils/evmProvider');
 
-          // Switch/add QF Network in MetaMask
-          await ensureQFNetwork();
+          // Prevent MetaMask event handlers from firing during connection
+          setReconnecting(true);
 
-          // Request accounts + create wallet client
+          try {
+            await ensureQFNetwork();
+          } catch (err: any) {
+            if (err?.code === 4001) {
+              setError('Please switch to QF Network to continue.');
+              set({ connecting: false, _mmConnecting: false });
+              setReconnecting(false);
+              return;
+            }
+            throw err;
+          }
+
           const walletClient = await createEvmWalletClient();
 
           const evmAddr = walletClient.account?.address as `0x${string}`;
           if (!evmAddr) throw new Error('No account returned from MetaMask');
 
+          // Set connected state immediately — name resolves in background
           set({
             address: evmAddr,
-            ss58Address: null, // MetaMask users have no SS58 address
+            ss58Address: null,
             displayName: `${evmAddr.slice(0, 6)}...${evmAddr.slice(-4)}`,
             walletName: 'metamask',
             providerType: 'evm',
-            accountMapped: true, // No mapping needed for EVM users
+            accountMapped: true,
             showWalletModal: false,
           });
 
-          // Resolve QNS name in background
-          import('../utils/qns').then(({ resolveReverse }) =>
-            resolveReverse(evmAddr)
-              .then((name) => {
-                if (name) set({ qnsName: name, displayName: name });
-              })
-              .catch(() => {})
-          );
+          // Re-enable event handlers now that state is stable
+          setReconnecting(false);
 
-          // Watch for MetaMask account/chain changes
-          import('../utils/evmProvider').then(({ watchMetaMaskChanges }) => {
-            const cleanup = watchMetaMaskChanges(
-              (accounts) => {
-                if (accounts.length === 0) {
-                  // User disconnected from MetaMask
-                  get().disconnect();
-                } else {
-                  // Account switched — reconnect
-                  get().disconnect();
-                  get().connectMetaMask();
-                }
-              },
-              () => {
-                // Chain changed — just reconnect to re-validate
-                get().disconnect();
-                get().connectMetaMask();
-              }
-            );
-            // Store cleanup function if needed (can use a module-level variable)
-            (window as any).__qns_mm_cleanup = cleanup;
+          // Resolve QNS name with retry — critical for navbar pill
+          resolveNameWithRetry(evmAddr, 3, 2000).then((name) => {
+            if (name) {
+              set({ qnsName: name, displayName: name });
+            }
           });
+
+          // Set up MetaMask event watchers (only once per connection)
+          // Clean up previous listener first
+          (window as any).__qns_mm_cleanup?.();
+
+          const { watchMetaMaskChanges } = await import(
+            '../utils/evmProvider'
+          );
+          const cleanup = watchMetaMaskChanges(
+            // accountsChanged
+            (accounts) => {
+              if (accounts.length === 0) {
+                // User disconnected in MetaMask
+                get().disconnect();
+              } else {
+                const newAddr = accounts[0] as `0x${string}`;
+                const currentAddr = get().address;
+                if (
+                  newAddr.toLowerCase() !== currentAddr?.toLowerCase()
+                ) {
+                  // Account actually changed — soft update, not full disconnect/reconnect
+                  import('../utils/evmProvider').then(
+                    async ({ createEvmWalletClient: recreate }) => {
+                      try {
+                        await recreate();
+                        set({
+                          address: newAddr,
+                          displayName: `${newAddr.slice(0, 6)}...${newAddr.slice(-4)}`,
+                          // Clear name — will re-resolve
+                          qnsName: null,
+                        });
+                        // Resolve name for new account
+                        resolveNameWithRetry(newAddr, 3, 2000).then(
+                          (name) => {
+                            if (name) {
+                              set({
+                                qnsName: name,
+                                displayName: name,
+                              });
+                            }
+                          }
+                        );
+                      } catch {
+                        get().disconnect();
+                      }
+                    }
+                  );
+                }
+                // Same account — no-op (spurious MetaMask event)
+              }
+            },
+            // chainChanged
+            async (chainId: string) => {
+              const expectedChainId = 3426; // QF Network
+              const newChainId = parseInt(chainId, 16);
+              if (newChainId === expectedChainId) {
+                // Switched back to QF Network — rebuild wallet client silently
+                try {
+                  const { createEvmWalletClient: recreate } =
+                    await import('../utils/evmProvider');
+                  await recreate();
+                } catch {
+                  // Silent — lazy recovery in evmContractCall will handle it
+                }
+              } else {
+                // Wrong chain — don't disconnect, just show a warning.
+                // The ensureQFNetwork() call before every write will prompt to switch back.
+                // This prevents the destructive disconnect/reconnect cycle.
+              }
+            }
+          );
+          (window as any).__qns_mm_cleanup = cleanup;
         } catch (error: any) {
           const msg = error?.message || '';
-          if (msg.includes('User rejected') || msg.includes('User denied') || error?.code === 4001) {
+          if (
+            msg.includes('User rejected') ||
+            msg.includes('User denied') ||
+            error?.code === 4001
+          ) {
             setError('Connection rejected. Please try again.');
           } else if (msg.includes('MetaMask not')) {
             setError(msg);
           } else {
             setError(msg || 'Failed to connect MetaMask');
           }
-          // Clean up
-          const { destroyEvmClients } = await import('../utils/evmProvider');
+          const { destroyEvmClients, setReconnecting } = await import(
+            '../utils/evmProvider'
+          );
+          setReconnecting(false);
           destroyEvmClients();
           set({
             address: null,
@@ -280,21 +412,23 @@ export const useWalletStore = create<WalletState>()(
             accountMapped: false,
           });
         } finally {
-          set({ connecting: false });
+          set({ connecting: false, _mmConnecting: false });
         }
       },
 
       disconnect: () => {
         const { providerType } = get();
-        disconnectWallet(); // existing Substrate cleanup
+        disconnectWallet();
 
-        // Also clean up EVM clients if MetaMask was connected
         if (providerType === 'evm') {
           (window as any).__qns_mm_cleanup?.();
           delete (window as any).__qns_mm_cleanup;
-          import('../utils/evmProvider').then(({ destroyEvmClients }) => {
-            destroyEvmClients();
-          });
+          import('../utils/evmProvider').then(
+            ({ destroyEvmClients, setReconnecting }) => {
+              setReconnecting(false);
+              destroyEvmClients();
+            }
+          );
         }
 
         set({
@@ -308,6 +442,7 @@ export const useWalletStore = create<WalletState>()(
           accountMapped: false,
           showWalletModal: false,
           walletError: null,
+          _mmConnecting: false,
         });
       },
 
@@ -318,14 +453,14 @@ export const useWalletStore = create<WalletState>()(
           const { resolveReverse } = await import('../utils/qns');
           const name = await resolveReverse(address);
           if (name) {
-            // Chain returned a name — update
             set({ qnsName: name, displayName: name });
           } else if (!existingName) {
-            // No name on chain AND no optimistic name — show truncated address
             const { ss58Address } = get();
             set({
               qnsName: null,
-              displayName: ss58Address ? truncateAddress(ss58Address) : truncateAddress(address),
+              displayName: ss58Address
+                ? truncateAddress(ss58Address)
+                : truncateAddress(address),
             });
           }
           // If name is null but existingName is set, do nothing —
@@ -346,9 +481,9 @@ export const useWalletStore = create<WalletState>()(
     }),
     {
       name: 'qns-wallet-storage',
-      version: 4, // bumped from 3 → 4 to add providerType field
+      version: 5, // bumped from 4 → 5 for _mmConnecting field
       migrate: (persistedState, version) => {
-        if (version < 4) return undefined as unknown as WalletState;
+        if (version < 5) return undefined as unknown as WalletState;
         return persistedState as WalletState;
       },
       partialize: (state) => ({
@@ -367,32 +502,46 @@ export const useWalletStore = create<WalletState>()(
 
             if (state.walletName === 'metamask') {
               // Rehydrate MetaMask
-              state.connectMetaMask().then(() => {
-                useWalletStore.setState({ _rehydrating: false });
-              }).catch(() => {
-                useWalletStore.setState({ _rehydrating: false });
-                state.disconnect();
-              });
+              state
+                .connectMetaMask()
+                .then(() => {
+                  useWalletStore.setState({ _rehydrating: false });
+                })
+                .catch(() => {
+                  useWalletStore.setState({ _rehydrating: false });
+                  state.disconnect();
+                });
             } else {
               // Rehydrate Substrate wallet (existing logic)
-              const walletType = state.walletName as 'talisman' | 'subwallet';
-              state.connectWallet(walletType).then(() => {
-                useWalletStore.setState({ _rehydrating: false });
-                if (!useWalletStore.getState().address) {
-                  // First attempt failed — retry after delay for slow extension injection
-                  useWalletStore.setState({ _rehydrating: true });
-                  setTimeout(() => {
-                    state.connectWallet(walletType).then(() => {
-                      useWalletStore.setState({ _rehydrating: false });
-                    }).catch(() => {
-                      useWalletStore.setState({ _rehydrating: false });
-                    });
-                  }, 1500);
-                }
-              }).catch(() => {
-                useWalletStore.setState({ _rehydrating: false });
-                state.disconnect();
-              });
+              const walletType = state.walletName as
+                | 'talisman'
+                | 'subwallet';
+              state
+                .connectWallet(walletType)
+                .then(() => {
+                  useWalletStore.setState({ _rehydrating: false });
+                  if (!useWalletStore.getState().address) {
+                    useWalletStore.setState({ _rehydrating: true });
+                    setTimeout(() => {
+                      state
+                        .connectWallet(walletType)
+                        .then(() => {
+                          useWalletStore.setState({
+                            _rehydrating: false,
+                          });
+                        })
+                        .catch(() => {
+                          useWalletStore.setState({
+                            _rehydrating: false,
+                          });
+                        });
+                    }, 1500);
+                  }
+                })
+                .catch(() => {
+                  useWalletStore.setState({ _rehydrating: false });
+                  state.disconnect();
+                });
             }
           } else if (state?.address) {
             state.refreshName();

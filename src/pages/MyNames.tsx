@@ -781,11 +781,15 @@ export default function MyNamesPage() {
         hapticError();
         return;
       }
-      let userMessage = 'Transaction rejected';
+      let userMessage = 'Transaction failed';
       if (err.message) {
         const message = err.message.toLowerCase();
         if (message.includes('insufficient funds') || message.includes('insufficient balance')) {
           userMessage = 'Insufficient QF balance';
+        } else if (message.includes('not connected') || message.includes('reconnect')) {
+          userMessage = 'Wallet connection lost. Please disconnect and reconnect.';
+        } else if (message.includes('switch metamask') || message.includes('qf network')) {
+          userMessage = 'Please switch MetaMask to QF Network and try again.';
         } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
           userMessage = 'Transaction rejected';
         }
@@ -890,10 +894,14 @@ export default function MyNamesPage() {
         hapticError();
         return;
       }
-      let userMessage = 'Transaction rejected';
+      let userMessage = 'Transaction failed';
       if (err.message) {
         const message = err.message.toLowerCase();
-        if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+        if (message.includes('not connected') || message.includes('reconnect')) {
+          userMessage = 'Wallet connection lost. Please disconnect and reconnect.';
+        } else if (message.includes('switch metamask') || message.includes('qf network')) {
+          userMessage = 'Please switch MetaMask to QF Network and try again.';
+        } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
           userMessage = 'Transaction rejected';
         } else if (message.includes('unauthorized') || message.includes('not owner')) {
           userMessage = 'You are not the owner of this name';
