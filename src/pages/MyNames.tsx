@@ -12,7 +12,6 @@ import {
   Star,
   X,
   Pencil,
-  Github,
   Globe,
   Send,
   Link2,
@@ -22,6 +21,8 @@ import {
   Copy,
   ArrowRight,
   Search,
+  Wallet,
+  Clock,
 } from 'lucide-react';
 import {
   renewName,
@@ -41,6 +42,8 @@ import { hapticSuccess, hapticError, hapticTap, hapticProfileAction } from '../u
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import RenewModal from '../components/RenewModal';
 import Avatar from '../components/Avatar';
+import PulseDot from '../components/PulseDot';
+import DetailModal from '../components/DetailModal';
 
 interface OwnedName {
   name: string;
@@ -49,60 +52,247 @@ interface OwnedName {
   registeredAt: bigint;
 }
 
-const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'telegram'] as const;
+const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'] as const;
 
 const FIELD_ICONS: Record<typeof TEXT_KEYS[number], React.ReactNode> = {
   avatar: <Link2 size={16} />,
   bio: <FileText size={16} />,
   twitter: <Twitter size={16} />,
-  github: <Github size={16} />,
-  url: <Globe size={16} />,
   telegram: <Send size={16} />,
+  website: <Globe size={16} />,
+  email: <Send size={16} />,
 };
 
 const FIELD_LABELS: Record<typeof TEXT_KEYS[number], string> = {
   avatar: 'Avatar URL',
   bio: 'Bio',
   twitter: 'Twitter',
-  github: 'Github',
-  url: 'Website',
   telegram: 'Telegram',
+  website: 'Website',
+  email: 'Email',
 };
 
 const PLACEHOLDERS: Record<typeof TEXT_KEYS[number], string> = {
   avatar: 'https://example.com/avatar.png',
   bio: 'Tell the world about yourself',
   twitter: '@dotqfns or https://x.com/dotqfns',
-  github: 'username or https://github.com/username',
-  url: 'https://example.com',
   telegram: '@username or https://t.me/username',
+  website: 'https://example.com',
+  email: 'user@example.com',
 };
 
 const ShieldIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 );
 
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
+// ── Identity Card Component ──
 
-// Card animation variants
-const cardVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.45,
-      delay: i * 0.1,
-      ease: [0.22, 1, 0.36, 1] as const,
-    },
-  }),
+interface IdentityCardProps {
+  name: OwnedName;
+  records: { avatar: string; bio: string; twitter: string; telegram: string; website: string; email: string };
+  isPrimary: boolean;
+  enableTilt: boolean;
+  onOpenDetail: (name: string, tab?: 'overview' | 'edit' | 'manage' | 'share') => void;
+}
+
+const IdentityCard = ({ name, records, isPrimary, enableTilt, onOpenDetail }: IdentityCardProps) => {
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const rotateX = useMotionValue(0);
+  const rotateY = useMotionValue(0);
+  const springRotateX = useSpring(rotateX, { stiffness: 150, damping: 20 });
+  const springRotateY = useSpring(rotateY, { stiffness: 150, damping: 20 });
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    setMousePosition({ x, y });
+    
+    if (!enableTilt) return;
+    
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const nextRotateY = ((x - centerX) / centerX) * 4;
+    const nextRotateX = ((centerY - y) / centerY) * 4;
+
+    rotateX.set(nextRotateX);
+    rotateY.set(nextRotateY);
+  };
+
+  const handleMouseLeave = () => {
+    rotateX.set(0);
+    rotateY.set(0);
+  };
+
+  // Status calculation
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const thirtyDays = 30n * 24n * 60n * 60n;
+  const isExpiringSoon = !name.isPermanent && name.expires > 0n && name.expires - now < thirtyDays;
+  
+  // Status bar color
+  const statusBarClass = name.isPermanent 
+    ? 'bg-gradient-to-r from-[#00D179] to-[#00D179]/40'
+    : isExpiringSoon 
+      ? 'bg-gradient-to-r from-red-400 to-red-400/40'
+      : 'bg-gradient-to-r from-amber-400 to-amber-400/40';
+
+  // Badge checks
+  const isTeam = TEAM_NAMES.includes(name.name.toLowerCase());
+  const isDappLab = DAPP_LAB_NAMES.includes(name.name.toLowerCase());
+
+  // Completeness calculation
+  const completenessFields = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'];
+  const filledFields = completenessFields.filter(field => records[field as keyof typeof records]).length;
+
+  // Expiry text
+  const expiryText = !name.isPermanent && name.expires > 0n
+    ? new Date(Number(name.expires) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  return (
+    <motion.div
+      ref={cardRef}
+      layoutId={`card-${name.name}`}
+      onClick={() => onOpenDetail(name.name, 'overview')}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={enableTilt ? { rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 1200 } : undefined}
+      className={`group relative cursor-pointer rounded-2xl border bg-[#111] overflow-hidden flex flex-col items-center px-5 py-6 hover:border-white/[0.1] transition-all duration-300 ${
+        isPrimary ? 'border-[#00D179]/20' : 'border-white/[0.06]'
+      }`}
+      whileHover={{ y: -2 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, filter: 'blur(4px)' }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+    >
+      {/* Ambient glow for primary name */}
+      {isPrimary && (
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute inset-0 rounded-2xl" style={{
+            background: 'radial-gradient(ellipse, rgba(0,209,121,0.08) 0%, transparent 70%)',
+          }} />
+        </div>
+      )}
+
+      {/* Status header bar */}
+      <div className={`absolute top-0 left-0 right-0 h-1 ${statusBarClass}`} />
+
+      {/* Spotlight effect */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(500px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(0,209,121,0.05), transparent 40%)`,
+        }}
+      />
+
+      {/* Floating action icons */}
+      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 md:group-hover:opacity-100 opacity-100 md:opacity-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenDetail(name.name, 'edit');
+          }}
+          className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#555] hover:text-white transition-all"
+        >
+          <Pencil size={16} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenDetail(name.name, 'share');
+          }}
+          className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#555] hover:text-white transition-all"
+        >
+          <Share2 size={16} />
+        </button>
+      </div>
+
+      {/* Badge row */}
+      <div className="flex items-center gap-2 mb-4">
+        {name.isPermanent && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#00D179]/10 text-[#8DF0BA] border border-[#00D179]/20">
+            <ShieldIcon />
+            Permanent
+          </span>
+        )}
+        {isTeam && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#DADADA]/10 text-[#DADADA] border border-[#DADADA]/20">
+            <ShieldIcon />
+            Team
+          </span>
+        )}
+        {isDappLab && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#00EFE7]/10 text-[#00EFE7] border border-[#00EFE7]/20">
+            <ShieldIcon />
+            dApp Lab
+          </span>
+        )}
+      </div>
+
+      {/* Avatar */}
+      <motion.div
+        layoutId={`avatar-${name.name}`}
+        className={`relative mb-4 border-4 border-[#111]/60 rounded-full ring ${
+          isPrimary ? 'ring-2 ring-[#00D179]/40 ring-offset-2 ring-offset-[#111]' : ''
+        }`}
+      >
+        <Avatar url={records.avatar} name={name.name} size={80} className="md:w-20 md:h-20 w-16 h-16" />
+      </motion.div>
+
+      {/* Name */}
+      <div className="text-center mb-2">
+        <h3 className="font-clash text-xl font-bold text-white">
+          {name.name}<span className="text-[#00D179]">.qf</span>
+        </h3>
+      </div>
+
+      {/* Status line */}
+      <div className="text-center mb-2">
+        {name.isPermanent ? (
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#00D179]">
+            <PulseDot color="bg-[#00D179]" />
+            <span>Permanent</span>
+          </div>
+        ) : expiryText ? (
+          <p className="text-[11px] text-[#888]">Expires {expiryText}</p>
+        ) : null}
+        
+        {isPrimary && (
+          <p className="text-[10px] text-[#00D179] font-medium mt-1">Primary</p>
+        )}
+      </div>
+
+      {/* Bio preview */}
+      {records.bio && (
+        <p className="text-[#666] text-xs text-center leading-relaxed line-clamp-2 mb-3 px-2">
+          {records.bio}
+        </p>
+      )}
+
+      {/* Completeness indicator */}
+      <div className="mt-auto pt-3">
+        <div className="flex items-center justify-center gap-1 mb-1">
+          {completenessFields.map((field, i) => (
+            <div
+              key={field}
+              className={`w-1 h-1 rounded-full ${
+                i < filledFields ? 'bg-[#00D179]' : 'bg-white/[0.06]'
+              }`}
+            />
+          ))}
+        </div>
+        <p className="text-[10px] text-[#333] text-center">
+          {filledFields} of {completenessFields.length}
+        </p>
+      </div>
+    </motion.div>
+  );
 };
 
 // Modal animation variants
@@ -140,26 +330,8 @@ const modalContentVariants = {
   },
 };
 
-interface NameCardProps {
-  item: OwnedName;
-  index: number;
-  bio: string;
-  avatarUrl: string;
-  isPrimary: boolean;
-  enableTilt: boolean;
-  renewing: boolean;
-  settingPrimary: boolean;
-  recentlyRenewed: boolean;
-  recentlyPrimaried: boolean;
-  onOpen: () => void;
-  onSetPrimary: (e: React.MouseEvent) => void;
-  onRenew: (e: React.MouseEvent) => void;
-  onShare: (e: React.MouseEvent) => void;
-  onEdit: (e: React.MouseEvent) => void;
-  onTransfer: (e: React.MouseEvent) => void;
-}
 
-const NameCard = ({
+/* const NameCard = ({
   item,
   index,
   bio,
@@ -223,8 +395,6 @@ const NameCard = ({
   return (
     <motion.div
       layoutId={`name-card-${item.name}`}
-      initial={cardVariants.hidden}
-      animate={cardVariants.visible(index)}
       onClick={onOpen}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -308,7 +478,7 @@ const NameCard = ({
               </div>
             ) : expiryText && (
               <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-500">
-                <ClockIcon />
+                <Clock size={16} />
                 <span>{expiryText}</span>
               </div>
             )}
@@ -386,11 +556,11 @@ const NameCard = ({
       </div>
     </motion.div>
   );
-};
+}; */
 
-export default function MyNamesPage() {
-  const { address, ss58Address, connect, refreshName, providerType } = useWalletStore();
-  const { refreshNames } = useNamesStore();
+function MyNamesPage() {
+  const { address, ss58Address, connect, refreshName, providerType, qnsName } = useWalletStore();
+  const { refreshNames, ownedNames } = useNamesStore();
   const { showToast } = useToast();
   const { copy } = useCopy();
   const [searchParams] = useSearchParams();
@@ -401,7 +571,7 @@ export default function MyNamesPage() {
 
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
-  const [textRecords, setTextRecords] = useState<Record<string, Record<string, string>>>({});
+  const [cardRecords, setCardRecords] = useState<Map<string, Record<string, string>>>(new Map());
   const [editValues, setEditValues] = useState<Record<string, Record<string, string>>>({});
   const [savingAll, setSavingAll] = useState(false);
   const [renewingName, setRenewingName] = useState<string | null>(null);
@@ -414,26 +584,28 @@ export default function MyNamesPage() {
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
   const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
   const [renewError, setRenewError] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'primary' | 'alpha' | 'expiry'>('primary');
 
-  // Edit modal state
+  // Detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'edit' | 'manage' | 'share'>('overview');
+
+  // Edit modal state (legacy, will be replaced by detail modal)
   const [editModalName, setEditModalName] = useState<string | null>(null);
-
   const [transferSuccess, setTransferSuccess] = useState(false);
   const hasAutoExpanded = useRef(false);
-
-  // Share modal state
   const [shareModalName, setShareModalName] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [enableTilt, setEnableTilt] = useState(false);
-
-  // Renew modal state
   const [renewModalName, setRenewModalName] = useState<string | null>(null);
 
+  // Load names
   const loadNames = useCallback(async () => {
     if (!address) return;
 
     // Pre-fill from the Zustand store if it has names and our local state is empty.
-    const storeNames = useNamesStore.getState().ownedNames;
+    const storeNames = ownedNames;
     if (storeNames.length > 0 && names.length === 0) {
       const mapped = storeNames.map((item) => ({
         name: item.name,
@@ -467,15 +639,50 @@ export default function MyNamesPage() {
           loadTextRecords(item.name);
         }
       }
-      // If chain returns empty but we have optimistic names, do NOT clear.
-      // The bgRefresh after 5s will reconcile.
     } catch {
       // Keep whatever we have
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, ownedNames, names.length]);
 
+  // Load text records for cards
+  const loadTextRecords = async (name: string) => {
+    const recordKeys = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'];
+    const records: Record<string, string> = {};
+    
+    await Promise.all(recordKeys.map(async (key) => {
+      try {
+        records[key] = await getTextRecord(name, key) || '';
+      } catch {
+        records[key] = '';
+      }
+    }));
+    
+    setCardRecords((prev) => new Map(prev.set(name, records)));
+    setEditValues((prev) => ({ ...prev, [name]: { ...records } }));
+  };
+
+  // Load all card records when names change
+  useEffect(() => {
+    if (!names.length) return;
+    const fetchRecords = async () => {
+      const recordKeys = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'];
+      const entries = await Promise.all(
+        names.map(async (n) => {
+          const records: Record<string, string> = {};
+          await Promise.all(recordKeys.map(async (key) => {
+            try { records[key] = await getTextRecord(n.name, key) || ''; } catch { records[key] = ''; }
+          }));
+          return [n.name, records] as [string, Record<string, string>];
+        })
+      );
+      setCardRecords(new Map(entries));
+    };
+    fetchRecords();
+  }, [names]);
+
+  // Background refresh
   const bgRefresh = useCallback(async () => {
     if (!address) return;
     try {
@@ -489,7 +696,7 @@ export default function MyNamesPage() {
         }));
         setNames(mappedNames);
         for (const item of mappedNames) {
-          if (!textRecords[item.name]) {
+          if (!cardRecords.get(item.name)) {
             loadTextRecords(item.name);
           }
         }
@@ -499,7 +706,41 @@ export default function MyNamesPage() {
     } catch {
       // silently ignore — keep existing state
     }
-  }, [address]);
+  }, [address, cardRecords]);
+
+  // Sort names
+  const sortedNames = [...names].sort((a, b) => {
+    if (sortMode === 'primary') {
+      const aPrimary = primaryName === a.name ? 0 : 1;
+      const bPrimary = primaryName === b.name ? 0 : 1;
+      if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+      return a.name.localeCompare(b.name);
+    }
+    if (sortMode === 'alpha') {
+      return a.name.localeCompare(b.name);
+    }
+    if (sortMode === 'expiry') {
+      if (a.isPermanent && !b.isPermanent) return 1;
+      if (!a.isPermanent && b.isPermanent) return -1;
+      if (a.isPermanent && b.isPermanent) return a.name.localeCompare(b.name);
+      return a.expires < b.expires ? -1 : 1;
+    }
+    return 0;
+  });
+
+  // Detail modal functions
+  const openDetailModal = (name: string, tab: 'overview' | 'edit' | 'manage' | 'share' = 'overview') => {
+    setSelectedName(name);
+    setDetailTab(tab);
+    setDetailModalOpen(true);
+    hapticTap();
+  };
+
+  const closeDetailModal = () => {
+    setDetailModalOpen(false);
+    setSelectedName(null);
+    setDetailTab('overview');
+  };
 
   useEffect(() => {
     hasAutoExpanded.current = false;
@@ -553,6 +794,7 @@ export default function MyNamesPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (detailModalOpen) closeDetailModal();
         if (editModalName) closeEditModal();
         if (transferModal) setTransferModal(null);
         if (shareModalName) setShareModalName(null);
@@ -560,7 +802,7 @@ export default function MyNamesPage() {
       }
     };
 
-    const hasOpenModal = editModalName || transferModal || shareModalName || renewModalName;
+    const hasOpenModal = detailModalOpen || editModalName || transferModal || shareModalName || renewModalName;
 
     if (hasOpenModal) {
       document.addEventListener('keydown', handleKeyDown);
@@ -571,20 +813,11 @@ export default function MyNamesPage() {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [editModalName, transferModal, shareModalName]);
-
-  const loadTextRecords = async (name: string) => {
-    const records: Record<string, string> = {};
-    for (const key of TEXT_KEYS) {
-      records[key] = await getTextRecord(name, key);
-    }
-    setTextRecords((prev) => ({ ...prev, [name]: records }));
-    setEditValues((prev) => ({ ...prev, [name]: { ...records } }));
-  };
+  }, [detailModalOpen, editModalName, transferModal, shareModalName, renewModalName]);
 
   const openEditModal = (name: string) => {
     setEditModalName(name);
-    if (!textRecords[name]) {
+    if (!cardRecords.get(name)) {
       loadTextRecords(name);
     }
     hapticTap();
@@ -605,13 +838,12 @@ export default function MyNamesPage() {
     hapticTap();
     
     try {
-      // Collect all changed fields
       const keys: string[] = [];
       const values: string[] = [];
       
       for (const key of TEXT_KEYS) {
         const newValue = editValues[name]?.[key] ?? '';
-        const oldValue = textRecords[name]?.[key] ?? '';
+        const oldValue = cardRecords.get(name)?.[key] ?? '';
         
         if (newValue !== oldValue) {
           keys.push(key);
@@ -619,14 +851,14 @@ export default function MyNamesPage() {
         }
       }
       
-      // Call setMultipleTexts if there are changes
       if (keys.length > 0) {
         try {
           if (!signerAddress) throw new Error('No wallet connected');
           const { confirmation } = await setMultipleTextRecords(name, keys, values, signerAddress);
 
           // Optimistic update
-          setTextRecords((prev) => ({ ...prev, [name]: { ...(editValues[name] || {}) } }));
+          const updatedRecords = { ...(editValues[name] || {}) };
+          setCardRecords((prev) => new Map(prev.set(name, updatedRecords)));
           showToast('Profile updated successfully', 'success');
           hapticProfileAction();
           closeEditModal();
@@ -637,20 +869,17 @@ export default function MyNamesPage() {
               showToast('Profile update submitted but unconfirmed.', 'warning');
               return;
             }
-            // Check if this is a retryable error
             if (result.error && isRetryableError(result.error)) {
               showToast(RETRY_MESSAGE_SHORT, 'warning');
-              loadTextRecords(name); // re-fetch from chain
+              loadTextRecords(name);
               hapticError();
               return;
             }
-            // Revert text records
             showToast(`Profile update failed: ${result.error}. Reverting changes.`, 'error');
-            loadTextRecords(name); // re-fetch from chain
+            loadTextRecords(name);
             hapticError();
           });
         } catch (err: any) {
-          // Check if this is a retryable error
           if (isRetryableError(err.message)) {
             showToast(RETRY_MESSAGE_SHORT, 'warning');
             hapticError();
@@ -660,7 +889,6 @@ export default function MyNamesPage() {
           hapticError();
         }
       } else {
-        // Nothing changed — just close
         showToast('No changes to save', 'success');
         closeEditModal();
       }
@@ -817,11 +1045,7 @@ export default function MyNamesPage() {
     setTransferSuccess(false);
   };
 
-  const handleEditClick = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    openEditModal(name);
-  };
-
+  
   const handleTransfer = async () => {
     if (!address || !transferModal) return;
     setTransferError(null);
@@ -962,7 +1186,7 @@ export default function MyNamesPage() {
     const expiryText = `Expires ${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
     return (
       <div className={`flex flex-wrap items-center gap-2 text-xs ${isExpiringSoon ? 'text-[#F5A623]' : 'text-gray-500'}`}>
-        <span className={isExpiringSoon ? 'text-[#F5A623]' : 'text-gray-500'}><ClockIcon /></span>
+        <span className={isExpiringSoon ? 'text-[#F5A623]' : 'text-gray-500'}><Clock size={16} /></span>
         <span>{expiryText}</span>
         {isTeam && (
           <>
@@ -978,145 +1202,188 @@ export default function MyNamesPage() {
     return names.find((n) => n.name === editModalName);
   };
 
+  // Helper functions
+  const truncateAddress = (addr: string) => {
+    if (!addr || addr.length < 12) return addr;
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const getNextExpiry = () => {
+    const nonPermanent = names.filter(n => !n.isPermanent && n.expires > 0n);
+    if (nonPermanent.length === 0) return null;
+    const earliest = nonPermanent.reduce((min, curr) => 
+      curr.expires < min.expires ? curr : min
+    );
+    return new Date(Number(earliest.expires) * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
       <Navbar />
 
-      {/* Main Content */}
-      <main className="pt-24 pb-20 px-6">
-        <div className="mx-auto max-w-[680px]">
+      <main className="pt-24 pb-20 px-4">
+        <div className="mx-auto max-w-[1120px]">
+          {/* Header */}
           <div className="mb-8">
-            <div>
-              <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-2">
-                MY NAMES
-              </p>
-              <h1 className="flex flex-wrap gap-x-3 gap-y-1 font-clash text-3xl font-semibold text-white md:text-4xl">
-                {['Your', '.qf', 'names'].map((word, index) => (
-                  <motion.span
-                    key={word}
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.05 }}
-                    className={word === '.qf' ? 'text-[#00D179]' : ''}
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </h1>
-            </div>
+            <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-2">
+              MY NAMES
+            </p>
+            <h1 className="font-clash text-3xl font-semibold text-white md:text-4xl">
+              Your .qf identities
+            </h1>
           </div>
 
+          {/* NOT CONNECTED state */}
           {!address && (
-            <div className="animate-fade-in py-20 text-center">
-              <p className="text-[#8A8A8A] mb-6 font-satoshi text-lg">
-                Connect your wallet to manage your names
-              </p>
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mb-4">
+                <Wallet size={24} className="text-[#333]" />
+              </div>
+              <h2 className="font-clash text-2xl font-bold text-white mb-2">Connect your wallet</h2>
+              <p className="text-[#555] text-sm mb-6">to manage your .qf identities</p>
               <button
                 onClick={connect}
-                className="px-8 py-3 rounded-xl border border-[#00D179] text-white font-medium hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
+                className="px-6 py-3 rounded-xl bg-[#00D179] text-black font-semibold hover:bg-[#00B868] transition-colors"
               >
                 Connect Wallet
               </button>
             </div>
           )}
 
+          {/* LOADING state */}
           {address && loading && (
-  <div className="flex flex-col gap-6">
-    {[0, 1].map((i) => (
-      <div key={i} className="rounded-2xl border border-white/5 bg-[#111] overflow-hidden animate-pulse">
-        <div className="h-20 bg-gradient-to-r from-white/[0.03] via-white/[0.02] to-transparent" />
-        <div className="px-6 pb-6">
-          <div className="-mt-8 flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-white/[0.06] border-4 border-[#111] shrink-0" />
-            <div className="flex-1 pt-2 space-y-2">
-              <div className="h-6 w-36 rounded bg-white/[0.06]" />
-              <div className="h-3 w-24 rounded bg-white/[0.04]" />
-            </div>
-          </div>
-          <div className="h-4 w-48 rounded bg-white/[0.04] mt-4" />
-          <div className="border-t border-white/5 mt-4 pt-4">
-            <div className="flex justify-between">
-              {[0, 1, 2, 3, 4].map((j) => (
-                <div key={j} className="flex flex-col items-center gap-1.5">
-                  <div className="w-5 h-5 rounded bg-white/[0.04]" />
-                  <div className="w-8 h-2 rounded bg-white/[0.03]" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="rounded-2xl border border-white/[0.04] bg-[#111] animate-pulse" style={{ height: '400px' }}>
+                  <div className="h-1 bg-gradient-to-r from-white/[0.06] to-transparent mb-4" />
+                  <div className="flex flex-col items-center px-5">
+                    <div className="w-16 h-16 rounded-full bg-white/[0.06] mb-4" />
+                    <div className="h-6 w-24 rounded bg-white/[0.04] mb-2" />
+                    <div className="h-3 w-16 rounded bg-white/[0.03] mb-3" />
+                    <div className="h-3 w-32 rounded bg-white/[0.03]" />
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
+          )}
 
+          {/* EMPTY state */}
           {address && !loading && names.length === 0 && (
-            <motion.div
-              className="py-20 text-center"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="mx-auto mb-6 flex h-[120px] w-[120px] items-center justify-center rounded-full border-2 border-[#00D179]/20">
-                <div className="flex h-[88px] w-[88px] items-center justify-center rounded-full border border-[#00D179]/10">
-                  <Search size={32} className="text-[#00D179]/40" />
-                </div>
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mb-4">
+                <Search size={24} className="text-[#333]" />
               </div>
-              <p className="mb-2 text-xl font-semibold text-white">
-                No names yet
-              </p>
-              <p className="mb-6 text-sm text-gray-500">
-                Claim your .qf identity
-              </p>
+              <h2 className="font-clash text-2xl font-bold text-white mb-2">No names yet</h2>
+              <p className="text-[#555] text-sm mb-6">Claim your first .qf identity</p>
               <Link
                 to="/"
-                className="inline-block rounded-xl bg-[#00D179] px-8 py-3 font-bold text-black transition-colors duration-200 hover:bg-[#00B868]"
+                className="px-6 py-3 rounded-xl bg-[#00D179] text-black font-semibold hover:bg-[#00B868] transition-colors"
               >
                 Search Names
               </Link>
-            </motion.div>
+            </div>
           )}
 
+          {/* MAIN CONTENT */}
           {address && !loading && names.length > 0 && (
             <>
-              {renewError && (
-                <div className="mb-4 p-4 bg-[#E5484D]/10 border border-[#E5484D]/30 rounded-xl text-[#E5484D]">
-                  {renewError}
-                </div>
-              )}
-              {/* Grid layout: 2 columns on desktop, 1 on mobile */}
-              <div className="flex flex-col gap-6">
-                {names.map((item, index) => {
-                  const bio = textRecords[item.name]?.bio ?? '';
-                  const avatarUrl = textRecords[item.name]?.avatar ?? '';
-                  const isPrimary = primaryName === item.name;
+              {/* Summary bar */}
+              <div className="w-full rounded-xl border border-white/[0.04] bg-[#0c0c0c] px-5 py-4 mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  {/* Left: wallet + count */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      {providerType === 'evm' ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#F6851B"/>
+                          <path d="M2 17L12 22L22 17" stroke="#F6851B" strokeWidth="2"/>
+                          <path d="M2 12L12 17L22 12" stroke="#F6851B" strokeWidth="2"/>
+                        </svg>
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-[#E6007A]" />
+                      )}
+                      <span className="text-[#888] text-xs font-mono">
+                        {truncateAddress(address)}
+                      </span>
+                    </div>
+                    <div className="w-1 h-1 rounded-full bg-white/[0.2]" />
+                    <span className="text-white text-sm font-medium">
+                      {names.length} name{names.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
 
-                  return (
-                    <NameCard
-                      key={item.name}
-                      item={item}
-                      index={index}
-                      bio={bio}
-                      avatarUrl={avatarUrl}
-                      isPrimary={isPrimary}
-                      enableTilt={enableTilt}
-                      renewing={renewingName === item.name}
-                      settingPrimary={settingPrimary === item.name}
-                      recentlyRenewed={recentlyRenewed === item.name}
-                      recentlyPrimaried={recentlyPrimaried === item.name}
-                      onOpen={() => openEditModal(item.name)}
-                      onSetPrimary={(e) => handleSetPrimary(item.name, e)}
-                      onRenew={(e) => {
-                        e.stopPropagation();
-                        setRenewModalName(item.name);
-                      }}
-                      onShare={(e) => handleShare(item.name, e)}
-                      onEdit={(e) => handleEditClick(item.name, e)}
-                      onTransfer={(e) => handleTransferClick(item.name, e)}
-                    />
-                  );
-                })}
+                  {/* Center: primary name */}
+                  {qnsName && (
+                    <div className="flex items-center gap-2">
+                      <Avatar url={cardRecords.get(qnsName)?.avatar} name={qnsName} size={24} />
+                      <Link 
+                        to={`/name/${qnsName}`}
+                        className="text-[#00D179] text-sm font-medium hover:text-[#00B868] transition-colors"
+                      >
+                        {qnsName}.qf
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Right: next expiry */}
+                  <div className="text-sm">
+                    {names.some(n => !n.isPermanent) ? (
+                      <span className="text-amber-400">
+                        Earliest renewal: {getNextExpiry()}
+                      </span>
+                    ) : (
+                      <span className="text-[#00D179]">All permanent</span>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* Toolbar row */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  {(['primary', 'alpha', 'expiry'] as const).map((sort) => (
+                    <button 
+                      key={sort} 
+                      onClick={() => setSortMode(sort)} 
+                      className={`text-xs transition-colors ${
+                        sortMode === sort ? 'text-white' : 'text-[#444] hover:text-[#666]'
+                      }`}
+                    >
+                      {sort === 'primary' ? 'Primary first' : sort === 'alpha' ? 'A–Z' : 'Expiring soon'}
+                    </button>
+                  ))}
+                </div>
+                {qnsName && (
+                  <Link 
+                    to={`/name/${qnsName}`} 
+                    className="text-xs text-[#00D179] hover:text-[#00B868] transition-colors"
+                  >
+                    View public profile →
+                  </Link>
+                )}
+              </div>
+
+              {/* Grid of identity cards */}
+              <AnimatePresence>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {sortedNames.map((name) => {
+                    const defaultRecords = { avatar: '', bio: '', twitter: '', telegram: '', website: '', email: '' };
+                    const records = (cardRecords.get(name.name) || defaultRecords) as typeof defaultRecords;
+                    const isPrimary = primaryName === name.name;
+
+                    return (
+                      <IdentityCard
+                        key={name.name}
+                        name={name}
+                        records={records}
+                        isPrimary={isPrimary}
+                        enableTilt={enableTilt}
+                        onOpenDetail={openDetailModal}
+                      />
+                    );
+                  })}
+                </div>
+              </AnimatePresence>
             </>
           )}
         </div>
@@ -1146,7 +1413,7 @@ export default function MyNamesPage() {
                 <div className="flex items-start gap-4">
                   <div className="rounded-full border border-white/10 bg-[#0A0A0A] p-1 shadow-lg shadow-black/20">
                     <Avatar 
-                      url={textRecords[editModalName]?.avatar ?? ''} 
+                      url={cardRecords.get(editModalName)?.avatar ?? ''} 
                       name={editModalName} 
                       size={56} 
                     />
@@ -1499,6 +1766,48 @@ export default function MyNamesPage() {
         )}
       </AnimatePresence>
 
+      {/* Detail Modal */}
+      <AnimatePresence>
+        {detailModalOpen && selectedName && (() => {
+          const ownedName = names.find(n => n.name === selectedName);
+          if (!ownedName || !address || !providerType) return null;
+          
+          const records = cardRecords.get(selectedName) || {
+            avatar: '', bio: '', twitter: '', telegram: '', website: '', email: ''
+          } as { avatar: string; bio: string; twitter: string; telegram: string; website: string; email: string };
+
+          return (
+            <DetailModal
+              name={selectedName}
+              isOpen={detailModalOpen}
+              defaultTab={detailTab}
+              onClose={closeDetailModal}
+              ownedName={ownedName}
+              records={records}
+              isPrimary={primaryName === selectedName}
+              onSaveRecords={async (name, newRecords) => {
+                // Convert to the format expected by handleSaveAll
+                setEditValues(prev => ({ ...prev, [name]: newRecords }));
+                await handleSaveAll(name);
+              }}
+              onSetPrimary={async (name) => {
+                await handleSetPrimary(name, { stopPropagation: () => {} } as any);
+              }}
+              onRenew={async (name, years) => {
+                await handleRenew(name, years);
+              }}
+              onTransfer={async (name, toAddress) => {
+                setTransferModal(name);
+                setTransferRecipient(toAddress);
+                await handleTransfer();
+              }}
+              providerType={providerType}
+              address={address}
+            />
+          );
+        })()}
+      </AnimatePresence>
+
       {/* Renew Modal */}
       <AnimatePresence>
         {renewModalName && (() => {
@@ -1576,3 +1885,5 @@ export default function MyNamesPage() {
     </div>
   );
 }
+
+export default MyNamesPage;

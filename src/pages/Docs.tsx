@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Copy, Check, Book, Code, Globe, Key, FileText } from 'lucide-react';
+import { Copy, Check, Book, Code, Globe, Key, FileText, Wallet } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import {
@@ -15,6 +15,7 @@ const sections = [
   { id: 'how-it-works', label: 'How It Works', icon: Globe },
   { id: 'text-records', label: 'Text Records', icon: FileText },
   { id: 'integrate-js', label: 'JavaScript / TypeScript', icon: Code },
+  { id: 'integrate-evm', label: 'MetaMask / EVM Wallets', icon: Wallet },
   { id: 'integrate-sol', label: 'Solidity', icon: Code },
 ];
 
@@ -166,6 +167,84 @@ contract MyContract {
     }
 }`;
 
+const EVM_EXAMPLE = `// QNS integration with MetaMask / EVM wallets
+// Works with ethers.js, viem, or any EVM library
+// Chain ID: 3426 (QF Network)
+
+import { createPublicClient, http, namehash, encodeFunctionData } from 'viem';
+
+// QF Network chain definition
+const qfNetwork = {
+  id: 3426,
+  name: 'QF Network',
+  nativeCurrency: { name: 'QF', symbol: 'QF', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://rpc.qfnetwork.xyz'] },
+  },
+};
+
+const client = createPublicClient({
+  chain: qfNetwork,
+  transport: http(),
+});
+
+const RESOLVER = '${QNS_RESOLVER_ADDRESS}';
+const RESOLVER_ABI = [
+  'function addr(bytes32 node) view returns (address)',
+  'function name(bytes32 node) view returns (string)',
+  'function text(bytes32 node, string key) view returns (string)',
+];
+
+// Forward resolution: name.qf → address
+async function resolveAddress(name: string): Promise<string> {
+  const node = namehash(name + '.qf');
+  const address = await client.readContract({
+    address: RESOLVER,
+    abi: RESOLVER_ABI,
+    functionName: 'addr',
+    args: [node],
+  });
+  return address;
+}
+
+// Reverse resolution: address → name.qf
+async function reverseLookup(address: string): Promise<string> {
+  const reverseNode = namehash(
+    address.slice(2).toLowerCase() + '.addr.reverse'
+  );
+  const name = await client.readContract({
+    address: RESOLVER,
+    abi: RESOLVER_ABI,
+    functionName: 'name',
+    args: [reverseNode],
+  });
+  return name;
+}
+
+// Read text records (avatar, bio, twitter, etc.)
+async function getTextRecord(name: string, key: string): Promise<string> {
+  const node = namehash(name + '.qf');
+  return client.readContract({
+    address: RESOLVER,
+    abi: RESOLVER_ABI,
+    functionName: 'text',
+    args: [node, key],
+  });
+}
+
+// MetaMask: request connection to QF Network
+async function connectToQF() {
+  await window.ethereum.request({
+    method: 'wallet_addEthereumChain',
+    params: [{
+      chainId: '0x' + (3426).toString(16),
+      chainName: 'QF Network',
+      nativeCurrency: { name: 'QF', symbol: 'QF', decimals: 18 },
+      rpcUrls: ['https://rpc.qfnetwork.xyz'],
+    }],
+  });
+}`;
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -184,6 +263,20 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function highlightCode(code: string): string {
+  return code
+    // Comments
+    .replace(/(\/\/.*)/g, '<span class="text-[#555]">$1</span>')
+    // Strings (single and double quotes, template literals)
+    .replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g, '<span class="text-[#00D179]">$1</span>')
+    // Keywords
+    .replace(/\b(import|from|export|const|let|var|function|async|await|return|if|else|try|catch|new|typeof|interface|type)\b/g, '<span class="text-purple-400">$1</span>')
+    // Types / classes
+    .replace(/\b(string|number|boolean|Promise|void|any)\b/g, '<span class="text-amber-400">$1</span>')
+    // Numbers
+    .replace(/\b(\d+)\b/g, '<span class="text-orange-300">$1</span>');
+}
+
 function CodeBlock({ code, language = 'typescript' }: { code: string; language?: string }) {
   return (
     <div className="relative rounded-xl border border-white/[0.06] bg-[#0A0A0A] overflow-hidden">
@@ -192,7 +285,10 @@ function CodeBlock({ code, language = 'typescript' }: { code: string; language?:
         <CopyButton text={code} />
       </div>
       <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
-        <code className="text-[#999] font-mono text-[13px]">{code}</code>
+        <code 
+          className="text-[#999] font-mono text-[13px]"
+          dangerouslySetInnerHTML={{ __html: highlightCode(code) }}
+        />
       </pre>
     </div>
   );
@@ -277,11 +373,17 @@ export default function DocsPage() {
                     {label}
                   </button>
                 ))}
+                <div className="mt-auto pt-6 border-t border-white/[0.04]">
+                  <p className="text-[10px] text-[#333]">Last updated: March 2026</p>
+                </div>
               </div>
             </nav>
 
             {/* Main content */}
             <main className="flex-1 min-w-0 max-w-3xl">
+              {/* Last updated */}
+              <p className="text-xs text-[#333] mb-6">Last updated: March 2026</p>
+
               {/* Mobile section nav */}
               <div className="lg:hidden mb-8 -mx-6 px-6 overflow-x-auto no-scrollbar">
                 <div className="flex gap-2 min-w-max">
@@ -413,6 +515,15 @@ console.log(\`Twitter: \${twitter}\`);`}
                   Use polkadot-api (PAPI) to interact with QNS contracts on QF Network. viem is used for ABI encoding/decoding.
                 </p>
                 <CodeBlock code={PAPI_EXAMPLE} language="TypeScript" />
+              </section>
+
+              {/* MetaMask / EVM Wallets */}
+              <section id="integrate-evm" className="mb-16 scroll-mt-24">
+                <h2 className="font-clash text-2xl font-semibold text-white mb-2">MetaMask / EVM Wallets</h2>
+                <p className="text-[#666] mb-6 leading-relaxed">
+                  Integrate QNS into any EVM-compatible wallet or dApp. This example uses viem but works with ethers.js or web3.js.
+                </p>
+                <CodeBlock code={EVM_EXAMPLE} language="TypeScript" />
               </section>
 
               {/* Solidity */}

@@ -194,9 +194,9 @@ function ProvenancePanel({
 
 function LedgerPanel({ events }: { events: LedgerEvent[] }) {
   return (
-    <div className="relative">
+    <div className="flex-1 min-h-0 relative">
       {/* Scrollable container — hidden scrollbar */}
-      <div className="relative pl-4 max-h-[320px] overflow-y-auto scrollbar-hide">
+      <div className="relative pl-4 h-full overflow-y-auto scrollbar-hide">
         {/* Vertical line */}
         <div className="absolute left-[3px] top-3 bottom-3 w-px bg-white/[0.06]" />
 
@@ -789,7 +789,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_200px]">
 
               {/* ── Left: Provenance ── */}
-              <div className="hidden md:block p-5 border-r border-white/[0.04]">
+              <div className="hidden md:flex md:flex-col p-5 border-r border-white/[0.04]">
                 <ProvenancePanel
                   profile={profile}
                   onCopyAddress={handleCopyAddress}
@@ -947,7 +947,8 @@ export default function ProfilePage() {
               </motion.div>
 
               {/* ── Right: Ledger ── */}
-              <div className="hidden md:block p-5 border-l border-white/[0.04]">
+              <div className="hidden md:flex md:flex-col p-5 border-l border-white/[0.04]">
+                <p className="text-[10px] font-medium tracking-[0.2em] text-[#333] mb-3 select-none">LEDGER</p>
                 <LedgerPanel events={ledgerEvents} />
               </div>
             </div>
