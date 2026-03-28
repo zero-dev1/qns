@@ -1,45 +1,29 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWalletStore } from '../stores/walletStore';
 import { useNamesStore } from '../stores/namesStore';
-import { Link, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import {
   Twitter,
   Loader2,
   Check,
-  Star,
+  Wallet,
   X,
-  Pencil,
-  Github,
-  Globe,
-  Send,
-  Link2,
-  FileText,
-  RefreshCw,
-  Share2,
-  Copy,
-  ArrowRight,
-  Search,
 } from 'lucide-react';
 import {
-  renewName,
   transferNameOnChain,
   getTextRecord,
-  setMultipleTextRecords,
   resolveForward,
   getNamesOwnedByAddress,
-  setPrimaryName,
   resolveReverse,
 } from '../utils/qns';
 import { ss58ToEvmAddress } from '../utils/address';
-import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 import { useToast } from '../contexts/ToastContext';
-import { useCopy } from '../hooks/useCopy';
-import { hapticSuccess, hapticError, hapticTap, hapticProfileAction } from '../utils/haptics';
+import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
-import RenewModal from '../components/RenewModal';
+import IdentityCard from '../components/IdentityCard';
 import Avatar from '../components/Avatar';
 
 interface OwnedName {
@@ -49,352 +33,20 @@ interface OwnedName {
   registeredAt: bigint;
 }
 
-const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'github', 'url', 'telegram'] as const;
+const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'] as const;
 
-const FIELD_ICONS: Record<typeof TEXT_KEYS[number], React.ReactNode> = {
-  avatar: <Link2 size={16} />,
-  bio: <FileText size={16} />,
-  twitter: <Twitter size={16} />,
-  github: <Github size={16} />,
-  url: <Globe size={16} />,
-  telegram: <Send size={16} />,
-};
 
-const FIELD_LABELS: Record<typeof TEXT_KEYS[number], string> = {
-  avatar: 'Avatar URL',
-  bio: 'Bio',
-  twitter: 'Twitter',
-  github: 'Github',
-  url: 'Website',
-  telegram: 'Telegram',
-};
 
-const PLACEHOLDERS: Record<typeof TEXT_KEYS[number], string> = {
-  avatar: 'https://example.com/avatar.png',
-  bio: 'Tell the world about yourself',
-  twitter: '@dotqfns or https://x.com/dotqfns',
-  github: 'username or https://github.com/username',
-  url: 'https://example.com',
-  telegram: '@username or https://t.me/username',
-};
 
-const ShieldIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
 
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-
-// Card animation variants
-const cardVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.45,
-      delay: i * 0.1,
-      ease: [0.22, 1, 0.36, 1] as const,
-    },
-  }),
-};
-
-// Modal animation variants
-const modalBackdropVariants = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1,
-    transition: { duration: 0.2 }
-  },
-  exit: { 
-    opacity: 0,
-    transition: { duration: 0.2 }
-  },
-};
-
-const modalContentVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 10 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: {
-      type: 'spring' as const,
-      damping: 25,
-      stiffness: 300,
-    },
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.95,
-    y: 10,
-    transition: {
-      duration: 0.15,
-    },
-  },
-};
-
-interface NameCardProps {
-  item: OwnedName;
-  index: number;
-  bio: string;
-  avatarUrl: string;
-  isPrimary: boolean;
-  enableTilt: boolean;
-  renewing: boolean;
-  settingPrimary: boolean;
-  recentlyRenewed: boolean;
-  recentlyPrimaried: boolean;
-  onOpen: () => void;
-  onSetPrimary: (e: React.MouseEvent) => void;
-  onRenew: (e: React.MouseEvent) => void;
-  onShare: (e: React.MouseEvent) => void;
-  onEdit: (e: React.MouseEvent) => void;
-  onTransfer: (e: React.MouseEvent) => void;
-}
-
-const NameCard = ({
-  item,
-  index,
-  bio,
-  avatarUrl,
-  isPrimary,
-  enableTilt,
-  renewing,
-  settingPrimary,
-  recentlyRenewed,
-  recentlyPrimaried,
-  onOpen,
-  onSetPrimary,
-  onRenew,
-  onShare,
-  onEdit,
-  onTransfer,
-}: NameCardProps) => {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const rotateX = useMotionValue(0);
-  const rotateY = useMotionValue(0);
-  const springRotateX = useSpring(rotateX, { stiffness: 180, damping: 20, mass: 0.45 });
-  const springRotateY = useSpring(rotateY, { stiffness: 180, damping: 20, mass: 0.45 });
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Update spotlight position
-    setMousePosition({ x, y });
-    
-    // Update tilt if enabled
-    if (!enableTilt) return;
-    
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const nextRotateY = ((x - centerX) / centerX) * 3;
-    const nextRotateX = ((centerY - y) / centerY) * 3;
-
-    rotateX.set(Number(nextRotateX.toFixed(2)));
-    rotateY.set(Number(nextRotateY.toFixed(2)));
-  };
-
-  const handleMouseLeave = () => {
-    rotateX.set(0);
-    rotateY.set(0);
-  };
-
-  const hasExpiry = !item.isPermanent && item.expires > 0n;
-  const expiryText = hasExpiry
-    ? new Date(Number(item.expires) * 1000).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null;
-
-  const isTeam = TEAM_NAMES.includes(item.name.toLowerCase());
-  const isDappLab = DAPP_LAB_NAMES.includes(item.name.toLowerCase());
-
-  return (
-    <motion.div
-      layoutId={`name-card-${item.name}`}
-      initial={cardVariants.hidden}
-      animate={cardVariants.visible(index)}
-      onClick={onOpen}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={enableTilt ? { rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 800 } : undefined}
-      className={`name-card group relative cursor-pointer overflow-hidden rounded-2xl border bg-[#111] transition-all duration-300 hover:border-[#00D179]/20 hover:shadow-lg hover:shadow-[#00D179]/5 ${
-  recentlyRenewed || recentlyPrimaried ? 'border-[#00D179]/40 shadow-lg shadow-[#00D179]/10' : 'border-white/5'
-}`}
-    >
-      {/* Spotlight effect overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none z-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        style={{
-          background: `radial-gradient(350px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(0,209,121,0.04), transparent 40%)`,
-        }}
-      />
-      <div
-        className={`relative h-20 z-10 ${
-          isPrimary
-            ? 'bg-gradient-to-r from-[#00D179]/20 via-[#00D179]/10 to-transparent'
-            : 'bg-gradient-to-r from-white/5 via-white/[0.03] to-transparent'
-        }`}
-      >
-        <div className="absolute right-4 top-4 z-10 flex flex-wrap justify-end gap-2">
-          {item.isPermanent && (
-            <span className="permanent-badge hidden md:inline-flex rounded-full border border-[#00D179]/30 bg-[#00D179]/5 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
-              Permanent
-            </span>
-          )}
-          {isTeam && (
-            <span className="inline-flex rounded-full border border-[#00D179]/30 bg-[#00D179]/5 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
-              Team
-            </span>
-          )}
-          {isDappLab && (
-            <span className="inline-flex rounded-full border border-[#00D179]/30 bg-[#00D179]/5 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179]">
-              dApp Lab
-            </span>
-          )}
-          {recentlyRenewed && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-[#00D179]/30 bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179] animate-pulse">
-              <Check size={10} />
-              Renewed
-            </span>
-          )}
-          {recentlyPrimaried && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-[#00D179]/30 bg-[#00D179]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#00D179] animate-pulse">
-              <Star size={10} fill="currentColor" />
-              Primary set
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="px-6 pb-6">
-        <div className="-mt-8 flex items-center gap-4">
-          <div className="z-10 h-16 w-16 flex-shrink-0 overflow-hidden rounded-full border-4 border-[#111] bg-[#111]">
-            <Avatar url={avatarUrl} name={item.name} size={64} />
-          </div>
-
-          <div className="min-w-0 flex-1 pt-2">
-            <div className="flex items-center gap-2">
-              <h3 className="min-w-0 truncate font-clash text-xl md:text-2xl font-bold text-white whitespace-nowrap">
-                <span className="whitespace-nowrap">
-                  {item.name}
-                  <span className="text-[#00D179]">.qf</span>
-                </span>
-              </h3>
-
-              {isPrimary && (
-                <span className="inline-flex flex-shrink-0 items-center gap-1.5 text-xs text-[#00D179]">
-                  <span className="primary-dot" />
-                  <span className="whitespace-nowrap">Primary</span>
-                </span>
-              )}
-            </div>
-
-            {item.isPermanent ? (
-              <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-[#00D179]">
-                <ShieldIcon />
-                <span>Permanent</span>
-              </div>
-            ) : expiryText && (
-              <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-500">
-                <ClockIcon />
-                <span>{expiryText}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <p className={`mt-2 line-clamp-1 text-sm ${bio ? 'text-gray-400' : 'italic text-gray-600'}`}>
-          {bio || 'No bio set'}
-        </p>
-
-        <div className="mt-4 border-t border-white/5 pt-4">
-          <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={onSetPrimary}
-              disabled={isPrimary || settingPrimary}
-              className={`group/action min-w-0 flex flex-1 flex-col items-center gap-1.5 ${
-                isPrimary || settingPrimary ? 'cursor-default' : 'cursor-pointer'
-              }`}
-            >
-              <span className={`transition-colors duration-200 ${isPrimary ? 'text-[#00D179]' : 'text-gray-500'} ${isPrimary || settingPrimary ? '' : 'group-hover/action:text-[#00D179]'}`}>
-                {settingPrimary ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <Star size={20} fill={isPrimary ? 'currentColor' : 'none'} />
-                )}
-              </span>
-              <span className={`text-[8px] md:text-[9px] uppercase tracking-wider whitespace-nowrap transition-colors duration-200 ${isPrimary ? 'text-[#00D179]' : 'text-gray-600'} ${isPrimary || settingPrimary ? '' : 'group-hover/action:text-gray-400'}`}>
-                Primary
-              </span>
-            </button>
-
-            <button
-              onClick={onRenew}
-              disabled={item.isPermanent || renewing}
-              className={`group/action min-w-0 flex flex-1 flex-col items-center gap-1.5 ${
-                item.isPermanent || renewing ? 'cursor-default opacity-40' : 'cursor-pointer'
-              }`}
-            >
-              <span className={`text-gray-500 transition-colors duration-200 ${item.isPermanent || renewing ? '' : 'group-hover/action:text-[#00D179]'}`}>
-                {renewing ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
-              </span>
-              <span className={`text-[8px] md:text-[9px] uppercase tracking-wider whitespace-nowrap text-gray-600 transition-colors duration-200 ${item.isPermanent || renewing ? '' : 'group-hover/action:text-gray-400'}`}>
-                Renew
-              </span>
-            </button>
-
-            <button onClick={onShare} className="group/action min-w-0 flex flex-1 cursor-pointer flex-col items-center gap-1.5">
-              <span className="text-gray-500 transition-colors duration-200 group-hover/action:text-[#00D179]">
-                <Share2 size={20} />
-              </span>
-              <span className="text-[8px] md:text-[9px] uppercase tracking-wider whitespace-nowrap text-gray-600 transition-colors duration-200 group-hover/action:text-gray-400">
-                Share
-              </span>
-            </button>
-
-            <button onClick={onEdit} className="group/action min-w-0 flex flex-1 cursor-pointer flex-col items-center gap-1.5">
-              <span className="text-gray-500 transition-colors duration-200 group-hover/action:text-[#00D179]">
-                <Pencil size={20} />
-              </span>
-              <span className="text-[8px] md:text-[9px] uppercase tracking-wider whitespace-nowrap text-gray-600 transition-colors duration-200 group-hover/action:text-gray-400">
-                Edit
-              </span>
-            </button>
-
-            <button onClick={onTransfer} className="group/action min-w-0 flex flex-1 cursor-pointer flex-col items-center gap-1.5">
-              <span className="text-gray-500 transition-colors duration-200 group-hover/action:text-[#00D179]">
-                <ArrowRight size={20} />
-              </span>
-              <span className="text-[8px] md:text-[9px] uppercase tracking-wider whitespace-nowrap text-gray-600 transition-colors duration-200 group-hover/action:text-gray-400">
-                Transfer
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
 
 export default function MyNamesPage() {
   const { address, ss58Address, connect, refreshName, providerType } = useWalletStore();
   const { refreshNames } = useNamesStore();
   const { showToast } = useToast();
-  const { copy } = useCopy();
   const [searchParams] = useSearchParams();
   const expandName = searchParams.get('expand');
+  const hasAutoExpanded = useRef(false);
 
   // Compute the correct signer address based on provider type
   const signerAddress = providerType === 'evm' ? address : (ss58Address || address);
@@ -402,32 +54,14 @@ export default function MyNamesPage() {
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
   const [textRecords, setTextRecords] = useState<Record<string, Record<string, string>>>({});
-  const [editValues, setEditValues] = useState<Record<string, Record<string, string>>>({});
-  const [savingAll, setSavingAll] = useState(false);
-  const [renewingName, setRenewingName] = useState<string | null>(null);
-  const [recentlyRenewed, setRecentlyRenewed] = useState<string | null>(null);
-  const [recentlyPrimaried, setRecentlyPrimaried] = useState<string | null>(null);
   const [transferModal, setTransferModal] = useState<string | null>(null);
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
-  const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
-  const [renewError, setRenewError] = useState<string | null>(null);
-
-  // Edit modal state
-  const [editModalName, setEditModalName] = useState<string | null>(null);
-
   const [transferSuccess, setTransferSuccess] = useState(false);
-  const hasAutoExpanded = useRef(false);
-
-  // Share modal state
-  const [shareModalName, setShareModalName] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [enableTilt, setEnableTilt] = useState(false);
 
-  // Renew modal state
-  const [renewModalName, setRenewModalName] = useState<string | null>(null);
 
   const loadNames = useCallback(async () => {
     if (!address) return;
@@ -515,11 +149,11 @@ export default function MyNamesPage() {
     }
   }, [address]);
 
-  // Auto-open edit modal if URL param is set
+  // Auto-expand effect (temporary — commit 3 will wire it to DetailModal)
   useEffect(() => {
     if (expandName && !hasAutoExpanded.current && names.some((n) => n.name === expandName)) {
       hasAutoExpanded.current = true;
-      openEditModal(expandName);
+      // Will open DetailModal in commit 3. For now, just mark as expanded.
     }
   }, [expandName, names]);
 
@@ -553,16 +187,11 @@ export default function MyNamesPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (editModalName) closeEditModal();
         if (transferModal) setTransferModal(null);
-        if (shareModalName) setShareModalName(null);
-        if (renewModalName) setRenewModalName(null);
       }
     };
 
-    const hasOpenModal = editModalName || transferModal || shareModalName || renewModalName;
-
-    if (hasOpenModal) {
+    if (transferModal) {
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
     }
@@ -571,7 +200,7 @@ export default function MyNamesPage() {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [editModalName, transferModal, shareModalName]);
+  }, [transferModal]);
 
   const loadTextRecords = async (name: string) => {
     const records: Record<string, string> = {};
@@ -579,757 +208,249 @@ export default function MyNamesPage() {
       records[key] = await getTextRecord(name, key);
     }
     setTextRecords((prev) => ({ ...prev, [name]: records }));
-    setEditValues((prev) => ({ ...prev, [name]: { ...records } }));
   };
 
-  const openEditModal = (name: string) => {
-    setEditModalName(name);
-    if (!textRecords[name]) {
-      loadTextRecords(name);
-    }
+
+
+
+  // Detail modal handlers (for commit 3)
+  const openDetailModal = (_name: string, _tab?: 'overview' | 'edit' | 'manage' | 'share') => {
+    // Will open DetailModal in commit 3
     hapticTap();
   };
 
-  const closeEditModal = () => {
-    setEditModalName(null);
-    hapticTap();
-  };
+  // Sort functionality
+  const [sortMode, setSortMode] = useState<'primary' | 'alpha' | 'expiry'>('primary');
 
-  const handleCancelEditing = () => {
-    closeEditModal();
-  };
-
-  const handleSaveAll = async (name: string) => {
-    if (!address) return;
-    setSavingAll(true);
-    hapticTap();
-    
-    try {
-      // Collect all changed fields
-      const keys: string[] = [];
-      const values: string[] = [];
-      
-      for (const key of TEXT_KEYS) {
-        const newValue = editValues[name]?.[key] ?? '';
-        const oldValue = textRecords[name]?.[key] ?? '';
-        
-        if (newValue !== oldValue) {
-          keys.push(key);
-          values.push(newValue);
-        }
-      }
-      
-      // Call setMultipleTexts if there are changes
-      if (keys.length > 0) {
-        try {
-          if (!signerAddress) throw new Error('No wallet connected');
-          const { confirmation } = await setMultipleTextRecords(name, keys, values, signerAddress);
-
-          // Optimistic update
-          setTextRecords((prev) => ({ ...prev, [name]: { ...(editValues[name] || {}) } }));
-          showToast('Profile updated successfully', 'success');
-          hapticProfileAction();
-          closeEditModal();
-
-          confirmation.then((result) => {
-            if (result.confirmed) return;
-            if (result.error === 'not_confirmed') {
-              showToast('Profile update submitted but unconfirmed.', 'warning');
-              return;
-            }
-            // Check if this is a retryable error
-            if (result.error && isRetryableError(result.error)) {
-              showToast(RETRY_MESSAGE_SHORT, 'warning');
-              loadTextRecords(name); // re-fetch from chain
-              hapticError();
-              return;
-            }
-            // Revert text records
-            showToast(`Profile update failed: ${result.error}. Reverting changes.`, 'error');
-            loadTextRecords(name); // re-fetch from chain
-            hapticError();
-          });
-        } catch (err: any) {
-          // Check if this is a retryable error
-          if (isRetryableError(err.message)) {
-            showToast(RETRY_MESSAGE_SHORT, 'warning');
-            hapticError();
-            return;
-          }
-          showToast('Failed to save, please try again', 'error');
-          hapticError();
-        }
-      } else {
-        // Nothing changed — just close
-        showToast('No changes to save', 'success');
-        closeEditModal();
-      }
-    } finally {
-      setSavingAll(false);
+  const sortedNames = names.sort((a, b) => {
+    if (sortMode === 'primary') {
+      const aPrimary = primaryName === a.name;
+      const bPrimary = primaryName === b.name;
+      if (aPrimary && !bPrimary) return -1;
+      if (!aPrimary && bPrimary) return 1;
+      return a.name.localeCompare(b.name);
     }
-  };
-
-  const handleSetPrimary = async (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!address) return;
-    setSettingPrimary(name);
-    try {
-      if (!signerAddress) throw new Error('No wallet connected');
-      const { confirmation } = await setPrimaryName(name, address, signerAddress);
-
-      // Optimistic
-      setPrimaryNameState(name);
-      useWalletStore.setState({ qnsName: name, displayName: name });
-      setRecentlyPrimaried(name);
-      setTimeout(() => setRecentlyPrimaried(null), 5000);
-      hapticSuccess();
-
-      confirmation.then((result) => {
-        if (result.confirmed) {
-          // Delay refresh to give chain time to index the reverse record.
-          // After refresh, re-assert the optimistic primary in case the
-          // chain's reverse lookup returned stale data.
-          setTimeout(() => {
-            refreshName().catch(() => {}).finally(() => {
-              // Re-assert optimistic primary if it was reverted by stale chain data
-              const current = useWalletStore.getState().qnsName;
-              if (current !== name) {
-                useWalletStore.setState({ qnsName: name, displayName: name });
-              }
-            });
-          }, 5000);
-          return;
-        }
-        if (result.error === 'not_confirmed') {
-          showToast('Primary name update submitted but unconfirmed.', 'warning');
-          setTimeout(() => refreshName().catch(() => {}), 5000);
-          return;
-        }
-        // Check if this is a retryable error
-        if (result.error && isRetryableError(result.error)) {
-          showToast(RETRY_MESSAGE_SHORT, 'warning');
-          refreshName().catch(() => {});
-          resolveReverse(address).then(setPrimaryNameState).catch(() => {});
-          hapticError();
-          return;
-        }
-        // Revert
-        showToast(`Failed to set primary: ${result.error}`, 'error');
-        refreshName().catch(() => {});
-        resolveReverse(address).then(setPrimaryNameState).catch(() => {});
-        hapticError();
-      });
-    } catch (err: any) {
-      // Check if this is a retryable error
-      if (isRetryableError(err.message)) {
-        showToast(RETRY_MESSAGE_SHORT, 'warning');
-        hapticError();
-        return;
-      }
-      showToast(err.message || 'Failed to set primary name', 'error');
-      hapticError();
-    } finally {
-      setSettingPrimary(null);
+    if (sortMode === 'alpha') {
+      return a.name.localeCompare(b.name);
     }
-  };
+    // expiry sort
+    const aExpiry = a.isPermanent ? 9999999999999n : a.expires;
+    const bExpiry = b.isPermanent ? 9999999999999n : b.expires;
+    return aExpiry < bExpiry ? -1 : aExpiry > bExpiry ? 1 : 0;
+  });
 
-  const handleRenew = async (name: string, years: number) => {
-    if (!address) return;
-    setRenewingName(name);
-    setRenewError(null);
-    try {
-      if (!signerAddress) throw new Error('No wallet connected');
-      const { confirmation } = await renewName(name, years, signerAddress);
+  // Card records mapping for IdentityCard
+  const cardRecords = new Map(
+    names.map((name) => [
+      name.name,
+      {
+        avatar: textRecords[name.name]?.avatar || '',
+        bio: textRecords[name.name]?.bio || '',
+        twitter: textRecords[name.name]?.twitter || '',
+        telegram: textRecords[name.name]?.telegram || '',
+        website: textRecords[name.name]?.url || '',
+        email: textRecords[name.name]?.email || '',
+      },
+    ])
+  );
 
-      // Optimistic update immediately
-      setNames((prev) =>
-        prev.map((item) => {
-          if (item.name !== name || item.isPermanent) return item;
-          return { ...item, expires: item.expires + BigInt(years) * 365n * 24n * 60n * 60n };
-        })
-      );
-      showToast(`Renewed ${name}.qf for ${years} year${years > 1 ? 's' : ''}`, 'success');
-      hapticSuccess();
-      setRecentlyRenewed(name);
-      setTimeout(() => setRecentlyRenewed(null), 5000);
 
-      confirmation.then((result) => {
-        if (result.confirmed) {
-          setTimeout(() => bgRefresh(), 3000);
-          return;
-        }
-        if (result.error === 'not_confirmed') {
-          showToast(`Renewal of ${name}.qf submitted but unconfirmed. Please check shortly.`, 'warning');
-          setTimeout(() => bgRefresh(), 5000);
-          return;
-        }
-        // Check if this is a retryable error
-        if (result.error && isRetryableError(result.error)) {
-          showToast(RETRY_MESSAGE_SHORT, 'warning');
-          hapticError();
-          bgRefresh(); // reload real data
-          return;
-        }
-        // Hard failure — revert optimistic expiry
-        showToast(`Renewal of ${name}.qf failed: ${result.error}`, 'error');
-        hapticError();
-        bgRefresh(); // reload real data
-      });
-    } catch (err: any) {
-      // Check if this is a retryable error
-      if (isRetryableError(err.message)) {
-        showToast(RETRY_MESSAGE_SHORT, 'warning');
-        hapticError();
-        return;
-      }
-      let userMessage = 'Transaction failed';
-      if (err.message) {
-        const message = err.message.toLowerCase();
-        if (message.includes('insufficient funds') || message.includes('insufficient balance')) {
-          userMessage = 'Insufficient QF balance';
-        } else if (message.includes('not connected') || message.includes('reconnect')) {
-          userMessage = 'Wallet connection lost. Please disconnect and reconnect.';
-        } else if (message.includes('switch metamask') || message.includes('qf network')) {
-          userMessage = 'Please switch MetaMask to QF Network and try again.';
-        } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
-          userMessage = 'Transaction rejected';
-        }
-      }
-      setRenewError(`Failed to renew ${name}: ${userMessage}`);
-      showToast(err.message || `Failed to renew ${name}`, 'error');
-      hapticError();
-    } finally {
-      setRenewingName(null);
-    }
-  };
-
-  const handleShare = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShareModalName(name);
-    hapticTap();
-  };
-
-  const handleTransferClick = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTransferModal(name);
-    setTransferRecipient('');
-    setTransferError(null);
-    setTransferSuccess(false);
-  };
-
-  const handleEditClick = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    openEditModal(name);
-  };
-
-  const handleTransfer = async () => {
-    if (!address || !transferModal) return;
-    setTransferError(null);
-    setTransferring(true);
-
-    const nameToTransfer = transferModal;
-    let recipient = transferRecipient.trim();
-    try {
-      if (recipient.endsWith('.qf')) {
-        const resolved = await resolveForward(recipient);
-        if (!resolved) {
-          setTransferError('Name not found.');
-          setTransferring(false);
-          return;
-        }
-        recipient = resolved;
-      } else if (/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
-        // Valid EVM address — use as-is
-      } else if (/^5[a-zA-Z0-9]{47}$/.test(recipient) || /^[a-zA-Z0-9]{46,48}$/.test(recipient)) {
-        try {
-          recipient = ss58ToEvmAddress(recipient);
-        } catch {
-          setTransferError('Invalid Substrate address.');
-          setTransferring(false);
-          return;
-        }
-      } else {
-        setTransferError('Enter a .qf name, 0x address, or Substrate address.');
-        setTransferring(false);
-        return;
-      }
-
-      if (!signerAddress) throw new Error('No wallet connected');
-      const { confirmation } = await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
-
-      // Optimistic removal
-      setNames((prev) => prev.filter((item) => item.name !== nameToTransfer));
-      if (editModalName === nameToTransfer) setEditModalName(null);
-      setTransferSuccess(true);
-      hapticSuccess();
-
-      confirmation.then((result) => {
-        if (result.confirmed) {
-          setTimeout(() => {
-            refreshNames(address).catch(() => {});
-            refreshName().catch(() => {});
-          }, 3000);
-          return;
-        }
-        if (result.error === 'not_confirmed') {
-          showToast(`Transfer submitted but unconfirmed. Check shortly.`, 'warning');
-          setTimeout(() => bgRefresh(), 5000);
-          return;
-        }
-        // Check if this is a retryable error
-        if (result.error && isRetryableError(result.error)) {
-          showToast(RETRY_MESSAGE_SHORT, 'warning');
-          hapticError();
-          bgRefresh(); // re-fetch real state
-          return;
-        }
-        // Hard failure — add name back
-        showToast(`Transfer failed: ${result.error}`, 'error');
-        hapticError();
-        bgRefresh(); // re-fetch real state
-      });
-    } catch (err: any) {
-      // Check if this is a retryable error
-      if (isRetryableError(err.message)) {
-        showToast(RETRY_MESSAGE_SHORT, 'warning');
-        hapticError();
-        return;
-      }
-      let userMessage = 'Transaction failed';
-      if (err.message) {
-        const message = err.message.toLowerCase();
-        if (message.includes('not connected') || message.includes('reconnect')) {
-          userMessage = 'Wallet connection lost. Please disconnect and reconnect.';
-        } else if (message.includes('switch metamask') || message.includes('qf network')) {
-          userMessage = 'Please switch MetaMask to QF Network and try again.';
-        } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
-          userMessage = 'Transaction rejected';
-        } else if (message.includes('unauthorized') || message.includes('not owner')) {
-          userMessage = 'You are not the owner of this name';
-        } else if (message.includes('insufficient') || message.includes('balance')) {
-          userMessage = 'Insufficient QF balance';
-        }
-      }
-      setTransferError(userMessage);
-      showToast(err.message || 'Transfer failed', 'error');
-      hapticError();
-    } finally {
-      setTransferring(false);
-    }
-  };
-
-  const handleCopyLink = async () => {
-    if (!shareModalName) return;
-    const url = `https://dotqf.xyz/name/${shareModalName}`;
-    copy(url, false);
-    hapticTap();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleShareX = () => {
-    if (!shareModalName) return;
-    const profileUrl = `https://dotqf.xyz/name/${shareModalName}`;
-    const text = `Check out my .qf identity on @dotqfns`;
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileUrl)}`;
-    window.open(url, '_blank');
-  };
-
-  const isTeamMember = (name: string) => TEAM_NAMES.includes(name.toLowerCase());
-
-  const getStatusDisplay = (item: OwnedName) => {
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    const thirtyDays = 30n * 24n * 60n * 60n;
-    const isExpiringSoon = item.expires > 0n && item.expires - now < thirtyDays;
-    const isTeam = isTeamMember(item.name);
-
-    if (item.isPermanent) {
-      return (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <span className="text-[#00D179]"><ShieldIcon /></span>
-          <span>Permanent</span>
-          {isTeam && (
-            <>
-              <span className="text-[#555555]">·</span>
-              <span className="text-[#C9A74C]">Team</span>
-            </>
-          )}
-        </div>
-      );
-    }
-
-    const date = new Date(Number(item.expires) * 1000);
-    const expiryText = `Expires ${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
-    return (
-      <div className={`flex flex-wrap items-center gap-2 text-xs ${isExpiringSoon ? 'text-[#F5A623]' : 'text-gray-500'}`}>
-        <span className={isExpiringSoon ? 'text-[#F5A623]' : 'text-gray-500'}><ClockIcon /></span>
-        <span>{expiryText}</span>
-        {isTeam && (
-          <>
-            <span className="text-[#555555]">·</span>
-            <span className="text-[#C9A74C]">Team</span>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  const getSelectedNameData = (): OwnedName | undefined => {
-    return names.find((n) => n.name === editModalName);
-  };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
+    <>
       <Navbar />
+      <div className="min-h-screen bg-[#0a0a0a] pt-24 pb-16">
+        <div className="max-w-[1120px] mx-auto px-4 sm:px-6">
 
-      {/* Main Content */}
-      <main className="pt-24 pb-20 px-6">
-        <div className="mx-auto max-w-[680px]">
-          <div className="mb-8">
-            <div>
-              <p className="font-satoshi font-medium text-sm text-[#00D179] uppercase tracking-[0.15em] mb-2">
-                MY NAMES
-              </p>
-              <h1 className="flex flex-wrap gap-x-3 gap-y-1 font-clash text-3xl font-semibold text-white md:text-4xl">
-                {['Your', '.qf', 'names'].map((word, index) => (
-                  <motion.span
-                    key={word}
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.05 }}
-                    className={word === '.qf' ? 'text-[#00D179]' : ''}
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </h1>
-            </div>
-          </div>
-
+          {/* ── NOT CONNECTED STATE ── */}
           {!address && (
-            <div className="animate-fade-in py-20 text-center">
-              <p className="text-[#8A8A8A] mb-6 font-satoshi text-lg">
-                Connect your wallet to manage your names
-              </p>
-              <button
-                onClick={connect}
-                className="px-8 py-3 rounded-xl border border-[#00D179] text-white font-medium hover:bg-[#00D17915] transition-all duration-200 cursor-pointer"
-              >
-                Connect Wallet
-              </button>
-            </div>
-          )}
-
-          {address && loading && (
-  <div className="flex flex-col gap-6">
-    {[0, 1].map((i) => (
-      <div key={i} className="rounded-2xl border border-white/5 bg-[#111] overflow-hidden animate-pulse">
-        <div className="h-20 bg-gradient-to-r from-white/[0.03] via-white/[0.02] to-transparent" />
-        <div className="px-6 pb-6">
-          <div className="-mt-8 flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-white/[0.06] border-4 border-[#111] shrink-0" />
-            <div className="flex-1 pt-2 space-y-2">
-              <div className="h-6 w-36 rounded bg-white/[0.06]" />
-              <div className="h-3 w-24 rounded bg-white/[0.04]" />
-            </div>
-          </div>
-          <div className="h-4 w-48 rounded bg-white/[0.04] mt-4" />
-          <div className="border-t border-white/5 mt-4 pt-4">
-            <div className="flex justify-between">
-              {[0, 1, 2, 3, 4].map((j) => (
-                <div key={j} className="flex flex-col items-center gap-1.5">
-                  <div className="w-5 h-5 rounded bg-white/[0.04]" />
-                  <div className="w-8 h-2 rounded bg-white/[0.03]" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
-
-          {address && !loading && names.length === 0 && (
             <motion.div
-              className="py-20 text-center"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-32"
             >
-              <div className="mx-auto mb-6 flex h-[120px] w-[120px] items-center justify-center rounded-full border-2 border-[#00D179]/20">
-                <div className="flex h-[88px] w-[88px] items-center justify-center rounded-full border border-[#00D179]/10">
-                  <Search size={32} className="text-[#00D179]/40" />
+              <div className="w-full max-w-sm rounded-2xl border border-white/[0.06] bg-[#111] p-8 text-center">
+                <div className="w-14 h-14 mx-auto mb-5 rounded-full bg-white/[0.04] flex items-center justify-center">
+                  <Wallet size={24} className="text-[#555]" />
                 </div>
+                <h2 className="font-clash text-xl font-bold text-white mb-2">
+                  Connect your wallet
+                </h2>
+                <p className="text-sm text-[#555] mb-6">
+                  Connect to view and manage your .qf identities
+                </p>
+                <button
+                  onClick={() => connect()}
+                  className="w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors"
+                >
+                  Connect Wallet
+                </button>
               </div>
-              <p className="mb-2 text-xl font-semibold text-white">
-                No names yet
-              </p>
-              <p className="mb-6 text-sm text-gray-500">
-                Claim your .qf identity
-              </p>
-              <Link
-                to="/"
-                className="inline-block rounded-xl bg-[#00D179] px-8 py-3 font-bold text-black transition-colors duration-200 hover:bg-[#00B868]"
-              >
-                Search Names
-              </Link>
             </motion.div>
           )}
 
+          {/* ── LOADING STATE ── */}
+          {address && loading && (
+            <div className="py-12">
+              {/* Summary bar skeleton */}
+              <div className="rounded-xl border border-white/[0.04] bg-[#111] p-4 mb-8 animate-pulse">
+                <div className="flex items-center gap-6">
+                  <div className="h-4 w-24 rounded bg-white/[0.06]" />
+                  <div className="h-4 w-16 rounded bg-white/[0.04]" />
+                  <div className="ml-auto h-4 w-32 rounded bg-white/[0.04]" />
+                </div>
+              </div>
+              {/* Card grid skeleton */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-2xl border border-white/[0.06] bg-[#111] p-6 animate-pulse">
+                    <div className="flex flex-col items-center">
+                      <div className="w-20 h-20 rounded-full bg-white/[0.06] mb-4" />
+                      <div className="h-5 w-28 rounded bg-white/[0.06] mb-2" />
+                      <div className="h-3 w-20 rounded bg-white/[0.04] mb-4" />
+                      <div className="h-3 w-40 rounded bg-white/[0.03]" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── EMPTY STATE ── */}
+          {address && !loading && names.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-32"
+            >
+              <div className="text-5xl mb-4 opacity-20">✦</div>
+              <h2 className="font-clash text-xl font-bold text-white mb-2">
+                No names yet
+              </h2>
+              <p className="text-sm text-[#555] mb-6 text-center max-w-xs">
+                Claim your first .qf identity and make it yours
+              </p>
+              <a
+                href="/?search="
+                className="px-6 py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors"
+              >
+                Claim your first .qf identity
+              </a>
+            </motion.div>
+          )}
+
+          {/* ── POPULATED STATE ── */}
           {address && !loading && names.length > 0 && (
             <>
-              {renewError && (
-                <div className="mb-4 p-4 bg-[#E5484D]/10 border border-[#E5484D]/30 rounded-xl text-[#E5484D]">
-                  {renewError}
-                </div>
-              )}
-              {/* Grid layout: 2 columns on desktop, 1 on mobile */}
-              <div className="flex flex-col gap-6">
-                {names.map((item, index) => {
-                  const bio = textRecords[item.name]?.bio ?? '';
-                  const avatarUrl = textRecords[item.name]?.avatar ?? '';
-                  const isPrimary = primaryName === item.name;
+              {/* Summary Bar */}
+              <div className="rounded-xl border border-white/[0.04] bg-[#111] px-5 py-4 mb-8">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  {/* Wallet */}
+                  <div className="flex items-center gap-2 text-xs text-[#555]">
+                    <Wallet size={14} />
+                    <span className="font-mono">
+                      {address.slice(0, 6)}...{address.slice(-4)}
+                    </span>
+                  </div>
 
-                  return (
-                    <NameCard
-                      key={item.name}
-                      item={item}
-                      index={index}
-                      bio={bio}
-                      avatarUrl={avatarUrl}
-                      isPrimary={isPrimary}
-                      enableTilt={enableTilt}
-                      renewing={renewingName === item.name}
-                      settingPrimary={settingPrimary === item.name}
-                      recentlyRenewed={recentlyRenewed === item.name}
-                      recentlyPrimaried={recentlyPrimaried === item.name}
-                      onOpen={() => openEditModal(item.name)}
-                      onSetPrimary={(e) => handleSetPrimary(item.name, e)}
-                      onRenew={(e) => {
-                        e.stopPropagation();
-                        setRenewModalName(item.name);
-                      }}
-                      onShare={(e) => handleShare(item.name, e)}
-                      onEdit={(e) => handleEditClick(item.name, e)}
-                      onTransfer={(e) => handleTransferClick(item.name, e)}
-                    />
-                  );
-                })}
+                  {/* Name count */}
+                  <div className="text-xs text-[#888]">
+                    {names.length} name{names.length !== 1 ? 's' : ''}
+                  </div>
+
+                  {/* Primary identity */}
+                  {primaryName && (
+                    <a
+                      href={`/name/${primaryName}`}
+                      className="flex items-center gap-2 text-xs text-[#00D179] hover:text-[#00B868] transition-colors"
+                    >
+                      <Avatar
+                        url={cardRecords.get(primaryName)?.avatar}
+                        name={primaryName}
+                        size={20}
+                      />
+                      <span className="font-medium">{primaryName}.qf</span>
+                    </a>
+                  )}
+
+                  {/* Renewal intelligence */}
+                  <div className="ml-auto text-xs">
+                    {(() => {
+                      const annualNames = names.filter((n) => !n.isPermanent && n.expires > 0n);
+                      if (annualNames.length === 0) {
+                        return <span className="text-[#00D179]">All permanent</span>;
+                      }
+                      const earliest = annualNames.reduce((a, b) =>
+                        a.expires < b.expires ? a : b
+                      );
+                      const expiryDate = new Date(Number(earliest.expires) * 1000);
+                      const nowMs = Date.now();
+                      const daysUntil = Math.floor((expiryDate.getTime() - nowMs) / (1000 * 60 * 60 * 24));
+                      const formatted = expiryDate.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      });
+                      return (
+                        <span className={daysUntil <= 30 ? 'text-red-400' : 'text-amber-400'}>
+                          Next renewal: {formatted}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
+
+              {/* Sort toolbar */}
+              <div className="flex items-center gap-2 mb-5">
+                {(['primary', 'alpha', 'expiry'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSortMode(mode)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      sortMode === mode
+                        ? 'bg-[#00D179]/10 text-[#00D179] border border-[#00D179]/20'
+                        : 'bg-white/[0.02] text-[#555] border border-white/[0.04] hover:text-white'
+                    }`}
+                  >
+                    {mode === 'primary' ? 'Primary first' : mode === 'alpha' ? 'A to Z' : 'Expiry'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Identity Card Grid */}
+              <AnimatePresence mode="popLayout">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {sortedNames.map((item) => {
+                    const recs = cardRecords.get(item.name) || {
+                      avatar: '', bio: '', twitter: '', telegram: '', website: '', email: '',
+                    };
+                    return (
+                      <IdentityCard
+                        key={item.name}
+                        name={item}
+                        records={recs}
+                        isPrimary={primaryName === item.name}
+                        enableTilt={enableTilt}
+                        onOpenDetail={openDetailModal}
+                      />
+                    );
+                  })}
+                </div>
+              </AnimatePresence>
             </>
           )}
         </div>
-      </main>
+      </div>
+      <Footer />
 
-      {/* Edit Profile Modal */}
-      <AnimatePresence>
-        {editModalName && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-            initial={modalBackdropVariants.hidden}
-            animate={modalBackdropVariants.visible}
-            exit={modalBackdropVariants.exit}
-            onClick={closeEditModal}
-          >
-            <motion.div
-              className="relative mx-4 max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#111111] shadow-2xl shadow-[#00D179]/10"
-              initial={modalContentVariants.hidden}
-              animate={modalContentVariants.visible}
-              exit={modalContentVariants.exit}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-[#00D179]/20 via-[#00D179]/10 to-transparent" />
-              <div className="relative px-6 pb-6 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
-              {/* Modal Header with X button */}
-              <div className="mb-8 flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="rounded-full border border-white/10 bg-[#0A0A0A] p-1 shadow-lg shadow-black/20">
-                    <Avatar 
-                      url={textRecords[editModalName]?.avatar ?? ''} 
-                      name={editModalName} 
-                      size={56} 
-                    />
-                  </div>
-                  <div className="pt-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="min-w-0 truncate font-clash text-xl md:text-2xl font-bold text-white whitespace-nowrap">
-                        <span className="whitespace-nowrap">
-                          {editModalName}<span className="text-[#00D179]">.qf</span>
-                        </span>
-                        {primaryName === editModalName && (
-                          <span className="primary-dot ml-2" />
-                        )}
-                      </h3>
-                      {primaryName === editModalName && (
-                        <span className="hidden sm:inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[#00D179]/20 bg-[#00D179]/10 px-2 py-1 text-[10px] font-medium text-[#00D179]">
-                          <Star size={8} fill="currentColor" />
-                          <span className="whitespace-nowrap">Primary</span>
-                        </span>
-                      )}
-                      {getSelectedNameData()?.isPermanent && (
-                        <span className="hidden sm:inline-flex flex-shrink-0 rounded-full border border-[#00D179]/20 bg-[#00D179]/5 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-[#8DF0BA] whitespace-nowrap">
-                          Permanent
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-2">
-                      {getSelectedNameData() && getStatusDisplay(getSelectedNameData()!)}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={closeEditModal}
-                  className="rounded-xl border border-white/10 bg-white/5 p-2 text-[#8A8A8A] transition-all duration-200 hover:border-[#00D179]/20 hover:bg-white/10 hover:text-white cursor-pointer"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Action buttons row */}
-              <div className="mb-6 rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                <div className="flex items-start justify-between gap-2">
-                {/* Primary - only show if not primary, amber color */}
-                {primaryName !== editModalName && (
-                  <button
-                    onClick={(e) => handleSetPrimary(editModalName, e)}
-                    disabled={settingPrimary === editModalName}
-                    className="group flex flex-1 flex-col items-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                      {settingPrimary === editModalName ? (
-                        <Loader2 size={22} className="animate-spin text-[#00D179]" />
-                      ) : (
-                        <Star size={22} />
-                      )}
-                    </div>
-                    <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Primary</span>
-                  </button>
-                )}
-
-                {/* Renew - emerald color, only for non-permanent */}
-                {getSelectedNameData() && !getSelectedNameData()!.isPermanent && (
-                  <button
-                    onClick={() => {
-                      const name = editModalName;
-                      closeEditModal();
-                      if (name) setRenewModalName(name);
-                    }}
-                    disabled={renewingName === editModalName}
-                    className="group flex flex-1 flex-col items-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                      {renewingName === editModalName ? (
-                        <Loader2 size={22} className="animate-spin text-[#00D179]" />
-                      ) : (
-                        <RefreshCw size={22} />
-                      )}
-                    </div>
-                    <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Renew</span>
-                  </button>
-                )}
-
-                {/* Share - default style */}
-                <button
-                  onClick={(e) => handleShare(editModalName, e)}
-                  className="group flex flex-1 flex-col items-center gap-2 cursor-pointer"
-                >
-                  <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                    <Share2 size={22} />
-                  </div>
-                  <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Share</span>
-                </button>
-
-                {/* Edit - emerald active style */}
-                <button
-                  className="flex flex-1 flex-col items-center gap-2 cursor-default"
-                >
-                  <div className="text-[#00D179]">
-                    <Pencil size={22} />
-                  </div>
-                  <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-[#00D179]">Edit</span>
-                </button>
-
-                {/* Transfer - default style */}
-                <button
-                  onClick={(e) => handleTransferClick(editModalName, e)}
-                  className="group flex flex-1 flex-col items-center gap-2 cursor-pointer"
-                >
-                  <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                    <ArrowRight size={22} />
-                  </div>
-                  <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Transfer</span>
-                </button>
-                </div>
-              </div>
-
-              {/* Profile Edit Fields */}
-              <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-5">
-                <div className="space-y-4">
-                  {TEXT_KEYS.map((key) => (
-                    <div key={key} className="space-y-1.5">
-                      <label className="flex items-center gap-2 text-sm text-[#8A8A8A]">
-                        <span>{FIELD_ICONS[key]}</span>
-                        <span className="capitalize">{FIELD_LABELS[key]}</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={editValues[editModalName]?.[key] ?? ''}
-                        onChange={(e) =>
-                          setEditValues((prev) => ({
-                            ...prev,
-                            [editModalName]: {
-                              ...prev[editModalName],
-                              [key]: e.target.value,
-                            },
-                          }))
-                        }
-                        placeholder={PLACEHOLDERS[key]}
-                        className="w-full rounded-xl border border-white/5 bg-[#090909] px-4 py-3 text-base md:text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 placeholder:text-[#555555]"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Cancel and Save All buttons */}
-                <div className="mt-6 flex items-center gap-3">
-                  <button
-                    onClick={handleCancelEditing}
-                    disabled={savingAll}
-                    className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-sm text-[#8A8A8A] transition-all duration-200 hover:border-white/20 hover:text-white cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleSaveAll(editModalName)}
-                    disabled={savingAll}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#00D179] px-4 py-3 text-sm font-medium text-black transition-all duration-200 hover:bg-[#00B868] cursor-pointer disabled:opacity-50"
-                  >
-                    {savingAll ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save All'
-                    )}
-                  </button>
-                </div>
-              </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Transfer Modal */}
+      {/* ── TRANSFER MODAL ── */}
       <AnimatePresence>
         {transferModal && (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-            initial={modalBackdropVariants.hidden}
-            animate={modalBackdropVariants.visible}
-            exit={modalBackdropVariants.exit}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={() => {
               if (!transferring) {
                 setTransferModal(null);
@@ -1339,9 +460,9 @@ export default function MyNamesPage() {
           >
             <motion.div
               className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#111] shadow-2xl"
-              initial={modalContentVariants.hidden}
-              animate={modalContentVariants.visible}
-              exit={modalContentVariants.exit}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-[#00D179]/10 via-[#00D179]/5 to-transparent" />
@@ -1381,7 +502,100 @@ export default function MyNamesPage() {
 
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={handleTransfer}
+                        onClick={async () => {
+                          if (!address || !transferModal) return;
+                          setTransferError(null);
+                          setTransferring(true);
+
+                          const nameToTransfer = transferModal;
+                          let recipient = transferRecipient.trim();
+                          try {
+                            if (recipient.endsWith('.qf')) {
+                              const resolved = await resolveForward(recipient);
+                              if (!resolved) {
+                                setTransferError('Name not found.');
+                                setTransferring(false);
+                                return;
+                              }
+                              recipient = resolved;
+                            } else if (/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
+                              // Valid EVM address — use as-is
+                            } else if (/^5[a-zA-Z0-9]{47}$/.test(recipient) || /^[a-zA-Z0-9]{46,48}$/.test(recipient)) {
+                              try {
+                                recipient = ss58ToEvmAddress(recipient);
+                              } catch {
+                                setTransferError('Invalid Substrate address.');
+                                setTransferring(false);
+                                return;
+                              }
+                            } else {
+                              setTransferError('Enter a .qf name, 0x address, or Substrate address.');
+                              setTransferring(false);
+                              return;
+                            }
+
+                            if (!signerAddress) throw new Error('No wallet connected');
+                            const { confirmation } = await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
+
+                            // Optimistic removal
+                            setNames((prev) => prev.filter((item) => item.name !== nameToTransfer));
+                            setTransferSuccess(true);
+                            hapticSuccess();
+
+                            confirmation.then((result) => {
+                              if (result.confirmed) {
+                                setTimeout(() => {
+                                  refreshNames(address).catch(() => {});
+                                  refreshName().catch(() => {});
+                                }, 3000);
+                                return;
+                              }
+                              if (result.error === 'not_confirmed') {
+                                showToast(`Transfer submitted but unconfirmed. Check shortly.`, 'warning');
+                                setTimeout(() => bgRefresh(), 5000);
+                                return;
+                              }
+                              // Check if this is a retryable error
+                              if (result.error && isRetryableError(result.error)) {
+                                showToast(RETRY_MESSAGE_SHORT, 'warning');
+                                hapticError();
+                                bgRefresh(); // re-fetch real state
+                                return;
+                              }
+                              // Hard failure — add name back
+                              showToast(`Transfer failed: ${result.error}`, 'error');
+                              hapticError();
+                              bgRefresh(); // re-fetch real state
+                            });
+                          } catch (err: any) {
+                            // Check if this is a retryable error
+                            if (isRetryableError(err.message)) {
+                              showToast(RETRY_MESSAGE_SHORT, 'warning');
+                              hapticError();
+                              return;
+                            }
+                            let userMessage = 'Transaction failed';
+                            if (err.message) {
+                              const message = err.message.toLowerCase();
+                              if (message.includes('not connected') || message.includes('reconnect')) {
+                                userMessage = 'Wallet connection lost. Please disconnect and reconnect.';
+                              } else if (message.includes('switch metamask') || message.includes('qf network')) {
+                                userMessage = 'Please switch MetaMask to QF Network and try again.';
+                              } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
+                                userMessage = 'Transaction rejected';
+                              } else if (message.includes('unauthorized') || message.includes('not owner')) {
+                                userMessage = 'You are not the owner of this name';
+                              } else if (message.includes('insufficient') || message.includes('balance')) {
+                                userMessage = 'Insufficient QF balance';
+                              }
+                            }
+                            setTransferError(userMessage);
+                            showToast(err.message || 'Transfer failed', 'error');
+                            hapticError();
+                          } finally {
+                            setTransferring(false);
+                          }
+                        }}
                         disabled={transferring || !transferRecipient.trim()}
                         className="flex-1 py-3 bg-[#E5484D] hover:bg-[#c93d41] text-white font-medium rounded-xl transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                       >
@@ -1440,139 +654,6 @@ export default function MyNamesPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Share Modal */}
-      <AnimatePresence>
-        {shareModalName && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
-            initial={modalBackdropVariants.hidden}
-            animate={modalBackdropVariants.visible}
-            exit={modalBackdropVariants.exit}
-            onClick={() => setShareModalName(null)}
-          >
-            <motion.div
-              className="relative w-full max-w-sm overflow-hidden rounded-[24px] border border-white/10 bg-[#111111] p-6 shadow-2xl shadow-[#00D179]/10"
-              initial={modalContentVariants.hidden}
-              animate={modalContentVariants.visible}
-              exit={modalContentVariants.exit}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-[#00D179]/20 via-[#00D179]/10 to-transparent" />
-              <div className="relative">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-clash text-2xl font-bold text-white">
-                      {shareModalName}<span className="text-[#00D179]">.qf</span>
-                    </h3>
-                    <p className="mt-1 text-sm text-[#8A8A8A]">Share your on-chain identity</p>
-                  </div>
-                  <button
-                    onClick={() => setShareModalName(null)}
-                    className="rounded-xl border border-white/10 bg-white/5 p-2 text-[#8A8A8A] transition-all duration-200 hover:border-[#00D179]/20 hover:bg-white/10 hover:text-white"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                  <div className="flex flex-col gap-3">
-                    <button
-                      onClick={handleCopyLink}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00D179] py-3 font-medium text-black transition-colors duration-200 hover:bg-[#00B868] cursor-pointer"
-                    >
-                      {copied ? <Check size={18} /> : <Copy size={18} />}
-                      {copied ? 'Copied!' : 'Copy Link'}
-                    </button>
-                    <button
-                      onClick={handleShareX}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-3 text-white transition-colors duration-200 hover:bg-white/5 cursor-pointer"
-                    >
-                      <Twitter size={18} />
-                      Share on X
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Renew Modal */}
-      <AnimatePresence>
-        {renewModalName && (() => {
-          const item = names.find(n => n.name === renewModalName);
-          if (!item) return null;
-          return (
-            <RenewModal
-              name={item.name}
-              currentExpiry={item.expires}
-              nameLength={item.name.length}
-              onClose={() => setRenewModalName(null)}
-              onConfirm={(years) => {
-                setRenewModalName(null);
-                handleRenew(item.name, years);
-              }}
-            />
-          );
-        })()}
-      </AnimatePresence>
-
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(-4px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.15s ease-out forwards;
-        }
-
-        /* Card hover effect */
-        .name-card {
-          will-change: transform;
-        }
-
-        /* Primary dot pulse animation */
-        .primary-dot {
-          display: inline-block;
-          width: 6px;
-          height: 6px;
-          background-color: #00D179;
-          border-radius: 50%;
-          animation: pulse-dot 2s ease-in-out infinite;
-        }
-
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-
-        @keyframes pulse-dot {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.4);
-            opacity: 0.6;
-          }
-        }
-
-        /* Permanent badge shimmer */
-        .permanent-badge {
-          background-image: linear-gradient(110deg, transparent 30%, rgba(0, 209, 121, 0.15) 50%, transparent 70%);
-          background-size: 200% 100%;
-          animation: shimmer 4s infinite;
-        }
-      `}</style>
-      <Footer />
-    </div>
+    </>
   );
 }
