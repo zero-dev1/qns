@@ -7,6 +7,13 @@
     box-sizing: border-box;
   }
 
+  :root {
+    --sat: env(safe-area-inset-top);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+    --sar: env(safe-area-inset-right);
+  }
+
   html {
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 209, 121, 0.3) #0a0a0a;
@@ -25,6 +32,7 @@
     word-break: break-word;
     overflow-x: clip;
     max-width: 100vw;
+    overscroll-behavior-y: contain;
   }
 
   #root {
@@ -102,14 +110,48 @@
   background: rgba(0, 209, 121, 0.5);
 }
 
-/* Permanent badge shimmer animation */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+/* Holographic permanent badge shimmer animation */
+@keyframes holo-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }
 
 .permanent-badge {
-  background-image: linear-gradient(110deg, transparent 30%, rgba(0, 209, 121, 0.15) 50%, transparent 70%);
+  position: relative;
+  overflow: hidden;
+}
+
+.permanent-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    transparent 30%,
+    rgba(0, 209, 121, 0.12) 45%,
+    rgba(0, 239, 231, 0.08) 50%,
+    rgba(0, 209, 121, 0.12) 55%,
+    transparent 70%,
+    transparent 100%
+  );
   background-size: 200% 100%;
-  animation: shimmer 4s infinite;
+  animation: holo-shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: screen;
+}
+
+/* Mobile polish extras */
+
+/* Ensure all inputs are 16px on mobile to prevent iOS zoom */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* Fixed bottom CTA with safe area handling */
+.fixed-bottom-cta {
+  padding-bottom: calc(1rem + var(--sab));
 }

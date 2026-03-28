@@ -36,6 +36,28 @@ function playChime(frequencies: number[], durations: number[]): void {
 }
 
 /**
+ * QNS Sonic Identity — all based on a core motif in the key of C major.
+ * Registration success: C5 → E5 → G5 (existing, the "triumph")
+ * Gift delivered: G4 → C5 (warm handoff)
+ * Burn reveal: C3 → G2 (low, warm, permanent)
+ * Profile action: single E5 ping
+ */
+export function hapticGift(): void {
+  if (isVibrationSupported) navigator.vibrate([30, 40, 30]);
+  playChime([392.0, 523.25], [0.15, 0.25]);
+}
+
+export function hapticBurn(): void {
+  if (isVibrationSupported) navigator.vibrate(80);
+  playChime([130.81, 98.0], [0.2, 0.35]); // C3 → G2, deep
+}
+
+export function hapticProfileAction(): void {
+  if (isVibrationSupported) navigator.vibrate(15);
+  playChime([659.25], [0.1]); // single E5 ping
+}
+
+/**
  * Success: short pulse + ascending chime (C5 → E5 → G5)
  */
 export function hapticSuccess(): void {

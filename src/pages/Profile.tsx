@@ -5,6 +5,7 @@ import { Gift, Share2, Check, Loader2, Twitter, Send, X } from 'lucide-react';
 import { parseEther } from 'viem';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import {
   getPublicClient,
   getRegistration,
@@ -14,14 +15,16 @@ import {
   getQFBalance,
   getSubstrateQFBalance,
   formatQF,
+  getBurnStats,
 } from '../utils/qns';
+import type { BurnStats } from '../utils/qns';
 import { useWalletStore } from '../stores/walletStore';
 import {
   QNS_RESOLVER_ADDRESS,
   QNS_RESOLVER_ABI,
 } from '../config/contracts';
 import { useCopy } from '../hooks/useCopy';
-import { hapticTap } from '../utils/haptics';
+import { hapticTap, hapticGift } from '../utils/haptics';
 import { DAPP_LAB_NAMES, TEAM_NAMES } from '../utils/badges';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import { useToast } from '../contexts/ToastContext';
@@ -81,8 +84,17 @@ const showVisitorCTA = !isOwnProfile;
   const [senderBalance, setSenderBalance] = useState<bigint>(0n);
   const [isSending, setIsSending] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
-  const [giftSuccess, setGiftSuccess] = useState(false);
+// Gift phase state machine
+type GiftPhase = 'idle' | 'signing' | 'inflight' | 'delivered' | 'success';
+const [giftPhase, setGiftPhase] = useState<GiftPhase>('idle');
   const [_txHash, setTxHash] = useState<string | null>(null);
+
+  // Burn stats for visitor CTA
+  const [burnStats, setBurnStats] = useState<BurnStats | null>(null);
+
+  // Animated year counter for Member since
+  const registrationYear = profile ? new Date(Number(profile.registeredAt) * 1000).getFullYear() : new Date().getFullYear();
+  const animatedYear = useAnimatedNumber(registrationYear, 2);
 
   // Mouse position for spotlight effect
   const cardRef = useRef<HTMLDivElement>(null);
@@ -104,6 +116,78 @@ const showVisitorCTA = !isOwnProfile;
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile || !cardRef.current) return;
+
+    let permissionGranted = false;
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      if (!cardRef.current) return;
+      const beta = e.beta ?? 0;   // front-back tilt (-180 to 180)
+      const gamma = e.gamma ?? 0; // left-right tilt (-90 to 90)
+
+      // Normalize to a subtle range (±4 degrees)
+      const tiltX = Math.max(-4, Math.min(4, (beta - 45) * 0.08));  // 45 = resting position when held in hand
+      const tiltY = Math.max(-4, Math.min(4, gamma * 0.08));
+
+      rotateX.set(tiltX);
+      rotateY.set(tiltY);
+
+      // Update spotlight position based on tilt
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const spotX = (rect.width / 2) + (gamma * 2);
+        const spotY = (rect.height / 2) + ((beta - 45) * 2);
+        setMousePosition({ x: spotX, y: spotY });
+      }
+    };
+
+    const requestPermission = async () => {
+      // iOS 13+ requires permission request
+      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+        try {
+          const perm = await (DeviceOrientationEvent as any).requestPermission();
+          if (perm === 'granted') permissionGranted = true;
+        } catch {
+          return;
+        }
+      } else {
+        permissionGranted = true; // Android, older iOS
+      }
+
+      if (permissionGranted) {
+        window.addEventListener('deviceorientation', handleOrientation);
+      }
+    };
+
+    requestPermission();
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, [isMobile]);
+
+  // Fetch burn stats for visitor CTA
+  useEffect(() => {
+    const loadBurnStats = async () => {
+      try {
+        const stats = await getBurnStats();
+        setBurnStats(stats);
+      } catch (error) {
+        console.error('Failed to load burn stats:', error);
+        // Set fallback values
+        setBurnStats({
+          totalBurned: 0,
+          qnsBurned: 0,
+          totalRegistrations: 400,
+          burnPercent: 5,
+        });
+      }
+    };
+
+    loadBurnStats();
   }, []);
 
   useEffect(() => {
@@ -210,15 +294,16 @@ const showVisitorCTA = !isOwnProfile;
     const y = e.clientY - rect.top;
     setMousePosition({ x, y });
 
-    if (isMobile) return;
+    // Only apply mouse tilt on desktop (not mobile)
+    if (!isMobile) {
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const rotateYValue = ((x - centerX) / centerX) * 5;
+      const rotateXValue = ((centerY - y) / centerY) * 5;
 
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const rotateYValue = ((x - centerX) / centerX) * 5;
-    const rotateXValue = ((centerY - y) / centerY) * 5;
-
-    rotateX.set(rotateXValue);
-    rotateY.set(rotateYValue);
+      rotateX.set(rotateXValue);
+      rotateY.set(rotateYValue);
+    }
   };
 
   const handleMouseLeave = () => {
@@ -283,7 +368,7 @@ const showVisitorCTA = !isOwnProfile;
     setGiftAmount('');
     setGiftError(null);
     setIsSending(false);
-    setGiftSuccess(false);
+    setGiftPhase('idle'); // replaces setGiftSuccess(false)
   };
 
   const handleQuickSelect = (amount: number) => {
@@ -296,10 +381,9 @@ const showVisitorCTA = !isOwnProfile;
 
   const handleSendGift = async () => {
     if (!senderAddress || !profile?.address || !giftAmount) return;
-
-    // Early return if button should be disabled
     if (sendDisabled) return;
 
+    // ... existing validation ...
     const amount = parseFloat(giftAmount);
     if (isNaN(amount) || amount <= 0) {
       setGiftError('Please enter a valid amount');
@@ -337,11 +421,13 @@ const showVisitorCTA = !isOwnProfile;
 
     setIsSending(true);
     setGiftError(null);
+    setGiftPhase('signing'); // Phase 1: wallet is prompting
 
     try {
       let txHash: string | undefined;
       let confirmation: Promise<{ confirmed: boolean; error?: string }>;
 
+      // ... existing provider branching (evm vs substrate) ...
       if (providerType === 'evm') {
         // MetaMask: use EVM transfer
         const { evmSendTransfer } = await import('../utils/evmContractCall');
@@ -367,23 +453,38 @@ const showVisitorCTA = !isOwnProfile;
         confirmation = result.confirmation;
       }
 
-      setTxHash(txHash || null);
-      setGiftSuccess(true);
+      // Phase 2: tx submitted, in-flight
+      setGiftPhase('inflight');
+      hapticTap(); // subtle tap on broadcast
 
-      // Background confirmation
+      // After 1.8s, transition to "delivered"
+      setTimeout(() => {
+        setGiftPhase('delivered');
+        hapticGift(); // the unique gift chime plays HERE, on "delivery"
+      }, 1800);
+
+      // After 3.5s total, show full success with CTAs
+      setTimeout(() => {
+        setGiftPhase('success');
+      }, 3500);
+
+      setTxHash(txHash || null);
+
+      // Background confirmation (same pattern as registration)
       confirmation.then((result) => {
         if (result.confirmed) return;
+        // ... existing error handling, but reset giftPhase to 'idle' on hard failure ...
         if (result.error === 'not_confirmed') {
           setGiftError('Gift submitted but not yet confirmed on-chain. It may still arrive shortly.');
           return;
         }
         if (result.error && isRetryableError(result.error)) {
-          setGiftSuccess(false);
+          setGiftPhase('idle');
           setGiftError(RETRY_MESSAGE_SHORT);
           showToast(RETRY_MESSAGE_SHORT, 'warning');
           return;
         }
-        setGiftSuccess(false);
+        setGiftPhase('idle');
         setGiftError(`Gift failed on-chain: ${result.error}. Your balance was not deducted.`);
       });
     } catch (err: any) {
@@ -391,14 +492,17 @@ const showVisitorCTA = !isOwnProfile;
       const msg = err?.message ?? String(err);
 
       if (isRetryableError(msg)) {
+        setGiftPhase('idle');
         setGiftError(RETRY_MESSAGE_SHORT);
         showToast(RETRY_MESSAGE_SHORT, 'warning');
         return;
       }
 
       if (msg.includes('rejected') || msg.includes('Rejected') || msg.includes('Cancelled') || msg.includes('cancelled')) {
+        setGiftPhase('idle');
         setGiftError('Transaction cancelled.');
       } else {
+        setGiftPhase('idle');
         setGiftError(msg || 'Transaction failed. Please try again.');
       }
     } finally {
@@ -429,17 +533,17 @@ const showVisitorCTA = !isOwnProfile;
       };
 
       const profileUrl = `https://dotqf.xyz/name/${profile.name}`;
-      const defaultImage = 'https://dotqf.xyz/og-image.png';
+      const dynamicOgImage = `https://dotqf.xyz/api/og/${profile.name}.png`;
 
       setMetaTag('og:title', `${profile.name}.qf`);
       setMetaTag('og:description', profile.bio || 'A QNS identity on QF Network');
-      setMetaTag('og:image', profile.avatar || defaultImage);
+      setMetaTag('og:image', dynamicOgImage);
       setMetaTag('og:url', profileUrl);
       setMetaTag('og:type', 'profile');
-      setMetaTag('twitter:card', 'summary', 'name');
+      setMetaTag('twitter:card', 'summary_large_image', 'name');
       setMetaTag('twitter:title', `${profile.name}.qf — QNS`, 'name');
       setMetaTag('twitter:description', profile.bio || 'A QNS identity on QF Network', 'name');
-      setMetaTag('twitter:image', profile.avatar || defaultImage, 'name');
+      setMetaTag('twitter:image', dynamicOgImage, 'name');
 
       return () => {
         const tagsToRemove = [
@@ -486,39 +590,74 @@ const showVisitorCTA = !isOwnProfile;
     );
   }
 
-  if (error || !profile?.exists) {
-    return (
-      <>
-        <Navbar />
-        <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 pt-24">
-          <div className="text-center max-w-sm">
-            {/* Show the name prominently even though it's unclaimed */}
-            {name && !error && (
-              <p className="font-clash font-semibold text-2xl text-white mb-2">
-                {name.replace(/\.qf$/, '')}<span className="text-[#00D179]">.qf</span>
-              </p>
-            )}
-            <p className="text-[#555] mb-6">{error || 'This name hasn\'t been claimed yet'}</p>
-            
-            {/* If name is valid and unclaimed, offer to register it */}
-            {!error && name && (
+  if (!loading && (error || !profile?.exists)) {
+  const displayName = name?.replace(/\.qf$/, '') || '';
+  return (
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 pt-24">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          className="relative w-full max-w-md rounded-2xl border border-white/[0.04] bg-black/40 overflow-hidden"
+        >
+          {/* Noise/grain overlay */}
+          <div
+            className="absolute inset-0 z-10 pointer-events-none opacity-[0.03]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")`,
+            }}
+          />
+
+          {/* Faded header */}
+          <div className="relative h-32 bg-gradient-to-b from-white/[0.02] to-transparent">
+            <div className="absolute inset-0 flex items-center justify-center pt-8">
+              <h1 className="text-3xl font-bold text-white/20">
+                {displayName}<span className="text-[#00D179]/20">.qf</span>
+              </h1>
+            </div>
+          </div>
+
+          {/* Ghost avatar */}
+          <div className="px-6 pb-6 relative z-10">
+            <div className="flex justify-center -mt-6 mb-4">
+              <div className="w-24 h-24 rounded-full bg-white/[0.03] border-4 border-black/60 flex items-center justify-center">
+                <span className="text-2xl font-bold text-white/10">{displayName.slice(0, 2).toUpperCase()}</span>
+              </div>
+            </div>
+
+            <p className="text-[#333] text-center text-sm mt-4 mb-2">
+              {error || 'This identity hasn\'t been claimed'}
+            </p>
+
+            <div className="border-t border-white/[0.03] my-5" />
+
+            {/* The only color on screen — the CTA */}
+            {!error && (
               <Link
-                to={`/?search=${encodeURIComponent(name.replace(/\.qf$/, ''))}`}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors duration-200"
+                to={`/?search=${encodeURIComponent(displayName)}`}
+                className="block w-full text-center py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold text-sm transition-colors duration-200"
               >
-                Register {name.replace(/\.qf$/, '')}<span>.qf</span>
+                Claim {displayName}.qf
               </Link>
             )}
           </div>
-        </div>
-        <Footer />
-      </>
-    );
-  }
+        </motion.div>
+      </div>
+      <Footer />
+    </>
+  );
+}
 
-  const isDappLab = DAPP_LAB_NAMES.includes(profile.name.toLowerCase());
-  const isTeam = TEAM_NAMES.includes(profile.name.toLowerCase());
-  const hasSocials = profile.twitter || profile.telegram;
+  const isDappLab = profile ? DAPP_LAB_NAMES.includes(profile.name.toLowerCase()) : false;
+  const isTeam = profile ? TEAM_NAMES.includes(profile.name.toLowerCase()) : false;
+  const hasSocials = profile ? (profile.twitter || profile.telegram) : false;
+
+  // Guard clause - only render profile card if profile exists
+  if (!profile) {
+    return null;
+  }
 
   return (
     <>
@@ -527,14 +666,15 @@ const showVisitorCTA = !isOwnProfile;
       {/* Profile Card */}
       <motion.div
         ref={cardRef}
+        layoutId={name ? `name-card-${name.replace(/\.qf$/, '')}` : undefined}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25, duration: 0.6 }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         style={{
-          rotateX: isMobile ? 0 : springRotateX,
-          rotateY: isMobile ? 0 : springRotateY,
+          rotateX: springRotateX,
+          rotateY: springRotateY,
           transformPerspective: 1000,
         }}
         className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-black overflow-hidden"
@@ -621,7 +761,7 @@ const showVisitorCTA = !isOwnProfile;
 
           {/* Member since - OG flex for early adopters */}
           <p className="text-xs text-gray-500 text-center mt-4">
-            Member since {new Date(Number(profile.registeredAt) * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            Member since {new Date(Number(profile.registeredAt) * 1000).toLocaleDateString('en-US', { month: 'long' })} <motion.span>{animatedYear}</motion.span>
           </p>
 
           {/* Badges */}
@@ -672,8 +812,12 @@ const showVisitorCTA = !isOwnProfile;
         >
           <div className="rounded-2xl border border-white/[0.06] bg-[#111]/80 backdrop-blur-sm p-6 text-center">
             <p className="text-[#666] text-sm mb-1">Want your own identity on QF Network?</p>
-            <p className="text-white font-medium mb-4">
+            <p className="text-white font-medium mb-3">
               Claim your <span className="text-[#00D179]">.qf</span> name in seconds
+            </p>
+            {/* Live social proof */}
+            <p className="text-[#444] text-xs mb-4">
+              <span className="text-[#00D179]">{burnStats?.totalRegistrations || 400}</span> names claimed and counting
             </p>
             <button
               onClick={() => navigate('/')}
@@ -712,7 +856,11 @@ const showVisitorCTA = !isOwnProfile;
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-clash text-xl font-bold text-white">
-                    {!giftSuccess ? 'Send Gift' : 'Gift Sent!'}
+                    {giftPhase === 'idle' ? 'Send Gift' :
+                     giftPhase === 'signing' ? 'Confirming...' :
+                     giftPhase === 'inflight' ? 'Sending...' :
+                     giftPhase === 'delivered' ? 'Delivered' :
+                     'Gift Sent!'}
                   </h3>
                   <button
                     onClick={closeGiftModal}
@@ -722,142 +870,261 @@ const showVisitorCTA = !isOwnProfile;
                   </button>
                 </div>
 
-                {!giftSuccess ? (
-                  <>
-                    {/* Recipient Info */}
-                    <div className="mb-6">
-                      <label className="mb-2 block text-xs text-gray-500">Recipient</label>
-                      <input
-                        type="text"
-                        value={`${profile.name}.qf`}
-                        readOnly
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 outline-none cursor-not-allowed"
-                      />
-                    </div>
-
-                    {/* Wallet Connection Check */}
-                    {!senderAddress ? (
-                      <div className="text-center py-4">
-                        <p className="text-gray-500 mb-4">
-                          Connect wallet to send a gift
-                        </p>
-                        <button
-                          onClick={connect}
-                          disabled={connecting}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[#00D179] px-6 py-3 font-medium text-black transition-all duration-200 hover:bg-[#00B868] active:scale-95 disabled:opacity-50"
-                        >
-                          {connecting ? (
-                            <Loader2 size={18} className="animate-spin" />
-                          ) : null}
-                          {connecting ? 'Connecting...' : 'Connect Wallet'}
-                        </button>
+                <AnimatePresence mode="wait">
+                  {giftPhase === 'idle' && (
+                    <motion.div key="gift-form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                      {/* Recipient Info */}
+                      <div className="mb-6">
+                        <label className="mb-2 block text-xs text-gray-500">Recipient</label>
+                        <input
+                          type="text"
+                          value={`${profile.name}.qf`}
+                          readOnly
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 outline-none cursor-not-allowed"
+                        />
                       </div>
-                    ) : (
-                      <>
-                        {/* Amount Input */}
-                        <div className="mb-4">
-                          <label className="mb-2 block text-xs text-gray-500">Amount (QF)</label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              value={giftAmount}
-                              onChange={(e) => {
-                                setGiftAmount(e.target.value);
-                                setGiftError(null);
-                              }}
-                              placeholder="Enter amount"
-                              min="0"
-                              step="0.01"
-                              className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 pr-12 text-base md:text-sm text-white outline-none transition-all duration-200 focus:border-[#00D179]/50 focus:ring-1 focus:ring-[#00D179]/20 placeholder:text-gray-600"
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">
-                              QF
+
+                      {/* Wallet Connection Check */}
+                      {!senderAddress ? (
+                        <div className="text-center py-4">
+                          <p className="text-gray-500 mb-4">
+                            Connect wallet to send a gift
+                          </p>
+                          <button
+                            onClick={connect}
+                            disabled={connecting}
+                            className="inline-flex items-center gap-2 rounded-xl bg-[#00D179] px-6 py-3 font-medium text-black transition-all duration-200 hover:bg-[#00B868] active:scale-95 disabled:opacity-50"
+                          >
+                            {connecting ? (
+                              <Loader2 size={18} className="animate-spin" />
+                            ) : null}
+                            {connecting ? 'Connecting...' : 'Connect Wallet'}
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Amount Input */}
+                          <div className="mb-4">
+                            <label className="mb-2 block text-xs text-gray-500">Amount (QF)</label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                value={giftAmount}
+                                onChange={(e) => {
+                                  setGiftAmount(e.target.value);
+                                  setGiftError(null);
+                                }}
+                                placeholder="Enter amount"
+                                min="0"
+                                step="0.01"
+                                className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 pr-12 text-base md:text-sm text-white outline-none transition-all duration-200 focus:border-[#00D179]/50 focus:ring-1 focus:ring-[#00D179]/20 placeholder:text-gray-600"
+                              />
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">
+                                QF
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quick Select Buttons */}
+                          <div className="flex items-center gap-2 mb-4">
+                            {[10, 50, 100, 500].map((amount) => (
+                              <button
+                                key={amount}
+                                onClick={() => handleQuickSelect(amount)}
+                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                  giftAmount === amount.toString()
+                                    ? 'bg-[#00D179] text-black'
+                                    : 'bg-white/5 text-gray-400 hover:text-[#00D179] hover:bg-white/10'
+                                }`}
+                              >
+                                {amount}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Balance Display */}
+                          <div className="mb-4 text-center">
+                            <span className="text-sm text-gray-500">
+                              Your balance: <span className="text-white font-medium">{formatQF(senderBalance)} QF</span>
                             </span>
                           </div>
+
+                          {/* Error Message */}
+                          {giftError && (
+                            <p className="text-center text-red-400 text-sm mb-4">
+                              {giftError}
+                            </p>
+                          )}
+
+                          {/* Send Gift Button */}
+                          <button
+                            onClick={handleSendGift}
+                            disabled={isSending || sendDisabled || false}
+                            className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 ${
+                              isSending || sendDisabled
+                                ? 'bg-[#00D179]/50 text-black/50 cursor-not-allowed'
+                                : 'bg-[#00D179] hover:bg-[#00B868] text-black cursor-pointer'
+                            }`}
+                          >
+                            {isSending ? (
+                              <Loader2 size={18} className="animate-spin" />
+                            ) : null}
+                            {isSending ? 'Sending...' : 'Send Gift'}
+                          </button>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {giftPhase === 'signing' && (
+                    <motion.div key="gift-signing" className="text-center py-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <div className="relative inline-block mb-5">
+                        <div className="w-12 h-12 border-[3px] border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-[#00D179] rounded-full animate-pulse" />
                         </div>
+                      </div>
+                      <p className="text-white font-medium mb-1">Confirm in your wallet</p>
+                      <p className="text-[#555] text-sm">Sending {giftAmount} QF to {profile.name}.qf</p>
+                    </motion.div>
+                  )}
 
-                        {/* Quick Select Buttons */}
-                        <div className="flex items-center gap-2 mb-4">
-                          {[10, 50, 100, 500].map((amount) => (
-                            <button
-                              key={amount}
-                              onClick={() => handleQuickSelect(amount)}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                giftAmount === amount.toString()
-                                  ? 'bg-[#00D179] text-black'
-                                  : 'bg-white/5 text-gray-400 hover:text-[#00D179] hover:bg-white/10'
-                              }`}
-                            >
-                              {amount}
-                            </button>
-                          ))}
-                        </div>
+                  {giftPhase === 'inflight' && (
+                    <motion.div key="gift-inflight" className="text-center py-10" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}>
+                      {/* Animated gift icon — SVG line-draw */}
+                      <div className="relative flex items-center justify-center mb-6">
+                        {/* Soft pulsing ring behind the icon */}
+                        <motion.div
+                          className="absolute w-20 h-20 rounded-full bg-[#00D179]/10"
+                          animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.1, 0.3] }}
+                          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+                        {/* Gift box SVG with path draw-in */}
+                        <motion.div className="relative w-16 h-16 flex items-center justify-center">
+                          <motion.svg
+                            width="40" height="40" viewBox="0 0 24 24" fill="none"
+                            stroke="#00D179" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                          >
+                            {/* Gift box body */}
+                            <motion.rect x="3" y="8" width="18" height="13" rx="2"
+                              initial={{ pathLength: 0, opacity: 0 }}
+                              animate={{ pathLength: 1, opacity: 1 }}
+                              transition={{ duration: 0.6, ease: 'easeOut' }}
+                            />
+                            {/* Gift box lid */}
+                            <motion.rect x="2" y="4" width="20" height="4" rx="1"
+                              initial={{ pathLength: 0, opacity: 0 }}
+                              animate={{ pathLength: 1, opacity: 1 }}
+                              transition={{ duration: 0.5, delay: 0.3, ease: 'easeOut' }}
+                            />
+                            {/* Ribbon vertical */}
+                            <motion.line x1="12" y1="4" x2="12" y2="21"
+                              initial={{ pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={{ duration: 0.4, delay: 0.5 }}
+                            />
+                            {/* Ribbon horizontal */}
+                            <motion.line x1="3" y1="12" x2="21" y2="12"
+                              initial={{ pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={{ duration: 0.4, delay: 0.6 }}
+                            />
+                          </motion.svg>
+                        </motion.div>
+                      </div>
+                      {/* Floating upward animation on the whole icon */}
+                      <motion.p
+                        className="text-[#00D179] font-medium mb-1"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        Sending to {profile.name}.qf
+                      </motion.p>
+                      <motion.p
+                        className="text-[#555] text-sm"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.6 }}
+                      >
+                        {giftAmount} QF on its way
+                      </motion.p>
+                    </motion.div>
+                  )}
 
-                        {/* Balance Display */}
-                        <div className="mb-4 text-center">
-                          <span className="text-sm text-gray-500">
-                            Your balance: <span className="text-white font-medium">{formatQF(senderBalance)} QF</span>
-                          </span>
-                        </div>
-
-                        {/* Error Message */}
-                        {giftError && (
-                          <p className="text-center text-red-400 text-sm mb-4">
-                            {giftError}
-                          </p>
-                        )}
-
-                        {/* Send Gift Button */}
-                        <button
-                          onClick={handleSendGift}
-                          disabled={isSending || sendDisabled || false}
-                          className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 ${
-                            isSending || sendDisabled
-                              ? 'bg-[#00D179]/50 text-black/50 cursor-not-allowed'
-                              : 'bg-[#00D179] hover:bg-[#00B868] text-black cursor-pointer'
-                          }`}
+                  {giftPhase === 'delivered' && (
+                    <motion.div key="gift-delivered" className="text-center py-10" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ type: 'spring', damping: 20, stiffness: 300 }}>
+                      <div className="relative flex items-center justify-center mb-6">
+                        {/* Expanding ring — same pattern as registration celebrate */}
+                        <motion.div
+                          className="absolute w-[72px] h-[72px] rounded-full border-2 border-[#00D179]/30"
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1.6, opacity: 0 }}
+                          transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
+                        />
+                        {/* Checkmark circle */}
+                        <motion.div
+                          className="relative w-[72px] h-[72px] rounded-full bg-[#00D179] flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
                         >
-                          {isSending ? (
-                            <Loader2 size={18} className="animate-spin" />
-                          ) : null}
-                          {isSending ? 'Sending...' : 'Send Gift'}
+                          <motion.svg
+                            width="36" height="36" viewBox="0 0 24 24" fill="none"
+                            stroke="white" strokeWidth="3" strokeLinecap="round"
+                          >
+                            <motion.path
+                              d="M20 6L9 17l-5-5"
+                              initial={{ pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={{ duration: 0.4, delay: 0.2 }}
+                            />
+                          </motion.svg>
+                        </motion.div>
+                      </div>
+                      <motion.p
+                        className="font-clash font-semibold text-xl text-white mb-1"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                      >
+                        {profile.name}<span className="text-[#00D179]">.qf</span> received your gift
+                      </motion.p>
+                      <motion.p
+                        className="text-[#555] text-sm"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.5 }}
+                      >
+                        {giftAmount} QF delivered
+                      </motion.p>
+                    </motion.div>
+                  )}
+
+                  {giftPhase === 'success' && (
+                    <motion.div key="gift-success" className="text-center py-4" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                      {/* This is the existing success screen with Share on X / View profile / Close */}
+                      <h3 className="font-clash font-medium text-xl text-white mb-6">
+                        You sent {giftAmount} QF to {profile.name}.qf!
+                      </h3>
+                      <div className="flex flex-col gap-3">
+                        <button onClick={handleShareGiftOnX}
+                          className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-colors duration-200">
+                          <Twitter size={18} />
+                          Share on X
                         </button>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  /* Success Screen */
-                  <div className="text-center py-4">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#00D179]/20 flex items-center justify-center">
-                      <Check size={32} className="text-[#00D179]" />
-                    </div>
-                    <h3 className="font-clash font-medium text-xl text-white mb-6">
-                      You sent {giftAmount} QF to {profile.name}.qf!
-                    </h3>
-                    <div className="flex flex-col gap-3">
-                      <button
-                        onClick={handleShareGiftOnX}
-                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-colors duration-200"
-                      >
-                        <Twitter size={18} />
-                        Share on X
-                      </button>
-                      <Link
-                        to={`/name/${profile.name}`}
-                        onClick={closeGiftModal}
-                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/[0.08] text-[#666] hover:text-white hover:border-white/[0.15] transition-all duration-200 text-sm"
-                      >
-                        View {profile.name}<span className="text-[#00D179]">.qf</span> profile
-                      </Link>
-                      <button
-                        onClick={closeGiftModal}
-                        className="text-sm text-gray-500 hover:text-white transition-colors duration-200 py-2"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
+                        <Link to={`/name/${profile.name}`} onClick={closeGiftModal}
+                          className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/[0.08] text-[#666] hover:text-white hover:border-white/[0.15] transition-all duration-200 text-sm">
+                          View {profile.name}<span className="text-[#00D179]">.qf</span> profile
+                        </Link>
+                        <button onClick={closeGiftModal}
+                          className="text-sm text-gray-500 hover:text-white transition-colors duration-200 py-2">
+                          Close
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           </motion.div>

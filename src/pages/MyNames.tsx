@@ -37,7 +37,7 @@ import { ss58ToEvmAddress } from '../utils/address';
 import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
-import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
+import { hapticSuccess, hapticError, hapticTap, hapticProfileAction } from '../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import RenewModal from '../components/RenewModal';
 import Avatar from '../components/Avatar';
@@ -222,6 +222,7 @@ const NameCard = ({
 
   return (
     <motion.div
+      layoutId={`name-card-${item.name}`}
       initial={cardVariants.hidden}
       animate={cardVariants.visible(index)}
       onClick={onOpen}
@@ -627,7 +628,7 @@ export default function MyNamesPage() {
           // Optimistic update
           setTextRecords((prev) => ({ ...prev, [name]: { ...(editValues[name] || {}) } }));
           showToast('Profile updated successfully', 'success');
-          hapticSuccess();
+          hapticProfileAction();
           closeEditModal();
 
           confirmation.then((result) => {

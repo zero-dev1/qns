@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, LayoutGroup } from 'framer-motion';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -47,8 +47,9 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+    <LayoutGroup>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
         <Route
           path="/"
           element={
@@ -97,8 +98,9 @@ function AnimatedRoutes() {
             </PageTransition>
           }
         />
-      </Routes>
-    </AnimatePresence>
+        </Routes>
+      </AnimatePresence>
+    </LayoutGroup>
   );
 }
 

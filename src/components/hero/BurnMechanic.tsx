@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { Flame, Copy, Check } from 'lucide-react';
 import { useCopy } from '../../hooks/useCopy';
-import { hapticTap } from '../../utils/haptics';
+import { hapticTap, hapticBurn } from '../../utils/haptics';
 import { getBurnStats, BURN_ADDRESS_EVM } from '../../utils/qns';
 import type { BurnStats } from '../../utils/qns';
 
@@ -10,15 +10,24 @@ function AnimatedNumber({
   value,
   suffix = '',
   shouldAnimate,
+  isBurnStat = false, // Add flag for burn stats
 }: {
   value: number;
   suffix?: string;
   shouldAnimate: boolean;
+  isBurnStat?: boolean;
 }) {
   const [display, setDisplay] = useState(0);
+  const hasPlayedHaptic = useRef(false);
 
   useEffect(() => {
     if (!shouldAnimate || value === 0) return;
+
+    // Play haptic burn sound on first burn stat animation
+    if (isBurnStat && !hasPlayedHaptic.current) {
+      hapticBurn();
+      hasPlayedHaptic.current = true;
+    }
 
     const duration = 1200;
     const steps = 40;
@@ -38,7 +47,7 @@ function AnimatedNumber({
     }, stepDuration);
 
     return () => clearInterval(interval);
-  }, [value, shouldAnimate]);
+  }, [value, shouldAnimate, isBurnStat]);
 
   // Format with commas for display
   const formatted = display.toLocaleString('en-US', {
@@ -129,6 +138,7 @@ export default function BurnMechanic() {
                       value={burnStats?.qnsBurned || 0} 
                       suffix="" 
                       shouldAnimate={isInView}
+                      isBurnStat={true}
                     />
                     <span className="text-[#E5484D]/60 text-xl ml-1">QF</span>
                   </>

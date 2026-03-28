@@ -5,6 +5,7 @@ import { Search, User, FileText, Settings, ArrowRight, Loader2, X } from 'lucide
 import { useWalletStore } from '../stores/walletStore';
 import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import { validateNameLocal, checkAvailability } from '../utils/qns';
+import { hapticTap } from '../utils/haptics';
 
 interface CommandItem {
   id: string;
@@ -20,6 +21,7 @@ export default function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchResult, setSearchResult] = useState<{ name: string; available: boolean } | null>(null);
   const [searching, setSearching] = useState(false);
+  const [selectedFlash, setSelectedFlash] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
@@ -50,6 +52,23 @@ export default function CommandPalette() {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
+
+  // Reset flash when palette closes
+  useEffect(() => {
+    if (!open) {
+      setSelectedFlash(null);
+    }
+  }, [open]);
+
+  // Handle selection with flash effect
+  const handleSelect = (item: CommandItem) => {
+    setSelectedFlash(item.id);
+    hapticTap();
+    setTimeout(() => {
+      closePalette();
+      item.action();
+    }, 200);
+  };
 
   // Search for .qf name availability when query looks like a name
   useEffect(() => {
@@ -103,7 +122,6 @@ export default function CommandPalette() {
         description: 'Available — register this name',
         icon: <span className="text-[#00D179]">✓</span>,
         action: () => {
-          close();
           navigate(`/?search=${encodeURIComponent(searchResult.name)}`);
         },
         category: 'search',
@@ -115,7 +133,6 @@ export default function CommandPalette() {
         description: 'Taken — view profile',
         icon: <User size={16} />,
         action: () => {
-          close();
           navigate(`/name/${searchResult.name}`);
         },
         category: 'search',
@@ -130,7 +147,7 @@ export default function CommandPalette() {
       label: 'Home',
       description: 'Search and register names',
       icon: <Search size={16} />,
-      action: () => { close(); navigate('/'); },
+      action: () => { navigate('/'); },
       category: 'navigation',
     },
     {
@@ -138,7 +155,7 @@ export default function CommandPalette() {
       label: 'My Names',
       description: 'Manage your .qf names',
       icon: <User size={16} />,
-      action: () => { close(); navigate('/my-names'); },
+      action: () => { navigate('/my-names'); },
       category: 'navigation',
     },
     {
@@ -146,7 +163,7 @@ export default function CommandPalette() {
       label: 'Documentation',
       description: 'Developer integration guides',
       icon: <FileText size={16} />,
-      action: () => { close(); navigate('/docs'); },
+      action: () => { navigate('/docs'); },
       category: 'navigation',
     },
   ];
@@ -159,7 +176,7 @@ export default function CommandPalette() {
       label: 'Connect Wallet',
       description: 'Talisman, SubWallet, or MetaMask',
       icon: <Settings size={16} />,
-      action: () => { close(); connect(); },
+      action: () => { connect(); },
       category: 'action',
     });
   }
@@ -169,7 +186,7 @@ export default function CommandPalette() {
       label: `View ${qnsName}.qf`,
       description: 'Open your profile page',
       icon: <User size={16} />,
-      action: () => { close(); navigate(`/name/${qnsName}`); },
+      action: () => { navigate(`/name/${qnsName}`); },
       category: 'action',
     });
   }
@@ -198,7 +215,7 @@ export default function CommandPalette() {
       setSelectedIndex((prev) => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter' && allItems[selectedIndex]) {
       e.preventDefault();
-      allItems[selectedIndex].action();
+      handleSelect(allItems[selectedIndex]);
     }
   };
 
@@ -259,10 +276,12 @@ export default function CommandPalette() {
                 {allItems.map((item, i) => (
                   <button
                     key={item.id}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-100 cursor-pointer ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-200 cursor-pointer ${
                       i === selectedIndex ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]'
+                    } ${
+                      selectedFlash === item.id ? 'bg-[#00D179]/10' : ''
                     }`}
-                    onClick={item.action}
+                    onClick={() => handleSelect(item)}
                     onMouseEnter={() => setSelectedIndex(i)}
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.03] text-[#555] shrink-0">
