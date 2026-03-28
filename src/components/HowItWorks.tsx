@@ -1,409 +1,237 @@
 // src/components/HowItWorks.tsx
-import { useRef, useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, useInView } from 'framer-motion';
+import { useRef, useState, useEffect } from 'react';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 
-// ── Step data ──
+// ── Terminal line types ──
 
-const steps = [
+interface TerminalLine {
+  type: 'command' | 'output' | 'success' | 'loading' | 'detail';
+  text: string;
+  /** Delay (ms) before this line starts after the previous line finishes */
+  delay?: number;
+  /** For 'command' type: characters per second for typing effect */
+  cps?: number;
+  /** Highlight segments: [{text, color}] for mixed-color output lines */
+  segments?: { text: string; color?: string }[];
+}
+
+const SEQUENCE: TerminalLine[] = [
+  // Step 1: Search
+  { type: 'command', text: 'search alice.qf', delay: 400, cps: 24 },
+  { type: 'success', text: '✓ alice.qf is available', delay: 300 },
+  { type: 'detail', text: '  100 QF/year · 500 QF forever', delay: 100 },
+
+  // Step 2: Register
+  { type: 'command', text: 'register alice.qf --permanent', delay: 800, cps: 22 },
+  { type: 'loading', text: '⧗ confirming on QF Network...', delay: 200 },
+  { type: 'success', text: '✓ alice.qf registered to 0x7a3...f91', delay: 1200 },
+  { type: 'detail', text: '  burned 25 QF to 0x000...dead', delay: 100 },
+
+  // Step 3: Resolve / Use across ecosystem
+  { type: 'command', text: 'resolve alice.qf', delay: 800, cps: 26 },
   {
-    num: '01',
-    title: 'Search & claim',
-    description:
-      "Type any name. See instantly if it's available. Register in one transaction, confirmed in seconds, not minutes.",
-    detail: 'From 100 QF/year',
+    type: 'output',
+    text: '',
+    delay: 300,
+    segments: [
+      { text: '  → ', color: '#555' },
+      { text: '0x7a3...f91', color: '#888' },
+    ],
   },
   {
-    num: '02',
-    title: 'Build your identity',
-    description:
-      'Add your avatar, bio, and social links. Your .qf name becomes your on-chain profile that follows you everywhere.',
-    detail: 'Avatar · Bio · Socials',
+    type: 'output',
+    text: '',
+    delay: 150,
+    segments: [
+      { text: '  → avatar  ', color: '#555' },
+      { text: 'ipfs://Qm...xK4', color: '#888' },
+    ],
   },
   {
-    num: '03',
-    title: 'Use it across QF',
-    description:
-      'Every dApp on QF Network resolves your name. Send payments, vote in governance, trade on the DEX. All as yourname.qf.',
-    detail: 'One name, every dApp',
+    type: 'output',
+    text: '',
+    delay: 150,
+    segments: [
+      { text: '  → bio     ', color: '#555' },
+      { text: '"Building on QF Network"', color: '#888' },
+    ],
+  },
+  {
+    type: 'output',
+    text: '',
+    delay: 150,
+    segments: [
+      { text: '  → used by ', color: '#555' },
+      { text: 'QFPay', color: '#0040FF' },
+      { text: ' · ', color: '#333' },
+      { text: 'Quorum', color: '#6366F1' },
+      { text: ' · ', color: '#333' },
+      { text: 'NucleusX', color: '#5E3AAE' },
+    ],
   },
 ];
 
-// ── Motifs (time-based entrance animations) ──
+// ── Typed text hook: types out a string character by character ──
 
-function SearchMotif({ active }: { active: boolean }) {
-  const [typedLength, setTypedLength] = useState(0);
-  const [showBadge, setShowBadge] = useState(false);
-  const name = 'alice.qf';
+function useTypedText(text: string, active: boolean, cps: number = 24) {
+  const [displayed, setDisplayed] = useState('');
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (!active) {
-      setTypedLength(0);
-      setShowBadge(false);
+      setDisplayed('');
+      setDone(false);
       return;
     }
 
-    let charIndex = 0;
-    const typeInterval = setInterval(() => {
-      charIndex++;
-      setTypedLength(charIndex);
-      if (charIndex >= name.length) {
-        clearInterval(typeInterval);
-        setTimeout(() => setShowBadge(true), 300);
+    let i = 0;
+    setDisplayed('');
+    setDone(false);
+
+    const interval = setInterval(() => {
+      i++;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(interval);
+        setDone(true);
       }
-    }, 100);
+    }, 1000 / cps);
 
-    return () => clearInterval(typeInterval);
-  }, [active]);
+    return () => clearInterval(interval);
+  }, [text, active, cps]);
 
-  const displayed = name.slice(0, typedLength);
-  const textPart = displayed.replace('.qf', '');
-  const hasSuffix = displayed.includes('.qf');
-  const isTyping = active && typedLength > 0 && typedLength < name.length;
+  return { displayed, done };
+}
+
+// ── Single terminal line renderer ──
+
+function CommandLine({ text, active, cps }: { text: string; active: boolean; cps: number }) {
+  const { displayed, done } = useTypedText(text, active, cps);
 
   return (
-    <div className="relative w-full max-w-[280px] mx-auto">
-      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 font-satoshi text-lg">
-        <span className="text-white">{textPart}</span>
-        {(hasSuffix || typedLength > 0) && (
-          <span className="text-[#00D179]">.qf</span>
+    <div className="flex items-center gap-2 font-mono-addr text-sm">
+      <span className="text-[#00D179] select-none shrink-0">{'>'}</span>
+      <span className="text-white">
+        {displayed}
+        {active && !done && (
+          <span className="inline-block w-[7px] h-[14px] bg-[#00D179] ml-[1px] align-middle animate-pulse" />
         )}
-        {isTyping && (
-          <span className="inline-block w-[2px] h-5 bg-[#00D179] ml-0.5 animate-pulse align-middle" />
-        )}
-      </div>
-
-      <AnimatePresence>
-        {showBadge && (
-          <motion.div
-            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#00D179]/20 bg-[#00D179]/5 px-3 py-1.5 text-sm text-[#00D179]"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="h-2 w-2 rounded-full bg-[#00D179]" />
-            Available
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </span>
     </div>
   );
 }
 
-function ProfileMotif({ active }: { active: boolean }) {
-  const circumference = 2 * Math.PI * 30;
-  const [drawProgress, setDrawProgress] = useState(0);
-  const [typedName, setTypedName] = useState('');
-  const [visibleWords, setVisibleWords] = useState(0);
-  const [showSocials, setShowSocials] = useState(false);
-
-  const fullName = 'alice';
-  const bioWords = ['Building', 'on', 'QF', 'Network'];
-
-  useEffect(() => {
-    if (!active) {
-      setDrawProgress(0);
-      setTypedName('');
-      setVisibleWords(0);
-      setShowSocials(false);
-      return;
-    }
-
-    // Phase 1: Draw avatar circle (0–600ms)
-    let frame = 0;
-    const drawInterval = setInterval(() => {
-      frame++;
-      setDrawProgress(Math.min(frame / 20, 1));
-      if (frame >= 20) clearInterval(drawInterval);
-    }, 30);
-
-    // Phase 2: Type name (700–1200ms)
-    const nameTimeout = setTimeout(() => {
-      let ci = 0;
-      const nameInterval = setInterval(() => {
-        ci++;
-        setTypedName(fullName.slice(0, ci));
-        if (ci >= fullName.length) clearInterval(nameInterval);
-      }, 90);
-    }, 700);
-
-    // Phase 3: Bio words (1400–2200ms)
-    const bioTimeout = setTimeout(() => {
-      let wi = 0;
-      const bioInterval = setInterval(() => {
-        wi++;
-        setVisibleWords(wi);
-        if (wi >= bioWords.length) clearInterval(bioInterval);
-      }, 200);
-    }, 1400);
-
-    // Phase 4: Socials (2400ms)
-    const socialTimeout = setTimeout(() => setShowSocials(true), 2400);
-
-    return () => {
-      clearInterval(drawInterval);
-      clearTimeout(nameTimeout);
-      clearTimeout(bioTimeout);
-      clearTimeout(socialTimeout);
-    };
-  }, [active]);
-
-  const strokeDashoffset = circumference * (1 - drawProgress);
-  const showQfSuffix = typedName.length >= fullName.length;
-  const isTypingName = active && typedName.length > 0 && typedName.length < fullName.length;
-
-  return (
-    <div className="relative w-full max-w-[260px] mx-auto rounded-2xl border border-white/[0.06] bg-[#111] p-6 overflow-hidden">
-      {/* Avatar circle */}
-      <div className="flex justify-center mb-4">
-        <div className="relative h-16 w-16">
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
-            <circle
-              cx="32" cy="32" r="30"
-              fill="none"
-              stroke="#00D179"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
-            />
-          </svg>
-          <div
-            className={`absolute inset-0 flex items-center justify-center text-[#00D179] text-2xl font-clash font-bold transition-opacity duration-500 ${
-              drawProgress >= 1 ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            A
-          </div>
-        </div>
-      </div>
-
-      {/* Name */}
-      <div className="text-center h-7">
-        <span className="font-clash font-semibold text-lg text-white">{typedName}</span>
-        {showQfSuffix && <span className="font-clash font-semibold text-lg text-[#00D179]">.qf</span>}
-        {isTypingName && (
-          <span className="inline-block w-[2px] h-5 bg-[#00D179] ml-0.5 animate-pulse align-middle" />
-        )}
-      </div>
-
-      {/* Bio */}
-      <div className="mt-3 text-center text-sm h-5">
-        {bioWords.map((word, i) => (
-          <span
-            key={i}
-            className={`transition-opacity duration-300 ${
-              i < visibleWords ? 'text-[#666] opacity-100' : 'opacity-0'
-            }`}
-          >
-            {word}{i < bioWords.length - 1 ? ' ' : ''}
+function OutputLine({ line }: { line: TerminalLine }) {
+  if (line.segments) {
+    return (
+      <div className="font-mono-addr text-sm">
+        {line.segments.map((seg, i) => (
+          <span key={i} style={{ color: seg.color || '#888' }}>
+            {seg.text}
           </span>
         ))}
       </div>
+    );
+  }
 
-      {/* Socials */}
-      <div
-        className={`mt-4 flex justify-center gap-3 transition-all duration-500 ${
-          showSocials ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-        }`}
-      >
-        {['X', 'GH', 'TG'].map((s) => (
-          <div
-            key={s}
-            className="h-7 w-7 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-[10px] text-[#555]"
-          >
-            {s}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function EcosystemMotif({ active }: { active: boolean }) {
-  const [litCount, setLitCount] = useState(0);
-
-  const apps = [
-    { name: 'QFPay', color: '#0040FF', x: 20, y: 30 },
-    { name: 'Quorum', color: '#6366F1', x: 75, y: 15 },
-    { name: 'NucleusX', color: '#5E3AAE', x: 50, y: 65 },
-    { name: 'QFLink', color: '#0991B2', x: 10, y: 70 },
-    { name: 'PROVD', color: '#FF3131', x: 85, y: 60 },
-  ];
-
-  useEffect(() => {
-    if (!active) {
-      setLitCount(0);
-      return;
-    }
-
-    let count = 0;
-    const interval = setInterval(() => {
-      count++;
-      setLitCount(count);
-      if (count >= apps.length) clearInterval(interval);
-    }, 350);
-
-    return () => clearInterval(interval);
-  }, [active]);
+  const colorMap: Record<string, string> = {
+    success: '#00D179',
+    detail: '#444',
+    loading: '#666',
+    output: '#888',
+  };
 
   return (
-    <div className="relative w-full max-w-[280px] mx-auto h-[180px]">
-      {/* Center .qf node */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-        <div
-          className={`h-12 w-12 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${
-            active
-              ? 'border-[#00D179] bg-[#00D179]/10 shadow-[0_0_20px_rgba(0,209,121,0.2)]'
-              : 'border-white/[0.06] bg-white/[0.02]'
-          }`}
-        >
-          <span className="text-[#00D179] text-xs font-bold font-clash">.qf</span>
-        </div>
-      </div>
-
-      {/* App nodes + connecting lines */}
-      {apps.map((app, i) => {
-        const isLit = i < litCount;
-        return (
-          <div key={app.name}>
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
-              <line
-                x1="50%" y1="50%"
-                x2={`${app.x}%`} y2={`${app.y}%`}
-                stroke={isLit ? app.color : 'rgba(255,255,255,0.03)'}
-                strokeWidth="1"
-                strokeDasharray="200"
-                strokeDashoffset={isLit ? '0' : '200'}
-                style={{
-                  transition: 'stroke-dashoffset 0.8s ease-out, stroke 0.5s ease',
-                  opacity: isLit ? 0.4 : 0.15,
-                }}
-              />
-            </svg>
-            <div
-              className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-700"
-              style={{ left: `${app.x}%`, top: `${app.y}%` }}
-            >
-              <div
-                className="h-9 w-9 rounded-xl flex items-center justify-center text-[9px] font-bold font-clash transition-all duration-500"
-                style={{
-                  borderColor: isLit ? app.color : 'rgba(255,255,255,0.04)',
-                  borderWidth: '1px',
-                  backgroundColor: isLit ? `${app.color}15` : 'rgba(255,255,255,0.02)',
-                  color: isLit ? app.color : '#333',
-                  boxShadow: isLit ? `0 0 16px ${app.color}20` : 'none',
-                }}
-              >
-                {app.name.slice(0, 2)}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Motif array for index lookup ──
-const motifs = [SearchMotif, ProfileMotif, EcosystemMotif];
-
-// ── Step Progress Indicator (vertical, in sticky column) ──
-
-function StepProgress({ activeStep }: { activeStep: number }) {
-  return (
-    <div className="flex flex-col items-center gap-0">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="flex flex-col items-center">
-          <div
-            className={`h-3 w-3 rounded-full border-2 transition-all duration-500 ${
-              i <= activeStep
-                ? 'border-[#00D179] bg-[#00D179] shadow-[0_0_8px_rgba(0,209,121,0.4)]'
-                : 'border-white/[0.1] bg-transparent'
-            }`}
-          />
-          {i < 2 && (
-            <div className="w-px h-12 bg-white/[0.06] relative">
-              <div
-                className="absolute top-0 left-0 w-full bg-[#00D179] transition-all duration-700"
-                style={{ height: i < activeStep ? '100%' : '0%' }}
-              />
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Step block (used in the scrolling right column) ──
-
-function StepBlock({
-  step,
-  index,
-  onInView,
-}: {
-  step: (typeof steps)[0];
-  index: number;
-  onInView: (index: number) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const isInView = useInView(ref, { amount: 0.5 });
-
-  useEffect(() => {
-    if (isInView) onInView(index);
-  }, [isInView, index, onInView]);
-
-  return (
-    <div
-      ref={ref}
-      className="flex items-center"
-      style={{ minHeight: '70vh' }}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.3 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      >
-        {/* Mobile motif (shown only on mobile, inline above copy) */}
-        <div className="md:hidden flex justify-center mb-8">
-          {(() => {
-            const Motif = motifs[index];
-            return <Motif active={isInView} />;
-          })()}
-        </div>
-
-        <span className="font-clash text-5xl font-bold text-[#00D179]/15 block mb-4">
-          {step.num}
+    <div className="font-mono-addr text-sm" style={{ color: colorMap[line.type] || '#888' }}>
+      {line.type === 'loading' ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 border border-[#333] border-t-[#00D179] rounded-full animate-spin" />
+          <span>{line.text.replace('⧗ ', '')}</span>
         </span>
-        <h3 className="font-clash font-semibold text-2xl md:text-3xl text-white mb-4">
-          {step.title}
-        </h3>
-        <p className="text-[#666] leading-relaxed mb-5 max-w-md">
-          {step.description}
-        </p>
-        <span className="inline-flex text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] text-[#555] border border-white/[0.06]">
-          {step.detail}
-        </span>
-      </motion.div>
+      ) : (
+        line.text
+      )}
     </div>
   );
 }
 
-// ── Main Component ──
+// ── Main component ──
 
 export default function HowItWorks() {
-  const [currentStep, setCurrentStep] = useState(0);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(sectionRef, { once: true, amount: 0.3 });
 
-  const handleStepInView = useCallback((index: number) => {
-    setCurrentStep(index);
-  }, []);
+  // Track which lines are visible and which line is actively typing
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [activeTypingIndex, setActiveTypingIndex] = useState<number | null>(null);
+  const [typingDone, setTypingDone] = useState(false);
+
+  // Sequential line reveal engine
+  useEffect(() => {
+    if (!isInView) return;
+
+    let cancelled = false;
+    let currentIndex = 0;
+
+    const showNext = () => {
+      if (cancelled || currentIndex >= SEQUENCE.length) return;
+
+      const line = SEQUENCE[currentIndex];
+      const delay = currentIndex === 0 ? (line.delay || 0) : (line.delay || 200);
+
+      setTimeout(() => {
+        if (cancelled) return;
+
+        const idx = currentIndex;
+        currentIndex++;
+        setVisibleCount(currentIndex);
+
+        if (line.type === 'command') {
+          // Command: start typing, wait for estimated typing duration, then next
+          setActiveTypingIndex(idx);
+          const typingDuration = (line.text.length / (line.cps || 24)) * 1000 + 100;
+          setTimeout(() => {
+            if (cancelled) return;
+            setActiveTypingIndex(null);
+            showNext();
+          }, typingDuration);
+        } else if (line.type === 'loading') {
+          // Loading: show spinner for a beat, then next line replaces visual
+          setTimeout(() => {
+            if (!cancelled) showNext();
+          }, line.delay ? 800 : 800);
+        } else {
+          // Output/success/detail: appear instantly, small pause, then next
+          showNext();
+        }
+      }, delay);
+    };
+
+    showNext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isInView]);
+
+  // After all lines shown, mark complete
+  useEffect(() => {
+    if (visibleCount >= SEQUENCE.length) {
+      const t = setTimeout(() => setTypingDone(true), 500);
+      return () => clearTimeout(t);
+    }
+  }, [visibleCount]);
+
+  const visibleLines = SEQUENCE.slice(0, visibleCount);
+
+  // Hide loading line once its successor (success line) is visible
+  const shouldHideLoading = (index: number) => {
+    if (SEQUENCE[index]?.type !== 'loading') return false;
+    return visibleCount > index + 1;
+  };
 
   return (
-    <section className="py-24 md:py-32">
+    <section ref={sectionRef} className="py-24 md:py-32">
       <div className="mx-auto max-w-[1120px] px-6">
         {/* Section header */}
         <motion.p
@@ -416,58 +244,94 @@ export default function HowItWorks() {
           HOW IT WORKS
         </motion.p>
         <motion.h2
-          className="font-clash text-center text-4xl font-bold text-white md:text-5xl mb-16 md:mb-24"
+          className="font-clash text-center text-4xl font-bold text-white md:text-5xl mb-16 md:mb-20"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          Three steps. Sixty seconds.
+          Three commands. One identity.
         </motion.h2>
 
-        {/* Two-column layout: sticky left + scrolling right (desktop) */}
-        {/* Single column on mobile */}
-        <div className="md:grid md:grid-cols-2 md:gap-16 lg:gap-24">
-          {/* Left column — sticky on desktop, hidden on mobile */}
-          <div className="hidden md:block">
-            <div className="sticky top-32">
-              <div className="flex items-start gap-8">
-                {/* Step progress indicator */}
-                <StepProgress activeStep={currentStep} />
+        {/* Terminal container */}
+        <motion.div
+          className="mx-auto max-w-2xl"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+        >
+          <div className="terminal-container relative rounded-2xl border border-white/[0.06] bg-[#0c0c0c] overflow-hidden">
+            {/* Subtle noise overlay */}
+            <div
+              className="absolute inset-0 pointer-events-none opacity-[0.015]"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")`,
+              }}
+            />
 
-                {/* Active motif */}
-                <div className="flex-1 flex justify-center items-center min-h-[280px]">
-                  <AnimatePresence mode="wait">
+            {/* Top bar — minimal window chrome */}
+            <div className="flex items-center gap-1.5 px-5 py-3.5 border-b border-white/[0.04]">
+              <div className="w-[7px] h-[7px] rounded-full bg-white/[0.06]" />
+              <div className="w-[7px] h-[7px] rounded-full bg-white/[0.06]" />
+              <div className="w-[7px] h-[7px] rounded-full bg-white/[0.06]" />
+              <span className="ml-3 text-[10px] text-[#333] font-mono-addr tracking-wide select-none">
+                qns
+              </span>
+            </div>
+
+            {/* Terminal body */}
+            <div className="p-5 md:p-6 space-y-2 min-h-[320px] md:min-h-[360px]">
+              <AnimatePresence initial={false}>
+                {visibleLines.map((line, i) => {
+                  if (shouldHideLoading(i)) return null;
+
+                  return (
                     <motion.div
-                      key={currentStep}
-                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      key={i}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeOut' }}
                     >
-                      {(() => {
-                        const Motif = motifs[currentStep];
-                        return <Motif active={true} />;
-                      })()}
+                      {line.type === 'command' ? (
+                        <CommandLine
+                          text={line.text}
+                          active={activeTypingIndex === i}
+                          cps={line.cps || 24}
+                        />
+                      ) : (
+                        <OutputLine line={line} />
+                      )}
                     </motion.div>
-                  </AnimatePresence>
-                </div>
-              </div>
+                  );
+                })}
+              </AnimatePresence>
+
+              {/* Idle cursor after sequence completes */}
+              {typingDone && (
+                <motion.div
+                  className="flex items-center gap-2 font-mono-addr text-sm pt-2"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <span className="text-[#00D179] select-none">{'>'}</span>
+                  <span className="inline-block w-[7px] h-[14px] bg-[#00D179]/60 animate-pulse" />
+                </motion.div>
+              )}
             </div>
           </div>
 
-          {/* Right column — scrolling step blocks */}
-          <div>
-            {steps.map((step, i) => (
-              <StepBlock
-                key={step.num}
-                step={step}
-                index={i}
-                onInView={handleStepInView}
-              />
-            ))}
+          {/* Subtle ambient glow behind terminal */}
+          <div className="absolute inset-0 -z-10 mx-auto max-w-2xl">
+            <div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] rounded-full opacity-[0.04]"
+              style={{
+                background: 'radial-gradient(ellipse, rgba(0,209,121,1) 0%, transparent 70%)',
+              }}
+            />
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

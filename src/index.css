@@ -224,16 +224,6 @@
 }
 
 
-/* ── HowItWorks sticky theater ── */
-.hiw-sticky-viewport {
-  /* Ensure sticky works within the container */
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-}
 
 @keyframes search-bar-pulse {
   0% { box-shadow: 0 0 20px rgba(0, 209, 121, 0.12), 0 0 60px rgba(0, 209, 121, 0.04); }
@@ -271,7 +261,11 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
-.animate-shimmer {
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+/* ── Terminal container glow on hover ── */
+.terminal-container {
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.terminal-container:hover {
+  border-color: rgba(0, 209, 121, 0.08);
+  box-shadow: 0 0 40px rgba(0, 209, 121, 0.03);
 }
