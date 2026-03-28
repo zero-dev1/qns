@@ -697,7 +697,7 @@ export default function MyNamesPage() {
             telegram={textRecords[selectedName]?.telegram}
             website={textRecords[selectedName]?.website}
             email={textRecords[selectedName]?.email}
-            isPrimary={primaryName === selectedName}
+            isPrimary={selectedName === useWalletStore.getState().qnsName?.replace('.qf', '')}
             providerType={providerType}
             address={address || ''}
             balance={walletBalance}
