@@ -3,23 +3,23 @@ import { motion, useInView } from 'framer-motion';
 
 interface Stat {
   label: string;
-  value: number;
+  value: number | null;
   suffix: string;
   prefix?: string;
 }
 
-const stats: Stat[] = [
-  { label: 'Identities Claimed', value: 400, suffix: '+' },
-  { label: 'Burn Rate', value: 5, suffix: '%', prefix: '' },
-  { label: 'dApps Building', value: 9, suffix: '' },
-  { label: 'Seconds to Register', value: 6, suffix: '', prefix: '~' },
+const staticStats: Omit<Stat, 'value'>[] = [
+  { label: 'Identities Claimed', suffix: '', prefix: '' },
+  { label: 'Burn Rate', suffix: '%', prefix: '' },
+  { label: 'dApps Building', suffix: '', prefix: '' },
+  { label: 'Seconds to Register', suffix: '', prefix: '~' },
 ];
 
-function AnimatedNumber({ value, prefix = '', suffix, shouldAnimate }: { value: number; prefix?: string; suffix: string; shouldAnimate: boolean }) {
+function AnimatedNumber({ value, prefix = '', suffix, shouldAnimate }: { value: number | null; prefix?: string; suffix: string; shouldAnimate: boolean }) {
   const [display, setDisplay] = useState(0);
 
   useEffect(() => {
-    if (!shouldAnimate) return;
+    if (!shouldAnimate || value === null) return;
     
     const duration = 1200; // ms
     const steps = 40;
@@ -42,6 +42,10 @@ function AnimatedNumber({ value, prefix = '', suffix, shouldAnimate }: { value: 
     return () => clearInterval(interval);
   }, [value, shouldAnimate]);
 
+  if (value === null) {
+    return <span>Loading...</span>;
+  }
+
   return (
     <span>{prefix}{display}{suffix}</span>
   );
@@ -50,12 +54,34 @@ function AnimatedNumber({ value, prefix = '', suffix, shouldAnimate }: { value: 
 export default function StatsBar() {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.5 });
+  const [totalClaimed, setTotalClaimed] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function fetchCount() {
+      try {
+        const { getTotalRegistrations } = await import('../utils/qns');
+        const count = await getTotalRegistrations();
+        setTotalClaimed(Number(count));
+      } catch {
+        setTotalClaimed(null); // fall back to nothing, not a hard-coded number
+      }
+    }
+    fetchCount();
+  }, []);
+
+  // Combine dynamic and static stats
+  const stats: Stat[] = [
+    { ...staticStats[0], value: totalClaimed },
+    { ...staticStats[1], value: 5 },
+    { ...staticStats[2], value: 9 },
+    { ...staticStats[3], value: 6 },
+  ];
 
   return (
     <section ref={ref} className="py-16 border-y border-white/[0.04]">
       <div className="max-w-[1120px] mx-auto px-6">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-0 md:divide-x md:divide-white/[0.06]">
-          {stats.map((stat, i) => (
+          {stats.map((stat: Stat, i: number) => (
             <motion.div
               key={stat.label}
               className="text-center md:px-6"

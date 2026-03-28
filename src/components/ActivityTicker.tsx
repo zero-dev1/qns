@@ -80,7 +80,7 @@ export default function ActivityTicker() {
                 </Link>
                 <span className="text-[#00D179]">.qf</span>
                 <span className="text-[#444] mx-1.5">·</span>
-                <span>claimed {current.isPermanent ? 'permanently' : ''} {timeAgo(current.timestamp)}</span>
+                <span>claimed{current.isPermanent ? ' permanently' : ''} {timeAgo(current.timestamp)}</span>
               </p>
             </motion.div>
           </AnimatePresence>
