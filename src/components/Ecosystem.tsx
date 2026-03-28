@@ -10,6 +10,8 @@ import {
   Wrench,
   MessageCircle,
   Swords,
+  Brush,
+  Sparkles,
 } from 'lucide-react';
 import SpotlightGrid from './SpotlightGrid';
 import SpotlightCard from './SpotlightCard';
@@ -111,6 +113,15 @@ const apps: EcosystemApp[] = [
     icon: Swords,
     accentColor: '#FF3131',
     status: 'dev',
+  },
+  {
+    name: 'QF Scribble',
+    tagline: 'Draw under your name',
+    description:
+      'Collaborative pixel canvas on QF Network. Every brushstroke tied to your .qf identity. No hex addresses, just names.',
+    icon: Brush,
+    accentColor: '#D3B76E',
+    status: 'dev' as AppStatus,
   },
 ];
 
@@ -239,6 +250,32 @@ export default function Ecosystem() {
               </SpotlightCard>
             </motion.div>
           ))}
+
+          {/* "And many more" — final card */}
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.97 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{
+              duration: 0.5,
+              delay: 0.2 + apps.length * 0.06,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            <SpotlightCard glowColor="#00D179" className="h-full">
+              <div className="p-6 flex flex-col items-center justify-center text-center min-h-[200px]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#00D179]/10 mb-4">
+                  <Sparkles size={20} className="text-[#00D179]" />
+                </div>
+                <h3 className="font-clash font-semibold text-xl text-white mb-2">
+                  And many more
+                </h3>
+                <p className="text-sm text-[#666] leading-relaxed max-w-[240px]">
+                  The QF ecosystem is growing. Every app resolves your .qf name from day one.
+                </p>
+              </div>
+            </SpotlightCard>
+          </motion.div>
         </SpotlightGrid>
 
         {/* Bottom message */}
