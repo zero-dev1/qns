@@ -34,7 +34,7 @@ export default function CTA() {
         </h2>
 
         <p className="mx-auto mb-8 max-w-md text-lg text-[#555]">
-          400+ names are already reserved. Thousands more are open — for now.
+          Hundreds of names are already claimed. Thousands more are open, for now.
         </p>
 
         {/* Floating name examples */}

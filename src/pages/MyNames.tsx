@@ -57,6 +57,7 @@ export default function MyNamesPage() {
   // Detail modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'edit' | 'manage' | 'share'>('overview');
 
 
   const loadNames = useCallback(async () => {
@@ -195,25 +196,7 @@ export default function MyNamesPage() {
     return () => mediaQuery.removeListener(handleMediaChange);
   }, []);
 
-  // Escape key to close DetailModal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && detailModalOpen) {
-        closeDetailModal();
-      }
-    };
-
-    if (detailModalOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [detailModalOpen]);
-
+  
   const loadTextRecords = async (name: string) => {
     const records: Record<string, string> = {};
     for (const key of TEXT_KEYS) {
@@ -226,8 +209,9 @@ export default function MyNamesPage() {
 
 
   // Detail modal handlers
-  const openDetailModal = (name: string) => {
+  const openDetailModal = (name: string, tab?: 'overview' | 'edit' | 'manage' | 'share') => {
     setSelectedName(name);
+    setDetailInitialTab(tab || 'overview');
     setDetailModalOpen(true);
     if (!textRecords[name]) {
       loadTextRecords(name);
@@ -235,12 +219,7 @@ export default function MyNamesPage() {
     hapticTap();
   };
 
-  const closeDetailModal = () => {
-    setDetailModalOpen(false);
-    setSelectedName(null);
-    hapticTap();
-  };
-
+  
   // Detail modal adapter handlers
   const handleSaveRecords = async (name: string, records: Record<string, string>) => {
     if (!address) return;
@@ -460,7 +439,7 @@ export default function MyNamesPage() {
   // Sort functionality
   const [sortMode, setSortMode] = useState<'primary' | 'alpha' | 'expiry'>('primary');
 
-  const sortedNames = names.sort((a, b) => {
+  const sortedNames = [...names].sort((a, b) => {
     if (sortMode === 'primary') {
       const aPrimary = primaryName === a.name;
       const bPrimary = primaryName === b.name;
@@ -486,7 +465,7 @@ export default function MyNamesPage() {
         bio: textRecords[name.name]?.bio || '',
         twitter: textRecords[name.name]?.twitter || '',
         telegram: textRecords[name.name]?.telegram || '',
-        website: textRecords[name.name]?.url || '',
+        website: textRecords[name.name]?.website || '',
         email: textRecords[name.name]?.email || '',
       },
     ])
@@ -688,6 +667,7 @@ export default function MyNamesPage() {
             isOpen={detailModalOpen}
             onClose={() => { setDetailModalOpen(false); setSelectedName(null); }}
             name={selectedName}
+            initialTab={detailInitialTab}
             expires={Number(names.find((n) => n.name === selectedName)?.expires || 0)}
             isPermanent={names.find((n) => n.name === selectedName)?.isPermanent || false}
             registeredAt={Number(names.find((n) => n.name === selectedName)?.registeredAt || 0)}
@@ -697,7 +677,7 @@ export default function MyNamesPage() {
             telegram={textRecords[selectedName]?.telegram}
             website={textRecords[selectedName]?.website}
             email={textRecords[selectedName]?.email}
-            isPrimary={selectedName === useWalletStore.getState().qnsName?.replace('.qf', '')}
+            isPrimary={primaryName === selectedName}
             providerType={providerType}
             address={address || ''}
             balance={walletBalance}

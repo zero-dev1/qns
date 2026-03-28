@@ -43,7 +43,7 @@ function AnimatedNumber({ value, prefix = '', suffix, shouldAnimate }: { value: 
   }, [value, shouldAnimate]);
 
   if (value === null) {
-    return <span>Loading...</span>;
+    return <span className="animate-pulse text-white/20">—</span>;
   }
 
   return (
@@ -55,6 +55,7 @@ export default function StatsBar() {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.5 });
   const [totalClaimed, setTotalClaimed] = useState<number | null>(null);
+  const [fetchFailed, setFetchFailed] = useState(false);
 
   useEffect(() => {
     async function fetchCount() {
@@ -63,7 +64,7 @@ export default function StatsBar() {
         const count = await getTotalRegistrations();
         setTotalClaimed(Number(count));
       } catch {
-        setTotalClaimed(null); // fall back to nothing, not a hard-coded number
+        setFetchFailed(true);
       }
     }
     fetchCount();
@@ -71,7 +72,7 @@ export default function StatsBar() {
 
   // Combine dynamic and static stats
   const stats: Stat[] = [
-    { ...staticStats[0], value: totalClaimed },
+    { ...staticStats[0], value: fetchFailed ? 0 : totalClaimed },
     { ...staticStats[1], value: 5 },
     { ...staticStats[2], value: 9 },
     { ...staticStats[3], value: 6 },

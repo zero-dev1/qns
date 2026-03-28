@@ -9,6 +9,7 @@ import Avatar from './Avatar';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 import { hapticTap, hapticSuccess, hapticError } from '../utils/haptics';
+import { namehash as computeNamehash } from '../utils/qns';
 
 // QDL: Team names - empty for now, can be populated later
 const TEAM_NAMES: string[] = [];
@@ -32,6 +33,7 @@ interface DetailModalProps {
   website?: string;
   email?: string;
   isPrimary: boolean;
+  initialTab?: Tab;
   // QDL: new props for pricing ceremony
   providerType: 'substrate' | 'evm' | null;
   address: string;
@@ -61,9 +63,9 @@ const RECORD_FIELDS = [
 ];
 
 export default function DetailModal({
-  isOpen, onClose, name, expires, isPermanent,
+  isOpen, onClose, name, expires, isPermanent, registeredAt,
   avatar, bio, twitter, telegram, website, email,
-  isPrimary, /* providerType, */ address, balance,
+  isPrimary, initialTab, /* providerType, */ address, balance,
   onSaveRecords, onSetPrimary, onRenew, onTransfer,
 }: DetailModalProps) {
   const { showToast } = useToast();
@@ -109,22 +111,20 @@ export default function DetailModal({
   const [linkCopied, setLinkCopied] = useState(false);
   const [hashCopied, setHashCopied] = useState(false);
 
-  // QDL: namehash for devs (keccak256 of name.qf)
-  const namehash = useMemo(() => {
+  // QDL: real EIP-137 namehash for devs
+  const fullNamehash = useMemo(() => {
     try {
-      // Simple display hash — real namehash computed on-chain
-      const encoder = new TextEncoder();
-      const data = encoder.encode(`${name}.qf`);
-      let hex = '0x';
-      data.forEach(b => { hex += b.toString(16).padStart(2, '0'); });
-      return hex.slice(0, 18) + '...' + hex.slice(-8);
+      return computeNamehash(`${name}.qf`);
     } catch { return '0x...'; }
   }, [name]);
+  const displayNamehash = fullNamehash.length > 20
+    ? `${fullNamehash.slice(0, 10)}...${fullNamehash.slice(-8)}` 
+    : fullNamehash;
 
   // Reset state when modal opens or name changes
   useEffect(() => {
     if (isOpen) {
-      setActiveTab('overview');
+      setActiveTab(initialTab || 'overview');
       setEditValues({
         avatar: avatar || '', bio: bio || '', twitter: twitter || '',
         telegram: telegram || '', website: website || '', email: email || '',
@@ -229,7 +229,7 @@ export default function DetailModal({
 
   const handleTransferConfirm = useCallback(async () => {
     setTransferring(true);
-    hapticError();
+    hapticTap();
     try {
       await onTransfer(transferTo.trim());
       hapticSuccess();
@@ -245,18 +245,18 @@ export default function DetailModal({
 
   const handleCopyLink = useCallback(() => {
     const url = `${window.location.origin}/${name}.qf`;
-    navigator.clipboard.writeText(url);
+    copy(url);
     setLinkCopied(true);
     hapticSuccess();
     setTimeout(() => setLinkCopied(false), 2000);
-  }, [name]);
+  }, [name, copy]);
 
   const handleCopyHash = useCallback(() => {
-    copy(namehash);
+    copy(fullNamehash);
     setHashCopied(true);
     hapticSuccess();
     setTimeout(() => setHashCopied(false), 2000);
-  }, [namehash, copy]);
+  }, [fullNamehash, copy]);
 
   const handleShareX = useCallback(() => {
     const text = `I own ${name}.qf on QF Network`;
@@ -372,6 +372,16 @@ export default function DetailModal({
                         <Star className="w-3 h-3" /> dApp Lab
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Registration date */}
+                {registeredAt && registeredAt > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-white/50">
+                    <span className="text-white/30 w-20">Registered</span>
+                    <span className="text-white/70">
+                      {new Date(registeredAt * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
                   </div>
                 )}
 
@@ -648,7 +658,7 @@ export default function DetailModal({
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-white/30">Namehash</span>
                     <div className="flex-1 px-2 py-1.5 rounded-lg bg-white/[0.03] text-xs text-white/40 font-mono truncate">
-                      {namehash}
+                      {displayNamehash}
                     </div>
                     <button
                       onClick={handleCopyHash}
