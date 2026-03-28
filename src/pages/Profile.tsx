@@ -612,7 +612,7 @@ export default function ProfilePage() {
 
   const handleShareGiftOnX = () => {
     if (!profile || !giftAmount) return;
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just gifted ${giftAmount} QF to ${profile.name}.qf on @dotqfns powered by @theqfnetwork`)}`, '_blank');
+    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(`Gifted ${giftAmount} QF to ${profile.name}.qf on @theqfnetwork via @dotqfns`)}`, '_blank');
   };
 
   // ── Meta tags (preserved exactly) ──

@@ -318,9 +318,7 @@ export default function RegistrationPanel({
   };
 
   const handleShareOnX = () => {
-    const burnAmt = regPrice ? formatQF(regPrice * 5n / 100n) : null;
-    const burnClause = burnAmt ? ` ${burnAmt} QF burned from supply forever.` : '';
-    const text = `Just claimed ${selectedName}.qf on @dotqfns —${burnClause} Registered in seconds on QF Network.`;
+    const text = `I'm ${selectedName}.qf on @theqfnetwork via @dotqfns`;
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${selectedName}`)}`;
     window.open(url, '_blank');
   };

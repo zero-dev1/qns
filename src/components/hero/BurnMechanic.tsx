@@ -119,11 +119,11 @@ export default function BurnMechanic() {
           </div>
           
           <p className="text-[#8A8A8A] text-sm mb-6 leading-relaxed">
-            Every <span className="text-[#00D179]">.qf</span> registration burns{' '}
+            Every <span className="text-[#00D179]">.qf</span> registration and renewal burns{' '}
             <span className="text-[#E5484D] font-medium">
               {loading ? '—' : `${burnStats?.burnPercent || 5}%`}
             </span>{' '}
-            of the fee permanently. The supply gets scarcer with every name claimed.
+            of the fee permanently. The supply gets scarcer with every name registered and renewed.
           </p>
           
           {/* Stats Grid */}

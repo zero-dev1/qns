@@ -99,22 +99,7 @@ export default function Hero() {
   // First visit tooltip state
   const [showTooltip, setShowTooltip] = useState(false);
   
-  // Auto-focus on desktop — but only after typewriter has had time to run
-  useEffect(() => {
-    if (window.matchMedia('(pointer: fine)').matches) {
-      // Wait 6 seconds so the typewriter completes at least one full name cycle
-      // before pulling focus (which kills the typewriter).
-      // If user interacts first, the typewriter stops naturally and this is a no-op.
-      const timer = setTimeout(() => {
-        // Only focus if user hasn't already interacted with the input
-        if (!input && inputRef.current && document.activeElement !== inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, 6000);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
+  
   // Check for search query param on mount AND when it changes (e.g. from CommandPalette)
   useEffect(() => {
     const searchParam = searchParams.get('search');

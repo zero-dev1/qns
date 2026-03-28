@@ -10,10 +10,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 import { hapticTap, hapticSuccess, hapticError } from '../utils/haptics';
 import { namehash as computeNamehash } from '../utils/qns';
-
-// QDL: Team names - empty for now, can be populated later
-const TEAM_NAMES: string[] = [];
-const DAPP_LAB_NAMES: string[] = [];
+import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 
 // QDL: Renewal pricing constants (must match contract)
 const GAS_BUFFER = 0.5;   // QF tokens reserved for gas — UI estimate only
@@ -317,7 +314,7 @@ export default function DetailModal({
   }, [fullNamehash, copy]);
 
   const handleShareX = useCallback(() => {
-    const text = `I own ${name}.qf on QF Network`;
+    const text = `I own ${name}.qf on @theqfnetwork via @dotqfns`;
     window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
     hapticTap();
   }, [name]);
@@ -728,14 +725,7 @@ export default function DetailModal({
                   <ExternalLink className="w-4 h-4" /> Share on X
                 </button>
 
-                {/* QDL: QR placeholder */}
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
-                  <h3 className="text-sm font-medium text-white">QR Code</h3>
-                  <div className="flex items-center justify-center h-32 rounded-xl bg-white/[0.02] border border-dashed border-white/10">
-                    <span className="text-xs text-white/20">QR code coming soon</span>
-                  </div>
-                </div>
-
+                
                 {/* QDL: Namehash for devs */}
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
                   <h3 className="text-sm font-medium text-white/60">For Developers</h3>

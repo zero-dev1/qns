@@ -839,7 +839,7 @@ export async function isReserved(name: string): Promise<boolean> {
 }
 
 export const BURN_ADDRESS_SS58 = '5C4hrfjw9DjXZTzV3MwzrrAr9PUr9y8SHgV3cmVGNUWRiJL5';
-const QFPAY_ROUTER = '5Ew9dLGRMLr3J5icw9vSG64w62hdxcvrDAvjKqx9T1KG1uKc';
+const REGISTRAR_SS58 = '5EHF1zj6LTZnpzoM4EKWTYhA7YNTpiFPRaeLj7MZ5zjwbNhp'; // QNS Registrar 0x79d1b7425c8ad9cda83e3bb1c4e6730ff77b7854
 const QF_EXPLORER_API = 'https://qf-explorer.mathswins.co.uk/api';
 
 export const BURN_ADDRESS_EVM = '0x000000000000000000000000000000000000dEaD';
@@ -873,7 +873,7 @@ export async function getBurnStats(): Promise<BurnStats> {
       if (tx.to === BURN_ADDRESS_SS58) {
         const amount = parseFloat(tx.amountQF);
         totalBurned += amount;
-        if (tx.from !== QFPAY_ROUTER) {
+        if (tx.from === REGISTRAR_SS58) {
           qnsBurned += amount;
         }
       }
