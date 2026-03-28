@@ -7,7 +7,7 @@ import { useNamesStore } from '../../stores/namesStore';
 import { useToast } from '../../contexts/ToastContext';
 import { hapticSuccess, hapticError } from '../../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../../utils/errorHelpers';
-import { getPrice, registerName, getQFBalance, getSubstrateQFBalance, formatQF, setMultipleTextRecords } from '../../utils/qns';
+import { getPrice, registerName, getQFBalance, getSubstrateQFBalance, formatQF, setMultipleTextRecords, setPrimaryName } from '../../utils/qns';
 import type { TxState, TxErrorType } from '../../types/search';
 
 const durations = [
@@ -192,9 +192,41 @@ export default function RegistrationPanel({
       };
       // Snapshot before optimistic add
       const previousNames = [...existingStoreNames];
+      const isFirstName = existingStoreNames.length === 0;
       setOwnedNames([...existingStoreNames, newName]);
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
-      refreshName().catch(() => {});
+
+      // QDL: First name ceremony — auto-set as primary so the identity
+      // is immediately live across navbar, profile, and reverse resolution.
+      // Fires in background; must not block the onboarding flow.
+      if (isFirstName && address) {
+        const signerAddr = providerType === 'evm' ? address : (ss58Address || address);
+        setPrimaryName(selectedName, address, signerAddr)
+          .then(({ confirmation }) => {
+            // Optimistically update wallet store so navbar reflects immediately
+            useWalletStore.setState({ qnsName: selectedName, displayName: selectedName });
+
+            confirmation.then((result) => {
+              if (result.confirmed) {
+                // Chain confirmed — refresh to lock in the canonical state
+                refreshName().catch(() => {});
+              } else if (result.error) {
+                // Reverse record failed on-chain — clear optimistic state.
+                // User can set primary manually from My Names.
+                refreshName().catch(() => {});
+              }
+            });
+          })
+          .catch(() => {
+            // setPrimaryName call itself failed (e.g. gas estimation, wallet rejection).
+            // Don't block anything — user can set primary manually.
+            refreshName().catch(() => {});
+          });
+      } else {
+        // Not first name — just refresh to pick up existing primary
+        refreshName().catch(() => {});
+      }
+
       onRegisterSuccess(selectedName);
 
       // After 600ms, transition to full success
