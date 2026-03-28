@@ -947,7 +947,7 @@ export default function ProfilePage() {
               </motion.div>
 
               {/* ── Right: Ledger ── */}
-              <div className="hidden md:block p-5 border-l border-white/[0.04]">
+              <div className="hidden md:flex md:flex-col p-5 border-l border-white/[0.04]">
                 <LedgerPanel events={ledgerEvents} />
               </div>
             </div>
