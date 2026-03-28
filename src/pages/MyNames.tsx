@@ -5,26 +5,22 @@ import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import {
-  Twitter,
-  Loader2,
-  Check,
-  Wallet,
-  X,
-} from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import {
   transferNameOnChain,
   getTextRecord,
   resolveForward,
   getNamesOwnedByAddress,
+  setPrimaryName,
   resolveReverse,
 } from '../utils/qns';
 import { ss58ToEvmAddress } from '../utils/address';
 import { useToast } from '../contexts/ToastContext';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
-import IdentityCard from '../components/IdentityCard';
 import Avatar from '../components/Avatar';
+import IdentityCard from '../components/IdentityCard';
+import DetailModal from '../components/DetailModal';
 
 interface OwnedName {
   name: string;
@@ -54,13 +50,13 @@ export default function MyNamesPage() {
   const [names, setNames] = useState<OwnedName[]>([]);
   const [loading, setLoading] = useState(false);
   const [textRecords, setTextRecords] = useState<Record<string, Record<string, string>>>({});
-  const [transferModal, setTransferModal] = useState<string | null>(null);
-  const [transferRecipient, setTransferRecipient] = useState('');
-  const [transferring, setTransferring] = useState(false);
-  const [transferError, setTransferError] = useState<string | null>(null);
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
-  const [transferSuccess, setTransferSuccess] = useState(false);
   const [enableTilt, setEnableTilt] = useState(false);
+  
+  // Detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'edit' | 'manage' | 'share'>('overview');
 
 
   const loadNames = useCallback(async () => {
@@ -149,11 +145,11 @@ export default function MyNamesPage() {
     }
   }, [address]);
 
-  // Auto-expand effect (temporary — commit 3 will wire it to DetailModal)
+  // Auto-expand to DetailModal
   useEffect(() => {
     if (expandName && !hasAutoExpanded.current && names.some((n) => n.name === expandName)) {
       hasAutoExpanded.current = true;
-      // Will open DetailModal in commit 3. For now, just mark as expanded.
+      openDetailModal(expandName, 'edit');
     }
   }, [expandName, names]);
 
@@ -183,15 +179,15 @@ export default function MyNamesPage() {
     return () => mediaQuery.removeListener(handleMediaChange);
   }, []);
 
-  // Escape key to close modals
+  // Escape key to close DetailModal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (transferModal) setTransferModal(null);
+      if (e.key === 'Escape' && detailModalOpen) {
+        closeDetailModal();
       }
     };
 
-    if (transferModal) {
+    if (detailModalOpen) {
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
     }
@@ -200,7 +196,7 @@ export default function MyNamesPage() {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [transferModal]);
+  }, [detailModalOpen]);
 
   const loadTextRecords = async (name: string) => {
     const records: Record<string, string> = {};
@@ -213,10 +209,216 @@ export default function MyNamesPage() {
 
 
 
-  // Detail modal handlers (for commit 3)
-  const openDetailModal = (_name: string, _tab?: 'overview' | 'edit' | 'manage' | 'share') => {
-    // Will open DetailModal in commit 3
+  // Detail modal handlers
+  const openDetailModal = (name: string, tab?: 'overview' | 'edit' | 'manage' | 'share') => {
+    setSelectedName(name);
+    setDetailTab(tab || 'overview');
+    setDetailModalOpen(true);
+    if (!textRecords[name]) {
+      loadTextRecords(name);
+    }
     hapticTap();
+  };
+
+  const closeDetailModal = () => {
+    setDetailModalOpen(false);
+    setSelectedName(null);
+    hapticTap();
+  };
+
+  // Detail modal adapter handlers
+  const handleSaveRecords = async (name: string, records: Record<string, string>) => {
+    if (!address) return;
+    
+    try {
+      const keys: string[] = [];
+      const values: string[] = [];
+      
+      for (const [key, value] of Object.entries(records)) {
+        const oldValue = textRecords[name]?.[key] ?? '';
+        if (value !== oldValue) {
+          keys.push(key);
+          values.push(value || '');
+        }
+      }
+      
+      if (keys.length > 0) {
+        if (!signerAddress) throw new Error('No wallet connected');
+        // Direct implementation since handleSaveAll was removed
+        const { setMultipleTextRecords } = await import('../utils/qns');
+        const { confirmation } = await setMultipleTextRecords(name, keys, values, signerAddress);
+
+        // Optimistic update
+        setTextRecords((prev: any) => ({ ...prev, [name]: { ...prev[name], ...records } }));
+        showToast('Profile updated successfully', 'success');
+        hapticTap();
+
+        confirmation.then((result) => {
+          if (result.confirmed) return;
+          if (result.error === 'not_confirmed') {
+            showToast('Profile update submitted but unconfirmed.', 'warning');
+            return;
+          }
+          if (result.error && isRetryableError(result.error)) {
+            showToast(RETRY_MESSAGE_SHORT, 'warning');
+            loadTextRecords(name);
+            hapticError();
+            return;
+          }
+          showToast(`Profile update failed: ${result.error}. Reverting changes.`, 'error');
+          loadTextRecords(name);
+          hapticError();
+        });
+      }
+    } catch (err: any) {
+      if (isRetryableError(err.message)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
+      showToast('Failed to save, please try again', 'error');
+      hapticError();
+    }
+  };
+
+  const handleSetPrimaryFromModal = async (name: string) => {
+    if (!address) return;
+    try {
+      if (!signerAddress) throw new Error('No wallet connected');
+      const { confirmation } = await setPrimaryName(name, address, signerAddress);
+
+      setPrimaryNameState(name);
+      useWalletStore.setState({ qnsName: name, displayName: name });
+      showToast('Primary name updated', 'success');
+      hapticSuccess();
+
+      confirmation.then((result) => {
+        if (result.confirmed) {
+          setTimeout(() => {
+            refreshName().catch(() => {}).finally(() => {
+              const current = useWalletStore.getState().qnsName;
+              if (current !== name) {
+                useWalletStore.setState({ qnsName: name, displayName: name });
+              }
+            });
+          }, 5000);
+          return;
+        }
+        if (result.error === 'not_confirmed') {
+          showToast('Primary name update submitted but unconfirmed.', 'warning');
+          setTimeout(() => refreshName().catch(() => {}), 5000);
+          return;
+        }
+        if (result.error && isRetryableError(result.error)) {
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+          refreshName().catch(() => {});
+          resolveReverse(address).then(setPrimaryNameState).catch(() => {});
+          hapticError();
+          return;
+        }
+        showToast(`Failed to set primary: ${result.error}`, 'error');
+        refreshName().catch(() => {});
+        resolveReverse(address).then(setPrimaryNameState).catch(() => {});
+        hapticError();
+      });
+    } catch (err: any) {
+      if (isRetryableError(err.message)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
+      showToast(err.message || 'Failed to set primary name', 'error');
+      hapticError();
+    }
+  };
+
+  const handleRenew = async (name: string, years: number) => {
+    if (!address) return;
+    
+    try {
+      if (!signerAddress) throw new Error('No wallet connected');
+      const { renewName } = await import('../utils/qns');
+      const { confirmation } = await renewName(name, years, signerAddress);
+
+      // Optimistic update
+      setNames((prev) =>
+        prev.map((item) => {
+          if (item.name !== name || item.isPermanent) return item;
+          return { ...item, expires: item.expires + BigInt(years) * 365n * 24n * 60n * 60n };
+        })
+      );
+      showToast(`Renewed ${name}.qf for ${years} year${years > 1 ? 's' : ''}`, 'success');
+      hapticSuccess();
+
+      confirmation.then((result) => {
+        if (result.confirmed) {
+          setTimeout(() => bgRefresh(), 3000);
+          return;
+        }
+        if (result.error === 'not_confirmed') {
+          showToast(`Renewal of ${name}.qf submitted but unconfirmed. Please check shortly.`, 'warning');
+          setTimeout(() => bgRefresh(), 5000);
+          return;
+        }
+        if (result.error && isRetryableError(result.error)) {
+          showToast(RETRY_MESSAGE_SHORT, 'warning');
+          hapticError();
+          bgRefresh();
+          return;
+        }
+        showToast(`Renewal of ${name}.qf failed: ${result.error}`, 'error');
+        hapticError();
+        bgRefresh();
+      });
+    } catch (err: any) {
+      if (isRetryableError(err.message)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        hapticError();
+        return;
+      }
+      showToast(err.message || `Failed to renew ${name}`, 'error');
+      hapticError();
+    }
+  };
+
+  const handleTransferFromModal = async (name: string, toAddress: string) => {
+    if (!address) return;
+    let recipient = toAddress.trim();
+
+    if (recipient.endsWith('.qf')) {
+      const resolved = await resolveForward(recipient);
+      if (!resolved) { showToast('Name not found', 'error'); return; }
+      recipient = resolved;
+    } else if (/^5[a-zA-Z0-9]{47}$/.test(recipient) || /^[a-zA-Z0-9]{46,48}$/.test(recipient)) {
+      try { recipient = ss58ToEvmAddress(recipient); }
+      catch { showToast('Invalid Substrate address', 'error'); return; }
+    } else if (!/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
+      showToast('Enter a .qf name, 0x address, or Substrate address', 'error');
+      return;
+    }
+
+    if (!signerAddress) throw new Error('No wallet connected');
+    const { confirmation } = await transferNameOnChain(name, recipient as `0x${string}`, signerAddress);
+
+    setNames((prev) => prev.filter((item) => item.name !== name));
+    hapticSuccess();
+    showToast(`${name}.qf transferred`, 'success');
+
+    confirmation.then((result) => {
+      if (result.confirmed) {
+        setTimeout(() => { refreshNames(address).catch(() => {}); refreshName().catch(() => {}); }, 3000);
+        return;
+      }
+      if (result.error && isRetryableError(result.error)) {
+        showToast(RETRY_MESSAGE_SHORT, 'warning');
+        bgRefresh();
+        return;
+      }
+      if (result.error) {
+        showToast(`Transfer failed: ${result.error}`, 'error');
+        bgRefresh();
+      }
+    });
   };
 
   // Sort functionality
@@ -443,215 +645,23 @@ export default function MyNamesPage() {
       </div>
       <Footer />
 
-      {/* ── TRANSFER MODAL ── */}
+      {/* ── DETAIL MODAL ── */}
       <AnimatePresence>
-        {transferModal && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              if (!transferring) {
-                setTransferModal(null);
-                setTransferSuccess(false);
-              }
-            }}
-          >
-            <motion.div
-              className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#111] shadow-2xl"
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-[#00D179]/10 via-[#00D179]/5 to-transparent" />
-              <div className="relative p-6">
-                {!transferSuccess ? (
-                  <>
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="font-clash text-xl font-bold text-white">
-                        Transfer {transferModal}<span className="text-[#00D179]">.qf</span>
-                      </h3>
-                      <button
-                        onClick={() => setTransferModal(null)}
-                        className="rounded-xl border border-white/10 bg-white/5 p-2 text-gray-400 transition-all duration-200 hover:border-[#00D179]/20 hover:bg-white/10 hover:text-white cursor-pointer"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-
-                    <div className="mb-4">
-                      <label className="mb-2 block text-xs text-gray-500">Recipient</label>
-                      <input
-                        type="text"
-                        value={transferRecipient}
-                        onChange={(e) => setTransferRecipient(e.target.value)}
-                        placeholder="5... (Substrate), 0x... (EVM), or name.qf"
-                        className="w-full rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 text-white text-base md:text-sm outline-none focus:border-[#00D179]/50 transition-colors duration-200 font-mono placeholder:text-gray-600"
-                      />
-                    </div>
-
-                    <p className="text-xs text-[#F5A623] mb-4">
-                      This action cannot be undone. The new owner will have full control of this name.
-                    </p>
-
-                    {transferError && (
-                      <p className="text-xs text-[#E5484D] mb-3">{transferError}</p>
-                    )}
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={async () => {
-                          if (!address || !transferModal) return;
-                          setTransferError(null);
-                          setTransferring(true);
-
-                          const nameToTransfer = transferModal;
-                          let recipient = transferRecipient.trim();
-                          try {
-                            if (recipient.endsWith('.qf')) {
-                              const resolved = await resolveForward(recipient);
-                              if (!resolved) {
-                                setTransferError('Name not found.');
-                                setTransferring(false);
-                                return;
-                              }
-                              recipient = resolved;
-                            } else if (/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
-                              // Valid EVM address — use as-is
-                            } else if (/^5[a-zA-Z0-9]{47}$/.test(recipient) || /^[a-zA-Z0-9]{46,48}$/.test(recipient)) {
-                              try {
-                                recipient = ss58ToEvmAddress(recipient);
-                              } catch {
-                                setTransferError('Invalid Substrate address.');
-                                setTransferring(false);
-                                return;
-                              }
-                            } else {
-                              setTransferError('Enter a .qf name, 0x address, or Substrate address.');
-                              setTransferring(false);
-                              return;
-                            }
-
-                            if (!signerAddress) throw new Error('No wallet connected');
-                            const { confirmation } = await transferNameOnChain(nameToTransfer, recipient as `0x${string}`, signerAddress);
-
-                            // Optimistic removal
-                            setNames((prev) => prev.filter((item) => item.name !== nameToTransfer));
-                            setTransferSuccess(true);
-                            hapticSuccess();
-
-                            confirmation.then((result) => {
-                              if (result.confirmed) {
-                                setTimeout(() => {
-                                  refreshNames(address).catch(() => {});
-                                  refreshName().catch(() => {});
-                                }, 3000);
-                                return;
-                              }
-                              if (result.error === 'not_confirmed') {
-                                showToast(`Transfer submitted but unconfirmed. Check shortly.`, 'warning');
-                                setTimeout(() => bgRefresh(), 5000);
-                                return;
-                              }
-                              // Check if this is a retryable error
-                              if (result.error && isRetryableError(result.error)) {
-                                showToast(RETRY_MESSAGE_SHORT, 'warning');
-                                hapticError();
-                                bgRefresh(); // re-fetch real state
-                                return;
-                              }
-                              // Hard failure — add name back
-                              showToast(`Transfer failed: ${result.error}`, 'error');
-                              hapticError();
-                              bgRefresh(); // re-fetch real state
-                            });
-                          } catch (err: any) {
-                            // Check if this is a retryable error
-                            if (isRetryableError(err.message)) {
-                              showToast(RETRY_MESSAGE_SHORT, 'warning');
-                              hapticError();
-                              return;
-                            }
-                            let userMessage = 'Transaction failed';
-                            if (err.message) {
-                              const message = err.message.toLowerCase();
-                              if (message.includes('not connected') || message.includes('reconnect')) {
-                                userMessage = 'Wallet connection lost. Please disconnect and reconnect.';
-                              } else if (message.includes('switch metamask') || message.includes('qf network')) {
-                                userMessage = 'Please switch MetaMask to QF Network and try again.';
-                              } else if (message.includes('rejected') || message.includes('denied') || message.includes('user rejected')) {
-                                userMessage = 'Transaction rejected';
-                              } else if (message.includes('unauthorized') || message.includes('not owner')) {
-                                userMessage = 'You are not the owner of this name';
-                              } else if (message.includes('insufficient') || message.includes('balance')) {
-                                userMessage = 'Insufficient QF balance';
-                              }
-                            }
-                            setTransferError(userMessage);
-                            showToast(err.message || 'Transfer failed', 'error');
-                            hapticError();
-                          } finally {
-                            setTransferring(false);
-                          }
-                        }}
-                        disabled={transferring || !transferRecipient.trim()}
-                        className="flex-1 py-3 bg-[#E5484D] hover:bg-[#c93d41] text-white font-medium rounded-xl transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        {transferring && <Loader2 size={16} className="animate-spin" />}
-                        {transferring ? 'Transferring...' : 'Transfer'}
-                      </button>
-                      <button
-                        onClick={() => setTransferModal(null)}
-                        disabled={transferring}
-                        className="text-sm text-gray-500 hover:text-white transition-colors cursor-pointer px-4 py-3"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-4">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#00D179]/20 flex items-center justify-center">
-                      <Check size={32} className="text-[#00D179]" />
-                    </div>
-                    <h3 className="font-clash font-medium text-xl text-white mb-2">
-                      {transferModal}<span className="text-[#00D179]">.qf</span> transferred!
-                    </h3>
-                    <p className="text-sm text-gray-500 mb-6">
-                      Successfully transferred to{' '}
-                      {transferRecipient.length > 20
-                        ? `${transferRecipient.slice(0, 8)}...${transferRecipient.slice(-6)}`
-                        : transferRecipient}
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      <button
-                        onClick={() => {
-                          const text = `Just transferred ${transferModal}.qf on @dotqfns powered by @theqfnetwork`;
-                          const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-                          window.open(url, '_blank');
-                        }}
-                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-colors duration-200 cursor-pointer"
-                      >
-                        <Twitter size={18} />
-                        Share on X
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTransferModal(null);
-                          setTransferSuccess(false);
-                        }}
-                        className="text-sm text-gray-500 hover:text-white transition-colors duration-200 py-2 cursor-pointer"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
+        {detailModalOpen && selectedName && (
+          <DetailModal
+            key={selectedName}
+            name={selectedName}
+            isOpen={detailModalOpen}
+            defaultTab={detailTab}
+            onClose={closeDetailModal}
+            ownedName={names.find((n) => n.name === selectedName)!}
+            records={cardRecords.get(selectedName) || { avatar: '', bio: '', twitter: '', telegram: '', website: '', email: '' }}
+            isPrimary={primaryName === selectedName}
+            onSaveRecords={handleSaveRecords}
+            onSetPrimary={handleSetPrimaryFromModal}
+            onRenew={handleRenew}
+            onTransfer={handleTransferFromModal}
+          />
         )}
       </AnimatePresence>
     </>
