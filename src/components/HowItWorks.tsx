@@ -49,21 +49,36 @@ export default function HowItWorks() {
           Three steps. Sixty seconds.
         </motion.h2>
 
-        <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div className="mt-16 relative grid grid-cols-1 gap-5 md:grid-cols-3">
+          {/* Connecting lines — desktop only */}
+          <div className="hidden md:block absolute top-[60px] left-0 right-0 z-0 px-[calc(16.66%+12px)]">
+            <motion.div
+              className="h-px w-full bg-gradient-to-r from-[#00D179]/30 via-[#00D179]/10 to-[#00D179]/30"
+              initial={{ scaleX: 0 }}
+              whileInView={{ scaleX: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              style={{ originX: 0 }}
+            />
+          </div>
+
           {steps.map((step, i) => (
             <motion.div
               key={step.num}
-              className="group relative rounded-2xl border border-white/[0.06] bg-[#111] overflow-hidden transition-all duration-300 hover:border-[#00D179]/20"
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              className="group relative rounded-2xl border border-white/[0.06] bg-[#111] overflow-hidden transition-all duration-300 hover:border-[#00D179]/20 z-10"
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.12 }}
+              transition={{
+                duration: 0.5,
+                delay: i * 0.15,
+                ease: [0.22, 1, 0.36, 1],
+              }}
             >
               {/* Top accent line */}
               <div className="h-[2px] bg-gradient-to-r from-[#00D179]/40 via-[#00D179]/10 to-transparent" />
 
               <div className="p-7">
-                {/* Step number + Icon row */}
                 <div className="flex items-center justify-between mb-6">
                   <span className="font-clash text-4xl font-bold text-[#00D179]/20 group-hover:text-[#00D179]/40 transition-colors duration-300">
                     {step.num}
@@ -73,11 +88,9 @@ export default function HowItWorks() {
                   </div>
                 </div>
 
-                {/* Content */}
                 <h3 className="font-clash font-semibold text-xl text-white mb-3">{step.title}</h3>
                 <p className="text-sm text-[#666] leading-relaxed mb-5">{step.description}</p>
 
-                {/* Detail pill */}
                 <span className="inline-flex text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] text-[#555] border border-white/[0.06]">
                   {step.detail}
                 </span>

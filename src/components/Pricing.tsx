@@ -192,6 +192,12 @@ export default function Pricing() {
                   transition={{ duration: 0.5, delay: index * 0.12 }}
                   whileHover={{ y: -4 }}
                 >
+                  {isForever && (
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none z-0">
+                      <div className="absolute inset-0 rounded-2xl pricing-card-shimmer" />
+                    </div>
+                  )}
+
                   {/* Hover spotlight */}
                   <div
                     className={`pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 ${
@@ -288,6 +294,18 @@ export default function Pricing() {
           background-size: 200% 100%;
           animation: shimmer 4s infinite;
           pointer-events: none;
+        }
+        .pricing-card-shimmer {
+          background: linear-gradient(
+            110deg,
+            transparent 20%,
+            rgba(0, 209, 121, 0.04) 40%,
+            rgba(0, 209, 121, 0.08) 50%,
+            rgba(0, 209, 121, 0.04) 60%,
+            transparent 80%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 4s infinite;
         }
       `}</style>
     </section>

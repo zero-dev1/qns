@@ -48,7 +48,7 @@ export default function ActivityTicker() {
     <div className="py-6">
       <div className="max-w-[1120px] mx-auto px-6">
         <div
-          className="flex items-center justify-center gap-3 h-10"
+          className="relative flex items-center justify-center gap-3 h-10"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
@@ -59,21 +59,30 @@ export default function ActivityTicker() {
           </span>
 
           <AnimatePresence mode="wait">
-            <motion.p
+            <motion.div
               key={`${current.name}-${visibleIndex}`}
-              className="text-sm text-[#666]"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25 }}
+              className="flex items-center gap-2 text-sm text-[#666]"
+              initial={{ opacity: 0, y: 10, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.97 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             >
-              <Link to={`/name/${current.name}`} className="text-white font-medium hover:text-[#00D179] transition-colors">
-  {current.name}
-</Link>
-              <span className="text-[#00D179]">.qf</span>
-              <span className="text-[#444] mx-1.5">·</span>
-              <span>claimed {current.isPermanent ? 'permanently' : ''} {timeAgo(current.timestamp)}</span>
-            </motion.p>
+              {/* Brief blip glow on entry */}
+              <motion.span
+                className="absolute left-1/2 -translate-x-1/2 w-32 h-8 rounded-full bg-[#00D179]/[0.06] blur-xl pointer-events-none"
+                initial={{ opacity: 1, scale: 0.5 }}
+                animate={{ opacity: 0, scale: 1.5 }}
+                transition={{ duration: 0.6 }}
+              />
+              <p>
+                <Link to={`/name/${current.name}`} className="text-white font-medium hover:text-[#00D179] transition-colors">
+                  {current.name}
+                </Link>
+                <span className="text-[#00D179]">.qf</span>
+                <span className="text-[#444] mx-1.5">·</span>
+                <span>claimed {current.isPermanent ? 'permanently' : ''} {timeAgo(current.timestamp)}</span>
+              </p>
+            </motion.div>
           </AnimatePresence>
         </div>
       </div>

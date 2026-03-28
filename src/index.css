@@ -12,6 +12,7 @@
     --sab: env(safe-area-inset-bottom);
     --sal: env(safe-area-inset-left);
     --sar: env(safe-area-inset-right);
+    --ease-qf: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   html {
@@ -154,4 +155,80 @@
 /* Fixed bottom CTA with safe area handling */
 .fixed-bottom-cta {
   padding-bottom: calc(1rem + var(--sab));
+}
+
+/* Spotlight card glow — uses per-card --glow-color or falls back to brand green */
+.spotlight-card::after {
+  background: var(--glow-color, rgba(0, 209, 121, 0.3));
+}
+
+/* .qf gradient text — reusable utility */
+.text-qf-gradient {
+  background: linear-gradient(90deg, #00D179, #00B868);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hero component styles */
+.hero-gradient-bg {
+  position: absolute;
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.98) 0%, rgba(10, 10, 10, 1) 100%);
+}
+
+.hero-glow {
+  background: radial-gradient(ellipse, rgba(0, 209, 121, 0.07) 0%, transparent 70%);
+}
+
+.search-bar-shell {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.search-bar-focus-glow {
+  box-shadow: 0 0 20px rgba(0, 209, 121, 0.12), 0 0 60px rgba(0, 209, 121, 0.04);
+}
+
+.search-bar-available-pulse {
+  animation: search-bar-pulse 0.9s ease-out 1;
+}
+
+@keyframes search-bar-pulse {
+  0% { box-shadow: 0 0 20px rgba(0, 209, 121, 0.12), 0 0 60px rgba(0, 209, 121, 0.04); }
+  50% { box-shadow: 0 0 28px rgba(0, 209, 121, 0.2), 0 0 84px rgba(0, 209, 121, 0.08); }
+  100% { box-shadow: 0 0 20px rgba(0, 209, 121, 0.12), 0 0 60px rgba(0, 209, 121, 0.04); }
+}
+
+.floating-particle {
+  position: absolute;
+  background: #00D179;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0, 209, 121, 0.04);
+  animation-name: float-particle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  pointer-events: none;
+}
+
+@keyframes float-particle {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  15% { opacity: 1; }
+  50% { transform: translate3d(6px, -22px, 0); opacity: 0.85; }
+  100% { transform: translate3d(-8px, -52px, 0); opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out forwards;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

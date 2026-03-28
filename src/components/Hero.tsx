@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { useWalletStore } from '../stores/walletStore';
 import {
   validateNameLocal,
@@ -17,8 +17,25 @@ import RegistrationPanel from './hero/RegistrationPanel';
 import BurnMechanic from './hero/BurnMechanic';
 import type { SearchResult } from '../types/search';
 
+// ── Letter stagger variants ──
+const headlineContainer = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.03, delayChildren: 0.15 },
+  },
+};
 
-// Floating particles config
+const letterVariant = {
+  hidden: { opacity: 0, y: 30, filter: 'blur(4px)' },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: 'blur(0px)',
+    transition: { type: 'spring' as const, damping: 20, stiffness: 150 },
+  },
+};
+
+// Floating particles (unchanged from original)
 const floatingParticles = [
   { size: 3, left: '10%', top: '24%', delay: '0s', duration: '12s', opacity: 0.08 },
   { size: 3, left: '22%', top: '70%', delay: '2.5s', duration: '15s', opacity: 0.12 },
@@ -28,11 +45,42 @@ const floatingParticles = [
   { size: 3, left: '58%', top: '84%', delay: '5.5s', duration: '14s', opacity: 0.11 },
 ];
 
-const HERO_EASE = [0.25, 0.4, 0.25, 1] as const;
+function LetterReveal({ text, className }: { text: string; className?: string }) {
+  return (
+    <motion.h1
+      className={className}
+      variants={headlineContainer}
+      initial="hidden"
+      animate="visible"
+      aria-label={text}
+    >
+      {text.split('').map((char, i) => (
+        <motion.span
+          key={`${char}-${i}`}
+          variants={letterVariant}
+          className="inline-block"
+        >
+          {char === ' ' ? '\u00A0' : char}
+        </motion.span>
+      ))}
+    </motion.h1>
+  );
+}
 
 export default function Hero() {
   const [searchParams] = useSearchParams();
-  const { refreshName } = useWalletStore();
+  const { refreshName, qnsName, address } = useWalletStore();
+  const heroRef = useRef<HTMLElement>(null);
+
+  // ── Scroll parallax ──
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const headlineY = useTransform(scrollYProgress, [0, 1], [0, -120]);
+  const searchY = useTransform(scrollYProgress, [0, 1], [0, -50]);
+  const bloomOpacity = useTransform(scrollYProgress, [0, 0.4], [1, 0]);
+  const bloomScale = useTransform(scrollYProgress, [0, 0.4], [1, 1.3]);
 
   // Search state
   const [input, setInput] = useState('');
@@ -51,10 +99,11 @@ export default function Hero() {
   // First visit tooltip state
   const [showTooltip, setShowTooltip] = useState(false);
   
-  // Auto-focus search input on desktop (pointer: fine = mouse/trackpad)
+  // Auto-focus on desktop
   useEffect(() => {
     if (window.matchMedia('(pointer: fine)').matches) {
-      inputRef.current?.focus();
+      // Delay focus slightly so letter animation plays first
+      setTimeout(() => inputRef.current?.focus(), 1200);
     }
   }, []);
 
@@ -208,12 +257,28 @@ export default function Hero() {
     setSearchPrice(null);
   };
 
+  // ── Determine headline ──
+  const isConnected = !!address;
+  const headlineText = isConnected && qnsName
+    ? `Welcome back, ${qnsName}` 
+    : 'Your identity on Quantum Fusion';
+  const subtitleText = isConnected && qnsName
+    ? 'Manage your identity or register another name.'
+    : 'Register a .qf name and use it across every dApp — messaging, trading, gaming, and everything built on QF Network.';
+
   return (
-    <section className="relative px-6 pb-[100px] pt-16 md:pt-24">
+    <section ref={heroRef} className="relative px-6 pb-[100px] pt-16 md:pt-24 overflow-hidden">
       {/* Animated gradient background */}
       <div className="absolute inset-0 -z-10 hero-gradient-bg" />
 
-      <div className="hero-glow absolute top-0 left-1/2 z-0 h-[400px] w-[600px] -translate-x-1/2 rounded-full pointer-events-none" />
+      {/* Gradient bloom — now scroll-linked */}
+      <motion.div
+        className="hero-glow absolute top-0 left-1/2 z-0 h-[400px] w-[600px] -translate-x-1/2 rounded-full pointer-events-none"
+        style={{ opacity: bloomOpacity, scale: bloomScale }}
+        initial={{ opacity: 0, scale: 0.6 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+      />
 
       {/* Floating particles */}
       <div className="absolute inset-0 z-0 pointer-events-none">
@@ -234,35 +299,38 @@ export default function Hero() {
         ))}
       </div>
 
-      <motion.div
-        className="max-w-[1120px] mx-auto text-center relative z-10"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.35 }}
-      >
-        <motion.h1
-          className="font-clash font-semibold text-[40px] md:text-[64px] leading-[1.1] text-[#FFFFFF] mb-6"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: HERO_EASE }}
-        >
-          Your identity on Quantum Fusion
-        </motion.h1>
+      <div className="max-w-[1120px] mx-auto text-center relative z-10">
+        {/* Headline with letter stagger + scroll parallax */}
+        <motion.div style={{ y: headlineY }}>
+          <LetterReveal
+            text={headlineText}
+            className="font-clash font-semibold text-[40px] md:text-[64px] leading-[1.1] text-[#FFFFFF] mb-6"
+          />
 
-        <motion.p
-          className="font-satoshi text-lg md:text-xl text-[#8A8A8A] max-w-[560px] mx-auto mb-10"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.8, ease: HERO_EASE }}
-        >
-          Register a <span className="text-[#00D179]">.qf</span> name and use it across every dApp — messaging, trading, gaming, and everything built on QF Network.
-        </motion.p>
+          {/* Subtitle — fades in after headline */}
+          <motion.p
+            className="font-satoshi text-lg md:text-xl text-[#8A8A8A] max-w-[560px] mx-auto mb-10"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {isConnected && qnsName ? (
+              subtitleText
+            ) : (
+              <>
+                Register a <span className="text-[#00D179]">.qf</span> name and use it across every dApp — messaging, trading, gaming, and everything built on QF Network.
+              </>
+            )}
+          </motion.p>
+        </motion.div>
 
+        {/* Search + Registration — delayed entrance + scroll parallax */}
         <motion.div
           className="w-full max-w-[520px] mx-auto"
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          style={{ y: searchY }}
+          initial={{ opacity: 0, y: 25, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.3, duration: 0.8, ease: HERO_EASE }}
+          transition={{ delay: 1.0, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
         >
           <AnimatePresence mode="wait">
             {/* Search Input - shown when no name selected */}
@@ -311,117 +379,19 @@ export default function Hero() {
           </AnimatePresence>
         </motion.div>
 
-        <p className="mt-5 text-sm text-[#555555] font-satoshi">
+        <motion.p
+          className="mt-5 text-sm text-[#555555] font-satoshi"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.3, duration: 0.5 }}
+        >
           Be among the first to claim your <span className="text-[#00D179]">.qf</span> name
-        </p>
+        </motion.p>
 
-        {/* Burn Mechanic Section */}
         <BurnMechanic />
-      </motion.div>
+      </div>
 
         
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(-4px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.15s ease-out forwards;
-        }
-        @keyframes shimmer {
-          0% {
-            background-position: -200% 0;
-          }
-          100% {
-            background-position: 200% 0;
-          }
-        }
-        .animate-shimmer {
-          background-size: 200% 100%;
-          animation: shimmer 1.5s ease-in-out infinite;
-        }
-
-        .hero-gradient-bg {
-          position: absolute;
-          background: linear-gradient(180deg, rgba(10, 10, 10, 0.98) 0%, rgba(10, 10, 10, 1) 100%);
-        }
-
-        .hero-glow {
-          background: radial-gradient(ellipse, rgba(0,209,121,0.07) 0%, transparent 70%);
-          animation: heroGlow 8s ease-in-out infinite;
-        }
-
-        @keyframes heroGlow {
-          0%,
-          100% {
-            transform: translateX(-50%) scale(1);
-            opacity: 0.7;
-          }
-          50% {
-            transform: translateX(-50%) scale(1.15);
-            opacity: 1;
-          }
-        }
-
-        .search-bar-shell {
-          transition: box-shadow 0.3s ease, border-color 0.3s ease;
-        }
-
-        .search-bar-focus-glow {
-          box-shadow: 0 0 20px rgba(0,209,121,0.12), 0 0 60px rgba(0,209,121,0.04);
-        }
-
-        .search-bar-available-pulse {
-          animation: search-bar-pulse 0.9s ease-out 1;
-        }
-
-        @keyframes search-bar-pulse {
-          0% {
-            box-shadow: 0 0 20px rgba(0,209,121,0.12), 0 0 60px rgba(0,209,121,0.04);
-          }
-          50% {
-            box-shadow: 0 0 28px rgba(0,209,121,0.2), 0 0 84px rgba(0,209,121,0.08);
-          }
-          100% {
-            box-shadow: 0 0 20px rgba(0,209,121,0.12), 0 0 60px rgba(0,209,121,0.04);
-          }
-        }
-
-        .floating-particle {
-          position: absolute;
-          background: #00D179;
-          border-radius: 50%;
-          box-shadow: 0 0 8px rgba(0, 209, 121, 0.04);
-          animation-name: float-particle;
-          animation-timing-function: ease-in-out;
-          animation-iteration-count: infinite;
-          pointer-events: none;
-        }
-
-        @keyframes float-particle {
-          0% {
-            transform: translate3d(0, 0, 0);
-            opacity: 0;
-          }
-          15% {
-            opacity: 1;
-          }
-          50% {
-            transform: translate3d(6px, -22px, 0);
-            opacity: 0.85;
-          }
-          100% {
-            transform: translate3d(-8px, -52px, 0);
-            opacity: 0;
-          }
-        }
-      `}</style>
-    </section>
+      </section>
   );
 }

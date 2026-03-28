@@ -9,9 +9,9 @@ interface Stat {
 }
 
 const stats: Stat[] = [
-  { label: 'Names Reserved', value: 400, suffix: '+' },
+  { label: 'Identities Claimed', value: 400, suffix: '+' },
   { label: 'Burn Rate', value: 5, suffix: '%', prefix: '' },
-  { label: 'dApps Integrating', value: 6, suffix: '+' },
+  { label: 'dApps Building', value: 6, suffix: '+' },
   { label: 'Seconds to Register', value: 6, suffix: '', prefix: '~' },
 ];
 
@@ -61,7 +61,7 @@ export default function StatsBar() {
               className="text-center md:px-6"
               initial={{ opacity: 0, y: 20 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
+              transition={{ duration: 0.5, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
             >
               <p className="font-clash text-3xl font-bold text-white md:text-4xl">
                 <AnimatedNumber

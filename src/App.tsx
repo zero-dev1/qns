@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AnimatePresence, LayoutGroup } from 'framer-motion';
 import ScrollToTop from './components/ScrollToTop';
+import ScrollProgress from './components/ScrollProgress';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import HowItWorks from './components/HowItWorks';
@@ -26,6 +27,7 @@ import { initializeConnectionWatcher, cleanupConnectionWatcher } from './stores/
 function LandingPage() {
   return (
     <>
+      <ScrollProgress />
       <Navbar />
       <main>
         <Hero />
