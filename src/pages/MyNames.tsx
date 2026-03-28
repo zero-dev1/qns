@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { Wallet } from 'lucide-react';
+import { Wallet, Copy, Check } from 'lucide-react';
 import {
   transferNameOnChain,
   getTextRecord,
@@ -13,9 +13,12 @@ import {
   getNamesOwnedByAddress,
   setPrimaryName,
   resolveReverse,
+  getContractPrices,
+  calculatePrice,
 } from '../utils/qns';
 import { ss58ToEvmAddress } from '../utils/address';
 import { useToast } from '../contexts/ToastContext';
+import { useCopy } from '../hooks/useCopy';
 import { hapticSuccess, hapticError, hapticTap } from '../utils/haptics';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import Avatar from '../components/Avatar';
@@ -53,11 +56,35 @@ export default function MyNamesPage() {
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
   const [enableTilt, setEnableTilt] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const { copy: copyAddress, copied: addressCopied } = useCopy();
+  const [namePrices, setNamePrices] = useState<{
+    price3Char: bigint; price4Char: bigint; price5PlusChar: bigint; permanentMultiplier: bigint;
+  } | null>(null);
   
   // Detail modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'edit' | 'manage' | 'share'>('overview');
+
+  useEffect(() => {
+    getContractPrices().then(setNamePrices).catch(() => {
+      // Use defaults from the module
+      import('../utils/qns').then(({ DEFAULT_PRICES }) => setNamePrices(DEFAULT_PRICES));
+    });
+  }, []);
+
+  // Helper function to calculate renewal price per year based on contract prices
+  const getRenewalPricePerYear = (nameStr: string): number => {
+    if (!namePrices) {
+      // Fallback: use DEFAULT_PRICES logic
+      const len = nameStr.length;
+      if (len === 3) return 1000;
+      if (len === 4) return 300;
+      return 100;
+    }
+    const annual = calculatePrice(nameStr.length, 1, false, namePrices);
+    return Number(annual) / 1e18;
+  };
 
 
   const loadNames = useCallback(async () => {
@@ -244,7 +271,6 @@ export default function MyNamesPage() {
 
         // Optimistic update
         setTextRecords((prev: any) => ({ ...prev, [name]: { ...prev[name], ...records } }));
-        showToast('Profile updated successfully', 'success');
         hapticTap();
 
         confirmation.then((result) => {
@@ -304,7 +330,6 @@ export default function MyNamesPage() {
 
       setPrimaryNameState(name);
       useWalletStore.setState({ qnsName: name, displayName: name });
-      showToast('Primary name updated', 'success');
       hapticSuccess();
 
       confirmation.then((result) => {
@@ -362,7 +387,6 @@ export default function MyNamesPage() {
           return { ...item, expires: item.expires + BigInt(years) * 365n * 24n * 60n * 60n };
         })
       );
-      showToast(`Renewed ${name}.qf for ${years} year${years > 1 ? 's' : ''}`, 'success');
       hapticSuccess();
 
       confirmation.then((result) => {
@@ -417,7 +441,6 @@ export default function MyNamesPage() {
 
     setNames((prev) => prev.filter((item) => item.name !== name));
     hapticSuccess();
-    showToast(`${name}.qf transferred`, 'success');
 
     confirmation.then((result) => {
       if (result.confirmed) {
@@ -560,62 +583,133 @@ export default function MyNamesPage() {
           {address && !loading && names.length > 0 && (
             <>
               {/* Summary Bar */}
-              <div className="rounded-xl border border-white/[0.04] bg-[#111] px-5 py-4 mb-8">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  {/* Wallet */}
-                  <div className="flex items-center gap-2 text-xs text-[#555]">
-                    <Wallet size={14} />
-                    <span className="font-mono">
-                      {address.slice(0, 6)}...{address.slice(-4)}
-                    </span>
-                  </div>
+<div className="rounded-xl border border-white/[0.04] bg-[#111] px-5 py-4 mb-8">
+  {/* Desktop layout */}
+  <div className="hidden sm:flex items-center gap-0">
+    {/* Address — copyable */}
+    <button
+      onClick={() => copyAddress(address || '', false)}
+      className="group flex items-center gap-2 text-xs text-[#555] hover:text-white transition-colors pr-5"
+    >
+      <Wallet size={14} />
+      <span className="font-mono">
+        {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
+      </span>
+      {addressCopied ? (
+        <Check size={12} className="text-[#00D179]" />
+      ) : (
+        <Copy size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
+    </button>
 
-                  {/* Name count */}
-                  <div className="text-xs text-[#888]">
-                    {names.length} name{names.length !== 1 ? 's' : ''}
-                  </div>
+    {/* Divider */}
+    <div className="w-px h-8 bg-white/[0.06]" />
 
-                  {/* Primary identity */}
-                  {primaryName && (
-                    <a
-                      href={`/name/${primaryName}`}
-                      className="flex items-center gap-2 text-xs text-[#00D179] hover:text-[#00B868] transition-colors"
-                    >
-                      <Avatar
-                        url={cardRecords.get(primaryName)?.avatar}
-                        name={primaryName}
-                        size={20}
-                      />
-                      <span className="font-medium">{primaryName}.qf</span>
-                    </a>
-                  )}
+    {/* Name count */}
+    <div className="px-5">
+      <span className="text-lg font-semibold text-white">{names.length}</span>
+      <span className="text-xs text-[#555] ml-1.5">name{names.length !== 1 ? 's' : ''}</span>
+    </div>
 
-                  {/* Renewal intelligence */}
-                  <div className="ml-auto text-xs">
-                    {(() => {
-                      const annualNames = names.filter((n) => !n.isPermanent && n.expires > 0n);
-                      if (annualNames.length === 0) {
-                        return <span className="text-[#00D179]">All permanent</span>;
-                      }
-                      const earliest = annualNames.reduce((a, b) =>
-                        a.expires < b.expires ? a : b
-                      );
-                      const expiryDate = new Date(Number(earliest.expires) * 1000);
-                      const nowMs = Date.now();
-                      const daysUntil = Math.floor((expiryDate.getTime() - nowMs) / (1000 * 60 * 60 * 24));
-                      const formatted = expiryDate.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      });
-                      return (
-                        <span className={daysUntil <= 30 ? 'text-red-400' : 'text-amber-400'}>
-                          Next renewal: {formatted}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
+    {/* Divider */}
+    <div className="w-px h-8 bg-white/[0.06]" />
+
+    {/* Primary identity */}
+    {primaryName && (
+      <>
+        <a
+          href={`/name/${primaryName}`}
+          className="flex items-center gap-2 text-xs text-[#00D179] hover:text-[#00B868] transition-colors px-5"
+        >
+          <Avatar
+            url={cardRecords.get(primaryName)?.avatar}
+            name={primaryName}
+            size={20}
+          />
+          <span className="font-medium">{primaryName}.qf</span>
+        </a>
+        <div className="w-px h-8 bg-white/[0.06]" />
+      </>
+    )}
+
+    {/* Renewal intelligence */}
+    <div className="ml-auto pl-5 text-xs">
+      {(() => {
+        const annualNames = names.filter((n) => !n.isPermanent && n.expires > 0n);
+        if (annualNames.length === 0) {
+          return <span className="text-[#00D179]">All permanent</span>;
+        }
+        const earliest = annualNames.reduce((a, b) =>
+          a.expires < b.expires ? a : b
+        );
+        const expiryDate = new Date(Number(earliest.expires) * 1000);
+        const nowMs = Date.now();
+        const daysUntil = Math.floor((expiryDate.getTime() - nowMs) / (1000 * 60 * 60 * 24));
+        const formatted = expiryDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        });
+        return (
+          <span className={daysUntil <= 30 ? 'text-red-400' : daysUntil <= 90 ? 'text-amber-400' : 'text-[#555]'}>
+            Next renewal: {formatted}
+          </span>
+        );
+      })()}
+    </div>
+  </div>
+
+  {/* Mobile layout — stacked */}
+  <div className="sm:hidden space-y-3">
+    <div className="flex items-center justify-between">
+      <button
+        onClick={() => copyAddress(address || '', false)}
+        className="flex items-center gap-2 text-xs text-[#555]"
+      >
+        <Wallet size={14} />
+        <span className="font-mono">
+          {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
+        </span>
+        {addressCopied && <Check size={12} className="text-[#00D179]" />}
+      </button>
+      <div className="text-right">
+        <span className="text-lg font-semibold text-white">{names.length}</span>
+        <span className="text-xs text-[#555] ml-1">name{names.length !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+    <div className="flex items-center justify-between border-t border-white/[0.04] pt-3">
+      {primaryName ? (
+        <a
+          href={`/name/${primaryName}`}
+          className="flex items-center gap-2 text-xs text-[#00D179]"
+        >
+          <Avatar
+            url={cardRecords.get(primaryName)?.avatar}
+            name={primaryName}
+            size={18}
+          />
+          <span className="font-medium">{primaryName}.qf</span>
+        </a>
+      ) : (
+        <span className="text-xs text-[#333]">No primary set</span>
+      )}
+      <div className="text-xs">
+        {(() => {
+          const annualNames = names.filter((n) => !n.isPermanent && n.expires > 0n);
+          if (annualNames.length === 0) return <span className="text-[#00D179]">All permanent</span>;
+          const earliest = annualNames.reduce((a, b) => a.expires < b.expires ? a : b);
+          const expiryDate = new Date(Number(earliest.expires) * 1000);
+          const daysUntil = Math.floor((expiryDate.getTime() - Date.now()) / 86400000);
+          const formatted = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return (
+            <span className={daysUntil <= 30 ? 'text-red-400' : daysUntil <= 90 ? 'text-amber-400' : 'text-[#555]'}>
+              Renew: {formatted}
+            </span>
+          );
+        })()}
+      </div>
+    </div>
+  </div>
+</div>
 
               {/* Sort toolbar */}
               <div className="flex items-center gap-2 mb-5">
@@ -681,6 +775,7 @@ export default function MyNamesPage() {
             providerType={providerType}
             address={address || ''}
             balance={walletBalance}
+            renewalPricePerYear={getRenewalPricePerYear(selectedName)}
             onSaveRecords={handleSaveRecordsFromModal}
             onSetPrimary={handleSetPrimaryFromModalNew}
             onRenew={handleRenewFromModal}

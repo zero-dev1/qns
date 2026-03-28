@@ -68,12 +68,15 @@ export default function IdentityCard({ name, records, isPrimary, enableTilt, onO
   const now = BigInt(Math.floor(Date.now() / 1000));
   const thirtyDays = 30n * 24n * 60n * 60n;
   const isExpiringSoon = !name.isPermanent && name.expires > 0n && (name.expires - now) < thirtyDays;
+  const isExpired = !name.isPermanent && name.expires > 0n && name.expires < now;
 
   const statusBarClass = name.isPermanent
     ? 'bg-gradient-to-r from-[#00D179] to-[#00D179]/40'
-    : isExpiringSoon
-      ? 'bg-gradient-to-r from-red-400 to-red-400/40'
-      : 'bg-gradient-to-r from-amber-400 to-amber-400/40';
+    : isExpired
+      ? 'bg-gradient-to-r from-red-500 to-red-500/40'
+      : isExpiringSoon
+        ? 'bg-gradient-to-r from-amber-400 to-amber-400/40'
+        : 'bg-gradient-to-r from-[#00D179] to-[#00D179]/40';
 
   const isTeam = TEAM_NAMES.includes(name.name.toLowerCase());
   const isDappLab = DAPP_LAB_NAMES.includes(name.name.toLowerCase());
@@ -119,6 +122,15 @@ export default function IdentityCard({ name, records, isPrimary, enableTilt, onO
             className="absolute inset-0 rounded-2xl"
             style={{
               background: 'radial-gradient(ellipse, rgba(0,209,121,0.08) 0%, transparent 70%)',
+            }}
+          />
+          {/* QDL: Subtle shimmer sweep on primary card — reuses @keyframes shimmer from index.css */}
+          <div
+            className="absolute inset-0 rounded-2xl"
+            style={{
+              background: 'linear-gradient(110deg, transparent 30%, rgba(0,209,121,0.04) 45%, rgba(0,209,121,0.07) 50%, rgba(0,209,121,0.04) 55%, transparent 70%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 5s ease-in-out infinite',
             }}
           />
         </div>

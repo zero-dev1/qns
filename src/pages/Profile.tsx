@@ -119,10 +119,14 @@ function ProvenancePanel({
   profile,
   onCopyAddress,
   addressCopied,
+  statusDotColor,
+  statusTextColor,
 }: {
   profile: ProfileData;
   onCopyAddress: () => void;
   addressCopied: boolean;
+  statusDotColor: string;
+  statusTextColor: string;
 }) {
   const node = namehash(`${profile.name}.qf`);
   const truncatedHash = node ? `${node.slice(0, 8)}...${node.slice(-4)}` : '';
@@ -160,9 +164,11 @@ function ProvenancePanel({
       label: 'STATUS',
       value: (
         <span className="flex items-center gap-1.5 text-xs">
-          <PulseDot color={profile.isPermanent ? 'bg-[#00D179]' : 'bg-amber-400'} />
-          <span className={profile.isPermanent ? 'text-[#00D179]' : 'text-amber-400'}>
-            {profile.isPermanent ? 'Permanent' : `Expires ${new Date(Number(profile.expires) * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`}
+          <PulseDot color={statusDotColor} />
+          <span className={statusTextColor}>
+            {profile.isPermanent
+              ? 'Permanent'
+              : `Expires ${new Date(Number(profile.expires) * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`}
           </span>
         </span>
       ),
@@ -196,7 +202,7 @@ function LedgerPanel({ events }: { events: LedgerEvent[] }) {
   return (
     <div className="relative">
       {/* Scrollable container — hidden scrollbar */}
-      <div className="relative pl-4 max-h-[320px] overflow-y-auto scrollbar-hide">
+      <div className="relative pl-4 max-h-[400px] overflow-y-auto scrollbar-hide">
         {/* Vertical line */}
         <div className="absolute left-[3px] top-3 bottom-3 w-px bg-white/[0.06]" />
 
@@ -698,14 +704,14 @@ export default function ProfilePage() {
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="w-full max-w-[1120px] rounded-2xl border border-white/[0.04] bg-[#0c0c0c] overflow-hidden"
+            className="w-full max-w-[1120px] rounded-2xl border border-white/[0.04] bg-[#0c0c0c] overflow-clip"
           >
             {/* Noise overlay */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")`,
             }} />
 
-            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_200px] relative">
+            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_200px] md:auto-rows-auto relative">
               {/* Left: Ghost provenance */}
               <div className="hidden md:block p-5 border-r border-white/[0.03]">
                 <div className="py-3">
@@ -764,6 +770,27 @@ export default function ProfilePage() {
   const hasSocials = profile.twitter || profile.telegram;
   const ledgerEvents = deriveLedgerEvents(profile);
 
+  // QDL: Status computation for color consistency
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const thirtyDays = 30n * 24n * 60n * 60n;
+  const isExpired = !profile.isPermanent && profile.expires > 0n && profile.expires < now;
+  const isExpiringSoon = !profile.isPermanent && !isExpired && profile.expires > 0n && (profile.expires - now) < thirtyDays;
+  const statusDotColor = profile.isPermanent
+    ? 'bg-[#00D179]'
+    : isExpired ? 'bg-red-400'
+    : isExpiringSoon ? 'bg-amber-400'
+    : 'bg-[#00D179]';
+  const statusTextColor = profile.isPermanent
+    ? 'text-[#00D179]'
+    : isExpired ? 'text-red-400'
+    : isExpiringSoon ? 'text-amber-400'
+    : 'text-[#00D179]';
+  const statusLabel = profile.isPermanent
+    ? 'Permanent'
+    : isExpired ? 'Expired'
+    : isExpiringSoon ? 'Expiring soon'
+    : 'Active';
+
   // ═══════════════════════════════════════
   // ── RENDER: Full profile (The Inspector) ──
   // ═══════════════════════════════════════
@@ -784,9 +811,9 @@ export default function ProfilePage() {
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25, duration: 0.6 }}
-            className="w-full rounded-2xl border border-white/[0.06] bg-[#0c0c0c] overflow-hidden"
+            className="w-full rounded-2xl border border-white/[0.06] bg-[#0c0c0c] overflow-clip"
           >
-            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_200px]">
+            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_200px] md:auto-rows-auto">
 
               {/* ── Left: Provenance ── */}
               <div className="hidden md:block p-5 border-r border-white/[0.04]">
@@ -794,6 +821,8 @@ export default function ProfilePage() {
                   profile={profile}
                   onCopyAddress={handleCopyAddress}
                   addressCopied={addressCopied}
+                  statusDotColor={statusDotColor}
+                  statusTextColor={statusTextColor}
                 />
               </div>
 
@@ -919,9 +948,9 @@ export default function ProfilePage() {
                     <div>
                       <p className="text-[9px] tracking-[0.2em] text-[#333] mb-1">STATUS</p>
                       <p className="flex items-center gap-1 text-[11px]">
-                        <PulseDot color={profile.isPermanent ? 'bg-[#00D179]' : 'bg-amber-400'} />
-                        <span className={profile.isPermanent ? 'text-[#00D179]' : 'text-amber-400'}>
-                          {profile.isPermanent ? 'Permanent' : 'Annual'}
+                        <PulseDot color={statusDotColor} />
+                        <span className={statusTextColor}>
+                          {statusLabel}
                         </span>
                       </p>
                     </div>

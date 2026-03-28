@@ -16,8 +16,7 @@ const TEAM_NAMES: string[] = [];
 const DAPP_LAB_NAMES: string[] = [];
 
 // QDL: Renewal pricing constants (must match contract)
-const PRICE_PER_YEAR = 5; // QF tokens
-const GAS_BUFFER = 0.5;   // QF tokens reserved for gas
+const GAS_BUFFER = 0.5;   // QF tokens reserved for gas — UI estimate only
 
 interface DetailModalProps {
   isOpen: boolean;
@@ -38,6 +37,7 @@ interface DetailModalProps {
   providerType: 'substrate' | 'evm' | null;
   address: string;
   balance: number; // QF token balance
+  renewalPricePerYear: number; // Dynamic price based on name length, passed from parent
   onSaveRecords: (records: Record<string, string>) => Promise<void>;
   onSetPrimary: () => Promise<void>;
   onRenew: (years: number) => Promise<void>;
@@ -62,10 +62,59 @@ const RECORD_FIELDS = [
   { key: 'email', label: 'Email', placeholder: 'you@example.com' },
 ];
 
+// ── QDL: Record normalization ─────────────────────
+// Matches the SOCIAL_CONFIG pattern from Profile.tsx
+
+function normalizeWebsite(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  // Already has protocol
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // Has protocol-like prefix but mangled
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  // Raw domain — prepend https://
+  return `https://${trimmed}`;
+}
+
+function normalizeTwitter(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  // Full URL — extract handle
+  const urlMatch = trimmed.match(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/(?:#!\/)?@?([a-zA-Z0-9_]+)/);
+  if (urlMatch) return urlMatch[1];
+  // Strip @ prefix
+  return trimmed.replace(/^@/, '');
+}
+
+function normalizeTelegram(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  // Full t.me URL — keep as-is (includes group invite links with +)
+  if (/^https?:\/\/t\.me\//i.test(trimmed)) return trimmed;
+  if (/^t\.me\//i.test(trimmed)) return `https://${trimmed}`;
+  // Strip @ prefix for plain handles
+  return trimmed.replace(/^@/, '');
+}
+
+function getTwitterUrl(handle: string): string {
+  if (!handle) return '';
+  if (handle.startsWith('http')) return handle;
+  if (handle.includes('x.com') || handle.includes('twitter.com')) return `https://${handle}`;
+  return `https://x.com/${handle.replace(/^@/, '')}`;
+}
+
+function getTelegramUrl(handle: string): string {
+  if (!handle) return '';
+  if (handle.startsWith('http')) return handle;
+  if (handle.includes('t.me')) return `https://${handle}`;
+  return `https://t.me/${handle.replace(/^@/, '')}`;
+}
+
 export default function DetailModal({
   isOpen, onClose, name, expires, isPermanent, registeredAt,
   avatar, bio, twitter, telegram, website, email,
-  isPrimary, initialTab, /* providerType, */ address, balance,
+  isPrimary, initialTab, address, balance,
+  renewalPricePerYear,  // ADD THIS
   onSaveRecords, onSetPrimary, onRenew, onTransfer,
 }: DetailModalProps) {
   const { showToast } = useToast();
@@ -93,7 +142,7 @@ export default function DetailModal({
   // QDL: Manage — renewal ceremony state
   const [renewYears, setRenewYears] = useState(1);
   const [renewing, setRenewing] = useState(false);
-  const renewCost = renewYears * PRICE_PER_YEAR;
+  const renewCost = renewYears * renewalPricePerYear;
   const canAffordRenew = balance >= renewCost + GAS_BUFFER;
   const newExpiry = useMemo(() => {
     if (isPermanent) return null;
@@ -166,7 +215,16 @@ export default function DetailModal({
     setSaving(true);
     hapticTap();
     try {
-      await onSaveRecords(editValues);
+      // QDL: Normalize records before saving
+      const normalized = {
+        ...editValues,
+        website: normalizeWebsite(editValues.website),
+        twitter: normalizeTwitter(editValues.twitter),
+        telegram: normalizeTelegram(editValues.telegram),
+      };
+      await onSaveRecords(normalized);
+      // Update local edit state to reflect normalization
+      setEditValues(normalized);
       hapticSuccess();
       showToast('Records saved', 'success');
     } catch {
@@ -305,7 +363,7 @@ export default function DetailModal({
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold text-white truncate">{name}.qf</h2>
                 {isPrimary && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-violet-500/20 text-violet-300">
+                  <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-[#00D179]/20 text-[#8DF0BA]">
                     <Crown className="w-3 h-3" /> Primary
                   </span>
                 )}
@@ -324,7 +382,7 @@ export default function DetailModal({
           </div>
 
           {/* ── Tabs ───────────────────────────── */}
-          <div className="flex border-b border-white/5 px-6">
+          <div className="flex border-b border-white/5 px-4 sm:px-6 overflow-x-auto scrollbar-hide">
             {TAB_CONFIG.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -334,8 +392,8 @@ export default function DetailModal({
                 <button
                   key={tab.id}
                   onClick={() => { setActiveTab(tab.id); hapticTap(); }}
-                  className={`relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors ${
-                    isActive ? 'text-white border-b-2 border-violet-500' : 'text-white/40 hover:text-white/60'
+                  className={`relative flex items-center gap-1.5 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors shrink-0 ${
+                    isActive ? 'text-white border-b-2 border-[#00D179]' : 'text-white/40 hover:text-white/60'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -363,7 +421,7 @@ export default function DetailModal({
                       </span>
                     )}
                     {isTeam && (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-[#00D179]/10 text-[#00D179] border border-[#00D179]/20">
                         <Sparkles className="w-3 h-3" /> Team
                       </span>
                     )}
@@ -389,10 +447,36 @@ export default function DetailModal({
                 {bio && <p className="text-sm text-white/60 leading-relaxed">{bio}</p>}
 
                 <div className="space-y-2">
-                  {twitter && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Twitter</span><span className="text-white/70">@{twitter.replace('@', '')}</span></div>}
-                  {telegram && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Telegram</span><span className="text-white/70">@{telegram.replace('@', '')}</span></div>}
-                  {website && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Website</span><a href={website} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline truncate">{website}</a></div>}
-                  {email && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Email</span><span className="text-white/70">{email}</span></div>}
+                  {twitter && (
+                    <div className="flex items-center gap-2 text-sm text-white/50">
+                      <span className="text-white/30 w-20">Twitter</span>
+                      <a href={getTwitterUrl(twitter)} target="_blank" rel="noopener noreferrer" className="text-[#00D179] hover:underline truncate">
+                        @{twitter.replace(/^@/, '')}
+                      </a>
+                    </div>
+                  )}
+                  {telegram && (
+                    <div className="flex items-center gap-2 text-sm text-white/50">
+                      <span className="text-white/30 w-20">Telegram</span>
+                      <a href={getTelegramUrl(telegram)} target="_blank" rel="noopener noreferrer" className="text-[#00D179] hover:underline truncate">
+                        {telegram.startsWith('http') ? telegram.replace(/^https?:\/\//, '') : `@${telegram.replace(/^@/, '')}`}
+                      </a>
+                    </div>
+                  )}
+                  {website && (
+                    <div className="flex items-center gap-2 text-sm text-white/50">
+                      <span className="text-white/30 w-20">Website</span>
+                      <a href={normalizeWebsite(website)} target="_blank" rel="noopener noreferrer" className="text-[#00D179] hover:underline truncate">
+                        {website.replace(/^https?:\/\//, '')}
+                      </a>
+                    </div>
+                  )}
+                  {email && (
+                    <div className="flex items-center gap-2 text-sm text-white/50">
+                      <span className="text-white/30 w-20">Email</span>
+                      <a href={`mailto:${email}`} className="text-white/70 hover:underline truncate">{email}</a>
+                    </div>
+                  )}
                 </div>
 
                 {/* QDL: Completeness nudge (read-only, no actions) */}
@@ -404,7 +488,7 @@ export default function DetailModal({
                     </div>
                     <div className="flex gap-1.5">
                       {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className={`h-1 flex-1 rounded-full ${i < completeness ? 'bg-violet-500' : 'bg-white/10'}`} />
+                        <div key={i} className={`h-1 flex-1 rounded-full ${i < completeness ? 'bg-[#00D179]' : 'bg-white/10'}`} />
                       ))}
                     </div>
                     <p className="text-xs text-white/30 mt-2">
@@ -434,7 +518,7 @@ export default function DetailModal({
                       value={editValues[field.key as keyof typeof editValues]}
                       onChange={e => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
                       placeholder={field.placeholder}
-                      className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-sm text-white placeholder-white/20 focus:border-violet-500/50 focus:outline-none transition-colors"
+                      className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-sm text-white placeholder-white/20 focus:border-[#00D179]/30 focus:outline-none transition-colors"
                     />
                   </div>
                 ))}
@@ -451,7 +535,7 @@ export default function DetailModal({
                   <button
                     onClick={handleSave}
                     disabled={saving || !isDirty}
-                    className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors flex items-center gap-2"
+                    className="px-5 py-2.5 rounded-xl bg-[#00D179] hover:bg-[#00B868] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors flex items-center gap-2"
                   >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                     Save Records
@@ -472,7 +556,7 @@ export default function DetailModal({
                     <button
                       onClick={handleSetPrimary}
                       disabled={settingPrimary}
-                      className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-sm font-medium text-white transition-colors flex items-center gap-2"
+                      className="px-4 py-2 rounded-xl bg-[#00D179] hover:bg-[#00B868] disabled:opacity-40 text-sm font-medium text-white transition-colors flex items-center gap-2"
                     >
                       {settingPrimary ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
                       Set Primary
@@ -510,7 +594,7 @@ export default function DetailModal({
                     {/* Cost breakdown */}
                     <div className="space-y-1.5 text-xs">
                       <div className="flex justify-between text-white/40">
-                        <span>Cost ({renewYears} yr{renewYears > 1 ? 's' : ''} x {PRICE_PER_YEAR} QF)</span>
+                        <span>Cost ({renewYears} yr{renewYears > 1 ? 's' : ''} x {renewalPricePerYear} QF)</span>
                         <span className="text-white/60">{renewCost} QF</span>
                       </div>
                       <div className="flex justify-between text-white/40">
@@ -567,7 +651,7 @@ export default function DetailModal({
                           value={transferTo}
                           onChange={e => { setTransferTo(e.target.value); setTransferError(''); }}
                           placeholder="Recipient address (0x... or 5...)"
-                          className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-sm text-white placeholder-white/20 focus:border-violet-500/50 focus:outline-none transition-colors"
+                          className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-sm text-white placeholder-white/20 focus:border-[#00D179]/30 focus:outline-none transition-colors"
                         />
                         {transferError && <p className="text-xs text-red-400">{transferError}</p>}
                         <button
