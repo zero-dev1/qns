@@ -1,123 +1,164 @@
-import { useRef, useState, useEffect } from 'react';
-import { motion, useScroll, useTransform, useMotionValueEvent } from 'framer-motion';
-import { Search, UserCircle, Globe } from 'lucide-react';
+// src/components/HowItWorks.tsx
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence, useInView } from 'framer-motion';
+
+// ── Step data ──
 
 const steps = [
   {
     num: '01',
-    icon: Search,
     title: 'Search & claim',
     description:
-      'Type any name. See instantly if it\'s available. Register in one transaction, confirmed in seconds, not minutes.',
+      "Type any name. See instantly if it's available. Register in one transaction, confirmed in seconds, not minutes.",
     detail: 'From 100 QF/year',
-    accentFrom: '#00D179',
-    accentTo: '#00B868',
   },
   {
     num: '02',
-    icon: UserCircle,
     title: 'Build your identity',
     description:
       'Add your avatar, bio, and social links. Your .qf name becomes your on-chain profile that follows you everywhere.',
     detail: 'Avatar · Bio · Socials',
-    accentFrom: '#00D179',
-    accentTo: '#00E88A',
   },
   {
     num: '03',
-    icon: Globe,
     title: 'Use it across QF',
     description:
-      'Every dApp on QF Network resolves your name. Send payments, vote in governance, trade on the DEX — all as yourname.qf.',
+      'Every dApp on QF Network resolves your name. Send payments, vote in governance, trade on the DEX. All as yourname.qf.',
     detail: 'One name, every dApp',
-    accentFrom: '#00D179',
-    accentTo: '#00FFB2',
   },
 ];
 
-/* ── Visual motifs for each step (CSS-animated, no heavy assets) ── */
+// ── Motifs (time-based entrance animations) ──
 
-function SearchMotif({ progress }: { progress: number }) {
-  const [badgeVisible, setBadgeVisible] = useState(false);
-
-  // Latch: once progress crosses 0.6, badge stays visible
-  useEffect(() => {
-    if (progress >= 0.6 && !badgeVisible) {
-      setBadgeVisible(true);
-    }
-  }, [progress, badgeVisible]);
-
-  const typedLength = Math.min(Math.floor(progress * 8), 7);
+function SearchMotif({ active }: { active: boolean }) {
+  const [typedLength, setTypedLength] = useState(0);
+  const [showBadge, setShowBadge] = useState(false);
   const name = 'alice.qf';
+
+  useEffect(() => {
+    if (!active) {
+      setTypedLength(0);
+      setShowBadge(false);
+      return;
+    }
+
+    let charIndex = 0;
+    const typeInterval = setInterval(() => {
+      charIndex++;
+      setTypedLength(charIndex);
+      if (charIndex >= name.length) {
+        clearInterval(typeInterval);
+        setTimeout(() => setShowBadge(true), 300);
+      }
+    }, 100);
+
+    return () => clearInterval(typeInterval);
+  }, [active]);
+
   const displayed = name.slice(0, typedLength);
-  const cursorVisible = progress > 0.05 && progress < 0.95;
+  const textPart = displayed.replace('.qf', '');
+  const hasSuffix = displayed.includes('.qf');
+  const isTyping = active && typedLength > 0 && typedLength < name.length;
 
   return (
     <div className="relative w-full max-w-[280px] mx-auto">
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 font-satoshi text-lg">
-        <span className="text-white">{displayed.replace('.qf', '')}</span>
-        {displayed.includes('.qf') ? null : displayed.length > 0 && (
+        <span className="text-white">{textPart}</span>
+        {(hasSuffix || typedLength > 0) && (
           <span className="text-[#00D179]">.qf</span>
         )}
-        {displayed.includes('.qf') && (
-          <>
-            <span className="text-white">{displayed.split('.qf')[0].slice(displayed.replace('.qf', '').length)}</span>
-            <span className="text-[#00D179]">.qf</span>
-          </>
-        )}
-        {cursorVisible && (
+        {isTyping && (
           <span className="inline-block w-[2px] h-5 bg-[#00D179] ml-0.5 animate-pulse align-middle" />
         )}
       </div>
-      {badgeVisible && (
-        <motion.div
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#00D179]/20 bg-[#00D179]/5 px-3 py-1.5 text-sm text-[#00D179]"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="h-2 w-2 rounded-full bg-[#00D179]" />
-          Available
-        </motion.div>
-      )}
+
+      <AnimatePresence>
+        {showBadge && (
+          <motion.div
+            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#00D179]/20 bg-[#00D179]/5 px-3 py-1.5 text-sm text-[#00D179]"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="h-2 w-2 rounded-full bg-[#00D179]" />
+            Available
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function ProfileMotif({ progress }: { progress: number }) {
-  // Avatar circle draws itself via SVG stroke-dashoffset
-  const circumference = 2 * Math.PI * 30; // r=30
-  const avatarDrawProgress = Math.min(progress / 0.25, 1); // 0→25% of step progress
-  const strokeDashoffset = circumference * (1 - avatarDrawProgress);
+function ProfileMotif({ active }: { active: boolean }) {
+  const circumference = 2 * Math.PI * 30;
+  const [drawProgress, setDrawProgress] = useState(0);
+  const [typedName, setTypedName] = useState('');
+  const [visibleWords, setVisibleWords] = useState(0);
+  const [showSocials, setShowSocials] = useState(false);
 
-  // Name types in after avatar is drawn
-  const nameProgress = Math.max(0, (progress - 0.25) / 0.2); // 25%→45%
   const fullName = 'alice';
-  const typedName = fullName.slice(0, Math.floor(nameProgress * fullName.length));
-  const showQfSuffix = nameProgress >= 1;
-
-  // Bio fades in word by word
-  const bioProgress = Math.max(0, (progress - 0.5) / 0.2); // 50%→70%
   const bioWords = ['Building', 'on', 'QF', 'Network'];
-  const visibleWordCount = Math.floor(bioProgress * (bioWords.length + 1));
 
-  // Socials appear
-  const showSocials = progress > 0.75;
+  useEffect(() => {
+    if (!active) {
+      setDrawProgress(0);
+      setTypedName('');
+      setVisibleWords(0);
+      setShowSocials(false);
+      return;
+    }
+
+    // Phase 1: Draw avatar circle (0–600ms)
+    let frame = 0;
+    const drawInterval = setInterval(() => {
+      frame++;
+      setDrawProgress(Math.min(frame / 20, 1));
+      if (frame >= 20) clearInterval(drawInterval);
+    }, 30);
+
+    // Phase 2: Type name (700–1200ms)
+    const nameTimeout = setTimeout(() => {
+      let ci = 0;
+      const nameInterval = setInterval(() => {
+        ci++;
+        setTypedName(fullName.slice(0, ci));
+        if (ci >= fullName.length) clearInterval(nameInterval);
+      }, 90);
+    }, 700);
+
+    // Phase 3: Bio words (1400–2200ms)
+    const bioTimeout = setTimeout(() => {
+      let wi = 0;
+      const bioInterval = setInterval(() => {
+        wi++;
+        setVisibleWords(wi);
+        if (wi >= bioWords.length) clearInterval(bioInterval);
+      }, 200);
+    }, 1400);
+
+    // Phase 4: Socials (2400ms)
+    const socialTimeout = setTimeout(() => setShowSocials(true), 2400);
+
+    return () => {
+      clearInterval(drawInterval);
+      clearTimeout(nameTimeout);
+      clearTimeout(bioTimeout);
+      clearTimeout(socialTimeout);
+    };
+  }, [active]);
+
+  const strokeDashoffset = circumference * (1 - drawProgress);
+  const showQfSuffix = typedName.length >= fullName.length;
+  const isTypingName = active && typedName.length > 0 && typedName.length < fullName.length;
 
   return (
     <div className="relative w-full max-w-[260px] mx-auto rounded-2xl border border-white/[0.06] bg-[#111] p-6 overflow-hidden">
-      {/* Avatar circle — SVG draw animation */}
+      {/* Avatar circle */}
       <div className="flex justify-center mb-4">
         <div className="relative h-16 w-16">
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 64 64">
-            {/* Background ring */}
-            <circle
-              cx="32" cy="32" r="30"
-              fill="none"
-              stroke="rgba(255,255,255,0.04)"
-              strokeWidth="2"
-            />
-            {/* Animated draw ring */}
+            <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
             <circle
               cx="32" cy="32" r="30"
               fill="none"
@@ -126,17 +167,12 @@ function ProfileMotif({ progress }: { progress: number }) {
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
-              style={{
-                transition: 'stroke-dashoffset 0.1s linear',
-                transform: 'rotate(-90deg)',
-                transformOrigin: 'center',
-              }}
+              style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
             />
           </svg>
-          {/* Avatar letter — fades in when circle completes */}
           <div
             className={`absolute inset-0 flex items-center justify-center text-[#00D179] text-2xl font-clash font-bold transition-opacity duration-500 ${
-              avatarDrawProgress >= 1 ? 'opacity-100' : 'opacity-0'
+              drawProgress >= 1 ? 'opacity-100' : 'opacity-0'
             }`}
           >
             A
@@ -144,26 +180,22 @@ function ProfileMotif({ progress }: { progress: number }) {
         </div>
       </div>
 
-      {/* Name — typewriter style */}
+      {/* Name */}
       <div className="text-center h-7">
-        <span className="font-clash font-semibold text-lg text-white">
-          {typedName}
-        </span>
-        {showQfSuffix && (
-          <span className="font-clash font-semibold text-lg text-[#00D179]">.qf</span>
-        )}
-        {nameProgress > 0 && nameProgress < 1 && (
+        <span className="font-clash font-semibold text-lg text-white">{typedName}</span>
+        {showQfSuffix && <span className="font-clash font-semibold text-lg text-[#00D179]">.qf</span>}
+        {isTypingName && (
           <span className="inline-block w-[2px] h-5 bg-[#00D179] ml-0.5 animate-pulse align-middle" />
         )}
       </div>
 
-      {/* Bio — word by word */}
+      {/* Bio */}
       <div className="mt-3 text-center text-sm h-5">
         {bioWords.map((word, i) => (
           <span
             key={i}
             className={`transition-opacity duration-300 ${
-              i < visibleWordCount ? 'text-[#666] opacity-100' : 'opacity-0'
+              i < visibleWords ? 'text-[#666] opacity-100' : 'opacity-0'
             }`}
           >
             {word}{i < bioWords.length - 1 ? ' ' : ''}
@@ -171,7 +203,7 @@ function ProfileMotif({ progress }: { progress: number }) {
         ))}
       </div>
 
-      {/* Social row */}
+      {/* Socials */}
       <div
         className={`mt-4 flex justify-center gap-3 transition-all duration-500 ${
           showSocials ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
@@ -190,8 +222,9 @@ function ProfileMotif({ progress }: { progress: number }) {
   );
 }
 
-function EcosystemMotif({ progress }: { progress: number }) {
-  // App logos lighting up in a constellation
+function EcosystemMotif({ active }: { active: boolean }) {
+  const [litCount, setLitCount] = useState(0);
+
   const apps = [
     { name: 'QFPay', color: '#0040FF', x: 20, y: 30 },
     { name: 'Quorum', color: '#6366F1', x: 75, y: 15 },
@@ -200,15 +233,29 @@ function EcosystemMotif({ progress }: { progress: number }) {
     { name: 'PROVD', color: '#FF3131', x: 85, y: 60 },
   ];
 
-  const litCount = Math.floor(progress * (apps.length + 1));
+  useEffect(() => {
+    if (!active) {
+      setLitCount(0);
+      return;
+    }
+
+    let count = 0;
+    const interval = setInterval(() => {
+      count++;
+      setLitCount(count);
+      if (count >= apps.length) clearInterval(interval);
+    }, 350);
+
+    return () => clearInterval(interval);
+  }, [active]);
 
   return (
     <div className="relative w-full max-w-[280px] mx-auto h-[180px]">
-      {/* Center node — your .qf identity */}
+      {/* Center .qf node */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
         <div
           className={`h-12 w-12 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${
-            progress > 0.05
+            active
               ? 'border-[#00D179] bg-[#00D179]/10 shadow-[0_0_20px_rgba(0,209,121,0.2)]'
               : 'border-white/[0.06] bg-white/[0.02]'
           }`}
@@ -217,21 +264,15 @@ function EcosystemMotif({ progress }: { progress: number }) {
         </div>
       </div>
 
-      {/* Orbiting app nodes + connecting lines */}
+      {/* App nodes + connecting lines */}
       {apps.map((app, i) => {
         const isLit = i < litCount;
         return (
           <div key={app.name}>
-            {/* Connecting line from center — animated stroke */}
-            <svg
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              style={{ zIndex: 0 }}
-            >
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
               <line
-                x1="50%"
-                y1="50%"
-                x2={`${app.x}%`}
-                y2={`${app.y}%`}
+                x1="50%" y1="50%"
+                x2={`${app.x}%`} y2={`${app.y}%`}
                 stroke={isLit ? app.color : 'rgba(255,255,255,0.03)'}
                 strokeWidth="1"
                 strokeDasharray="200"
@@ -242,13 +283,12 @@ function EcosystemMotif({ progress }: { progress: number }) {
                 }}
               />
             </svg>
-            {/* Node */}
             <div
               className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-700"
               style={{ left: `${app.x}%`, top: `${app.y}%` }}
             >
               <div
-                className={`h-9 w-9 rounded-xl flex items-center justify-center text-[9px] font-bold font-clash transition-all duration-500`}
+                className="h-9 w-9 rounded-xl flex items-center justify-center text-[9px] font-bold font-clash transition-all duration-500"
                 style={{
                   borderColor: isLit ? app.color : 'rgba(255,255,255,0.04)',
                   borderWidth: '1px',
@@ -267,13 +307,16 @@ function EcosystemMotif({ progress }: { progress: number }) {
   );
 }
 
-/* ── Progress indicator (vertical bar with 3 nodes) ── */
+// ── Motif array for index lookup ──
+const motifs = [SearchMotif, ProfileMotif, EcosystemMotif];
+
+// ── Step Progress Indicator (vertical, in sticky column) ──
+
 function StepProgress({ activeStep }: { activeStep: number }) {
   return (
-    <div className="hidden md:flex flex-col items-center gap-0 absolute left-0 top-1/2 -translate-y-1/2 -translate-x-16">
+    <div className="flex flex-col items-center gap-0">
       {[0, 1, 2].map((i) => (
         <div key={i} className="flex flex-col items-center">
-          {/* Node */}
           <div
             className={`h-3 w-3 rounded-full border-2 transition-all duration-500 ${
               i <= activeStep
@@ -281,9 +324,8 @@ function StepProgress({ activeStep }: { activeStep: number }) {
                 : 'border-white/[0.1] bg-transparent'
             }`}
           />
-          {/* Connector (not after last) */}
           {i < 2 && (
-            <div className="w-px h-16 bg-white/[0.06] relative">
+            <div className="w-px h-12 bg-white/[0.06] relative">
               <div
                 className="absolute top-0 left-0 w-full bg-[#00D179] transition-all duration-700"
                 style={{ height: i < activeStep ? '100%' : '0%' }}
@@ -296,155 +338,135 @@ function StepProgress({ activeStep }: { activeStep: number }) {
   );
 }
 
-/* ── Mobile step indicator (horizontal dots) ── */
-function MobileStepDots({ activeStep }: { activeStep: number }) {
+// ── Step block (used in the scrolling right column) ──
+
+function StepBlock({
+  step,
+  index,
+  onInView,
+}: {
+  step: (typeof steps)[0];
+  index: number;
+  onInView: (index: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { amount: 0.5 });
+
+  useEffect(() => {
+    if (isInView) onInView(index);
+  }, [isInView, index, onInView]);
+
   return (
-    <div className="flex md:hidden justify-center gap-2 mb-6">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className={`h-1.5 rounded-full transition-all duration-500 ${
-            i === activeStep ? 'w-6 bg-[#00D179]' : 'w-1.5 bg-white/[0.1]'
-          }`}
-        />
-      ))}
+    <div
+      ref={ref}
+      className="flex items-center"
+      style={{ minHeight: '70vh' }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.3 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {/* Mobile motif (shown only on mobile, inline above copy) */}
+        <div className="md:hidden flex justify-center mb-8">
+          {(() => {
+            const Motif = motifs[index];
+            return <Motif active={isInView} />;
+          })()}
+        </div>
+
+        <span className="font-clash text-5xl font-bold text-[#00D179]/15 block mb-4">
+          {step.num}
+        </span>
+        <h3 className="font-clash font-semibold text-2xl md:text-3xl text-white mb-4">
+          {step.title}
+        </h3>
+        <p className="text-[#666] leading-relaxed mb-5 max-w-md">
+          {step.description}
+        </p>
+        <span className="inline-flex text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] text-[#555] border border-white/[0.06]">
+          {step.detail}
+        </span>
+      </motion.div>
     </div>
   );
 }
 
-/* Helper: extracts a plain number from a MotionValue for the motif components */
-function MotifWrapper({
-  progress,
-  children,
-}: {
-  progress: any;
-  children: (p: number) => React.ReactNode;
-}) {
-  const [p, setP] = useState(0);
-
-  useEffect(() => {
-    const unsubscribe = progress.on('change', (v: number) => {
-      setP(Math.max(0, Math.min(1, v)));
-    });
-    return unsubscribe;
-  }, [progress]);
-
-  return <>{children(p)}</>;
-}
+// ── Main Component ──
 
 export default function HowItWorks() {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState(0);
 
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start start', 'end end'],
-  });
-
-  // ── Fade zones for the entire sticky theater ──
-  const theaterOpacity = useTransform(
-    scrollYProgress,
-    [0, 0.04, 0.92, 1],
-    [0, 1, 1, 0]
-  );
-
-  // ── Step opacities — clean handoffs, zero overlap ──
-  const step0Opacity = useTransform(scrollYProgress, [0.04, 0.08, 0.27, 0.30], [0, 1, 1, 0]);
-  const step1Opacity = useTransform(scrollYProgress, [0.32, 0.35, 0.58, 0.61], [0, 1, 1, 0]);
-  const step2Opacity = useTransform(scrollYProgress, [0.63, 0.66, 0.88, 0.92], [0, 1, 1, 0]);
-
-  // ── Header fade-out as step 1 takes over ──
-  const headerOpacity = useTransform(scrollYProgress, [0.04, 0.08, 0.15, 0.20], [0, 1, 1, 0]);
-
-  // ── Motif progress — aligned to each step's visible range ──
-  const step0Progress = useTransform(scrollYProgress, [0.08, 0.27], [0, 1]);
-  const step1Progress = useTransform(scrollYProgress, [0.35, 0.58], [0, 1]);
-  const step2Progress = useTransform(scrollYProgress, [0.66, 0.88], [0, 1]);
-
-  // ── Active step for progress indicator ──
-  const activeStep = useTransform(scrollYProgress, (v) => {
-    if (v < 0.31) return 0;
-    if (v < 0.62) return 1;
-    return 2;
-  });
-
-  // Sync currentStep state with motion value
-  useMotionValueEvent(activeStep, 'change', (v) => {
-    setCurrentStep(v);
-  });
-
-  const motifs = [SearchMotif, ProfileMotif, EcosystemMotif];
-  const progresses = [step0Progress, step1Progress, step2Progress];
-  const opacities = [step0Opacity, step1Opacity, step2Opacity];
+  const handleStepInView = useCallback((index: number) => {
+    setCurrentStep(index);
+  }, []);
 
   return (
-    <section>
-      {/* Tall scroll container — 300vh gives each step ~100vh of scroll */}
-      <div ref={containerRef} className="relative" style={{ height: '300vh' }}>
-        {/* Sticky viewport */}
-        <div className="sticky top-0 h-screen flex items-center overflow-hidden">
-          <motion.div
-            className="max-w-[1120px] mx-auto px-6 w-full relative"
-            style={{ opacity: theaterOpacity }}
-          >
-            {/* Section header — fades out as step 1 progresses */}
-            <motion.div
-              className="absolute top-0 left-6 right-6 -mt-24 md:-mt-20"
-              style={{ opacity: headerOpacity }}
-            >
-              <p className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]">
-                HOW IT WORKS
-              </p>
-              <h2 className="font-clash text-center text-4xl font-bold text-white md:text-5xl">
-                Three steps. Sixty seconds.
-              </h2>
-            </motion.div>
+    <section className="py-24 md:py-32">
+      <div className="mx-auto max-w-[1120px] px-6">
+        {/* Section header */}
+        <motion.p
+          className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          HOW IT WORKS
+        </motion.p>
+        <motion.h2
+          className="font-clash text-center text-4xl font-bold text-white md:text-5xl mb-16 md:mb-24"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          Three steps. Sixty seconds.
+        </motion.h2>
 
-            {/* Mobile step dots */}
-            <MobileStepDots activeStep={currentStep} />
+        {/* Two-column layout: sticky left + scrolling right (desktop) */}
+        {/* Single column on mobile */}
+        <div className="md:grid md:grid-cols-2 md:gap-16 lg:gap-24">
+          {/* Left column — sticky on desktop, hidden on mobile */}
+          <div className="hidden md:block">
+            <div className="sticky top-32">
+              <div className="flex items-start gap-8">
+                {/* Step progress indicator */}
+                <StepProgress activeStep={currentStep} />
 
-            {/* Step progress indicator — desktop */}
-            <StepProgress activeStep={currentStep} />
-
-            {/* Step panels — stacked, crossfading */}
-            <div className="relative min-h-[400px] flex items-center">
-              {steps.map((step, i) => {
-                const Motif = motifs[i];
-                return (
-                  <motion.div
-                    key={step.num}
-                    className="absolute inset-0 flex items-center"
-                    style={{ opacity: opacities[i] }}
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center w-full">
-                      {/* Visual motif */}
-                      <div className="flex justify-center order-1 md:order-1">
-                        <MotifWrapper progress={progresses[i]}>
-                          {(p: number) => <Motif progress={p} />}
-                        </MotifWrapper>
-                      </div>
-
-                      {/* Copy */}
-                      <div className="order-2 md:order-2">
-                        <span className="font-clash text-5xl font-bold text-[#00D179]/15 block mb-4">
-                          {step.num}
-                        </span>
-                        <h3 className="font-clash font-semibold text-2xl md:text-3xl text-white mb-4">
-                          {step.title}
-                        </h3>
-                        <p className="text-[#666] leading-relaxed mb-5 max-w-md">
-                          {step.description}
-                        </p>
-                        <span className="inline-flex text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] text-[#555] border border-white/[0.06]">
-                          {step.detail}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+                {/* Active motif */}
+                <div className="flex-1 flex justify-center items-center min-h-[280px]">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentStep}
+                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      {(() => {
+                        const Motif = motifs[currentStep];
+                        return <Motif active={true} />;
+                      })()}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </div>
             </div>
-          </motion.div>
+          </div>
+
+          {/* Right column — scrolling step blocks */}
+          <div>
+            {steps.map((step, i) => (
+              <StepBlock
+                key={step.num}
+                step={step}
+                index={i}
+                onInView={handleStepInView}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>

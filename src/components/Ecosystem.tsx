@@ -216,14 +216,24 @@ export default function Ecosystem() {
                   </p>
 
                   {/* CTA — only for live apps */}
-                  {app.status === 'live' && app.url && (
-                    <a
-                      href={app.url}
-                      className="inline-flex items-center gap-1.5 mt-5 text-sm font-medium text-white/80 hover:text-white transition-colors"
+                  {app.status === 'live' && (
+                    <button
+                      onClick={() => {
+                        const searchInput = document.querySelector<HTMLInputElement>(
+                          '.search-bar-shell input'
+                        );
+                        if (searchInput) {
+                          searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          setTimeout(() => searchInput.focus(), 500);
+                        } else {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 mt-5 text-sm font-medium text-[#00D179]/70 hover:text-[#00D179] transition-colors cursor-pointer"
                     >
-                      Open App
+                      You're here
                       <ArrowUpRight className="w-3.5 h-3.5" />
-                    </a>
+                    </button>
                   )}
                 </div>
               </SpotlightCard>
