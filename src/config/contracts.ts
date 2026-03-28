@@ -114,6 +114,13 @@ export const QNS_REGISTRAR_ABI = [
   },
   {
     type: 'function',
+    name: 'totalBurned',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'getReservedNames',
     inputs: [],
     outputs: [{ name: '', type: 'string[]' }],

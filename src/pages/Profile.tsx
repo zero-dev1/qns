@@ -200,13 +200,13 @@ function ProvenancePanel({
 
 function LedgerPanel({ events }: { events: LedgerEvent[] }) {
   return (
-    <div className="relative">
-      {/* Scrollable container — hidden scrollbar */}
-      <div className="relative pl-4 max-h-[400px] overflow-y-auto scrollbar-hide">
+    <div className="relative flex-1 min-h-0">
+      {/* Scrollable container */}
+      <div className="relative pl-4 h-full overflow-y-auto scrollbar-hide">
         {/* Vertical line */}
         <div className="absolute left-[3px] top-3 bottom-3 w-px bg-white/[0.06]" />
 
-        <div className="space-y-4">
+        <div className="space-y-4 pb-8">
           {events.map((event, i) => (
             <div key={i} className="relative">
               {/* Dot on the line */}
@@ -230,7 +230,7 @@ function LedgerPanel({ events }: { events: LedgerEvent[] }) {
         </div>
       </div>
 
-      {/* Bottom fade gradient — only visible when scrollable */}
+      {/* Bottom fade gradient */}
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0c0c0c] to-transparent pointer-events-none" />
     </div>
   );
@@ -675,7 +675,7 @@ export default function ProfilePage() {
                 <div className="h-4 w-40 mx-auto rounded bg-white/[0.04]" />
               </div>
               {/* Right skeleton */}
-              <div className="hidden md:block p-5 border-l border-white/[0.04]">
+              <div className="hidden md:flex md:flex-col p-5 border-l border-white/[0.04] min-h-0 overflow-hidden">
                 <div className="space-y-4">
                   {[1,2,3].map(i => (
                     <div key={i}><div className="h-3 w-28 rounded bg-white/[0.04] mb-1" /><div className="h-2 w-16 rounded bg-white/[0.03]" /></div>
@@ -751,7 +751,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Right: Empty ledger */}
-              <div className="hidden md:block p-5 border-l border-white/[0.03]">
+              <div className="hidden md:flex md:flex-col p-5 border-l border-white/[0.03] min-h-0 overflow-hidden">
                 <p className="text-[11px] text-[#1a1a1a] italic">No history yet</p>
               </div>
             </div>
@@ -976,7 +976,7 @@ export default function ProfilePage() {
               </motion.div>
 
               {/* ── Right: Ledger ── */}
-              <div className="hidden md:flex md:flex-col p-5 border-l border-white/[0.04]">
+              <div className="hidden md:flex md:flex-col p-5 border-l border-white/[0.04] min-h-0 overflow-hidden">
                 <LedgerPanel events={ledgerEvents} />
               </div>
             </div>

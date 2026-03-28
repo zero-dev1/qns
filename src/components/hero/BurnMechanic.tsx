@@ -10,7 +10,7 @@ function AnimatedNumber({
   value,
   suffix = '',
   shouldAnimate,
-  isBurnStat = false, // Add flag for burn stats
+  isBurnStat = false,
 }: {
   value: number;
   suffix?: string;
@@ -21,9 +21,11 @@ function AnimatedNumber({
   const hasPlayedHaptic = useRef(false);
 
   useEffect(() => {
-    if (!shouldAnimate || value === 0) return;
+    if (!shouldAnimate || value === 0) {
+      setDisplay(0);
+      return;
+    }
 
-    // Play haptic burn sound on first burn stat animation
     if (isBurnStat && !hasPlayedHaptic.current) {
       hapticBurn();
       hasPlayedHaptic.current = true;
@@ -38,7 +40,8 @@ function AnimatedNumber({
       current += 1;
       const progress = current / steps;
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(eased * value));
+      // No rounding for fractional values — interpolate smoothly
+      setDisplay(eased * value);
 
       if (current >= steps) {
         setDisplay(value);
@@ -49,10 +52,14 @@ function AnimatedNumber({
     return () => clearInterval(interval);
   }, [value, shouldAnimate, isBurnStat]);
 
-  // Format with commas for display
-  const formatted = display.toLocaleString('en-US', {
-    maximumFractionDigits: display >= 100 ? 0 : 2,
-  });
+  // Format: integers get no decimals above 100, everything else gets up to 6 significant fractional digits
+  const formatted = display >= 100
+    ? Math.round(display).toLocaleString('en-US')
+    : display >= 1
+      ? display.toLocaleString('en-US', { maximumFractionDigits: 2 })
+      : display > 0
+        ? display.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
+        : '0';
 
   return (
     <span>
@@ -134,12 +141,16 @@ export default function BurnMechanic() {
                   '—'
                 ) : (
                   <>
-                    <AnimatedNumber 
-                      value={burnStats?.qnsBurned || 0} 
-                      suffix="" 
-                      shouldAnimate={isInView}
-                      isBurnStat={true}
-                    />
+                    {burnStats?.qnsBurned === 0 && burnStats?.totalRegistrations > 0 ? (
+                      <span title="Burn data temporarily unavailable">—</span>
+                    ) : (
+                      <AnimatedNumber 
+                        value={burnStats?.qnsBurned || 0} 
+                        suffix="" 
+                        shouldAnimate={isInView}
+                        isBurnStat={true}
+                      />
+                    )}
                     <span className="text-[#E5484D]/60 text-xl ml-1">QF</span>
                   </>
                 )}

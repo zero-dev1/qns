@@ -45,6 +45,7 @@ contract QNSRegistrar {
     
     // Admin analytics
     uint256 public totalRegistrations;
+    uint256 public totalBurned;
     string[] public reservedNamesList;
     
     // Owner-to-names mapping for efficient querying
@@ -519,6 +520,7 @@ contract QNSRegistrar {
         if (burnAmount > 0) {
             (bool burnSuccess, ) = payable(burnAddress).call{value: burnAmount}("");
             require(burnSuccess, "QNSRegistrar: burn transfer failed");
+            totalBurned += burnAmount;
         }
     }
 

@@ -821,6 +821,14 @@ export async function getTotalRegistrations(): Promise<bigint | null> {
   }
 }
 
+export async function getTotalBurnedContract(): Promise<bigint | null> {
+  try {
+    return await callContract<bigint>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'totalBurned');
+  } catch {
+    return null;
+  }
+}
+
 export async function getReservedNamesList(): Promise<string[]> {
   try {
     return await callContract<string[]>(QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'getReservedNames');
@@ -839,7 +847,7 @@ export async function isReserved(name: string): Promise<boolean> {
 }
 
 export const BURN_ADDRESS_SS58 = '5C4hrfjw9DjXZTzV3MwzrrAr9PUr9y8SHgV3cmVGNUWRiJL5';
-const REGISTRAR_SS58 = '5EHF1zj6LTZnpzoM4EKWTYhA7YNTpiFPRaeLj7MZ5zjwbNhp'; // QNS Registrar 0x79d1b7425c8ad9cda83e3bb1c4e6730ff77b7854
+const REGISTRAR_SS58 = '5EpRx3VESwPSVZL6xrxT2P3hoRhdmWHgVfGFiZqqvWkAftNx'; // QNS Registrar on-chain SS58 (pallet-revive contract account)
 const QF_EXPLORER_API = 'https://qf-explorer.mathswins.co.uk/api';
 
 export const BURN_ADDRESS_EVM = '0x000000000000000000000000000000000000dEaD';
@@ -854,15 +862,21 @@ export interface BurnStats {
 export async function getBurnStats(): Promise<BurnStats> {
   // Fetch burn data from QFTools explorer API and on-chain in parallel
   const [transfersRes, totalRegs, burnPct] = await Promise.allSettled([
-    fetch(`${QF_EXPLORER_API}/txs/${BURN_ADDRESS_SS58}?limit=200`).then(r => r.json()),
+    fetch(`${QF_EXPLORER_API}/txs/${BURN_ADDRESS_SS58}?limit=200`)
+      .then(r => {
+        if (!r.ok) throw new Error(`Explorer API ${r.status}`);
+        return r.json();
+      }),
     getTotalRegistrations(),
     getBurnPercentContract(),
   ]);
 
   let totalBurned = 0;
   let qnsBurned = 0;
+  let explorerAvailable = false;
 
   if (transfersRes.status === 'fulfilled' && transfersRes.value?.transfers?.items) {
+    explorerAvailable = true;
     const items = transfersRes.value.transfers.items as Array<{
       from: string;
       to: string;
@@ -887,6 +901,22 @@ export async function getBurnStats(): Promise<BurnStats> {
   const burnPercent = burnPct.status === 'fulfilled' && burnPct.value
     ? Number(burnPct.value)
     : 5;
+
+  // If explorer was down but on-chain totalBurned is available (post-redeploy), use it.
+  // For now, this is future-proofing — totalBurned doesn't exist on current contract.
+  if (!explorerAvailable) {
+    try {
+      const onChainBurned = await callContract<bigint>(
+        QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'totalBurned', []
+      );
+      if (onChainBurned !== undefined && onChainBurned !== null) {
+        qnsBurned = Number(onChainBurned) / 1e18;
+      }
+    } catch {
+      // totalBurned doesn't exist on current contract — that's expected pre-redeploy.
+      // qnsBurned stays 0, card will show "—" via the display logic below.
+    }
+  }
 
   return { totalBurned, qnsBurned, totalRegistrations, burnPercent };
 }
