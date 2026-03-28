@@ -44,16 +44,16 @@ const apps: EcosystemApp[] = [
     name: 'QFPay',
     tagline: 'Send QF to anyone by name',
     description:
-      'Instant payments with a 0.1% burn. alice.qf, not 0x7a3b…',
+      'Instant payments to any .qf name with a 0.1% burn. Send to alice.qf, not 0x7a3b.',
     icon: ArrowLeftRight,
     accentColor: '#0040FF',
     status: 'soon',
   },
   {
     name: 'DappStore',
-    tagline: 'Discover every app on QF',
+    tagline: 'One login. Every app.',
     description:
-      'The central hub for decentralised apps on QF Network. Discover, access, and use every dApp from one place.',
+      'The central hub for decentralised apps on QF Network. Your .qf name carries across every app, no re-registration needed.',
     icon: LayoutGrid,
     accentColor: '#20EAE6',
     status: 'dev',
@@ -62,7 +62,7 @@ const apps: EcosystemApp[] = [
     name: 'NucleusX',
     tagline: 'Trade under your name',
     description:
-      'The QF DEX. Swap, provide liquidity, and build reputation as yourname.qf.',
+      'The QF DEX. Swap, provide liquidity, and build your trading reputation as yourname.qf.',
     icon: Landmark,
     accentColor: '#5E3AAE',
     status: 'dev',
@@ -71,16 +71,16 @@ const apps: EcosystemApp[] = [
     name: 'QFPad',
     tagline: 'Launch with a verified identity',
     description:
-      'Decentralized launchpad for QF projects. Creator profiles powered by .qf names.',
+      'Decentralized launchpad for QF projects. Creator credibility built into your .qf profile.',
     icon: Rocket,
     accentColor: '#89FBFE',
     status: 'dev',
   },
   {
     name: 'QFTools',
-    tagline: 'See what\'s happening on-chain',
+    tagline: 'Names, not addresses',
     description:
-      'The power-user toolkit for QF Network. Explore blocks, inspect transactions, and see the chain in real time.',
+      'Explore blocks and transactions with .qf names resolved everywhere. See who is doing what, not which hex string.',
     icon: Wrench,
     accentColor: '#A1A1AA',
     status: 'dev',
@@ -96,18 +96,18 @@ const apps: EcosystemApp[] = [
   },
   {
     name: 'QFLink',
-    tagline: 'Every message. On-chain. Forever.',
+    tagline: 'Message anyone by name',
     description:
-      'Fully on-chain messaging. Token-gated pods, direct messages, no server. Just the chain.',
+      'Send messages to alice.qf, not an address. Token-gated pods, direct messages, fully on-chain. No server, just the chain.',
     icon: MessageCircle,
     accentColor: '#0991B2',
     status: 'dev',
   },
   {
     name: 'PROVD',
-    tagline: 'Prove your skill. Every move on-chain.',
+    tagline: 'Compete as yourself',
     description:
-      '1v1 strategy card game. No luck after the shuffle — every move is your decision, recorded on-chain. Stake QF if you dare.',
+      '1v1 strategy card game tied to your .qf identity. Every move on-chain, every win under your name. Stake QF if you dare.',
     icon: Swords,
     accentColor: '#FF3131',
     status: 'dev',

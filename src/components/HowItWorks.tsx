@@ -8,7 +8,7 @@ const steps = [
     icon: Search,
     title: 'Search & claim',
     description:
-      'Type any name. See instantly if it\'s available. Register in one transaction — confirmed in seconds, not minutes.',
+      'Type any name. See instantly if it\'s available. Register in one transaction, confirmed in seconds, not minutes.',
     detail: 'From 100 QF/year',
     accentFrom: '#00D179',
     accentTo: '#00B868',
@@ -38,7 +38,15 @@ const steps = [
 /* ── Visual motifs for each step (CSS-animated, no heavy assets) ── */
 
 function SearchMotif({ progress }: { progress: number }) {
-  // A search bar that types itself
+  const [badgeVisible, setBadgeVisible] = useState(false);
+
+  // Latch: once progress crosses 0.6, badge stays visible
+  useEffect(() => {
+    if (progress >= 0.6 && !badgeVisible) {
+      setBadgeVisible(true);
+    }
+  }, [progress, badgeVisible]);
+
   const typedLength = Math.min(Math.floor(progress * 8), 7);
   const name = 'alice.qf';
   const displayed = name.slice(0, typedLength);
@@ -46,7 +54,6 @@ function SearchMotif({ progress }: { progress: number }) {
 
   return (
     <div className="relative w-full max-w-[280px] mx-auto">
-      {/* Fake search bar */}
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 font-satoshi text-lg">
         <span className="text-white">{displayed.replace('.qf', '')}</span>
         {displayed.includes('.qf') ? null : displayed.length > 0 && (
@@ -62,8 +69,7 @@ function SearchMotif({ progress }: { progress: number }) {
           <span className="inline-block w-[2px] h-5 bg-[#00D179] ml-0.5 animate-pulse align-middle" />
         )}
       </div>
-      {/* Available badge appears */}
-      {progress > 0.6 && (
+      {badgeVisible && (
         <motion.div
           className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#00D179]/20 bg-[#00D179]/5 px-3 py-1.5 text-sm text-[#00D179]"
           initial={{ opacity: 0, y: 8 }}
@@ -79,50 +85,96 @@ function SearchMotif({ progress }: { progress: number }) {
 }
 
 function ProfileMotif({ progress }: { progress: number }) {
-  // A profile card that builds itself
-  const showAvatar = progress > 0.15;
-  const showName = progress > 0.3;
-  const showBio = progress > 0.5;
-  const showSocials = progress > 0.7;
+  // Avatar circle draws itself via SVG stroke-dashoffset
+  const circumference = 2 * Math.PI * 30; // r=30
+  const avatarDrawProgress = Math.min(progress / 0.25, 1); // 0→25% of step progress
+  const strokeDashoffset = circumference * (1 - avatarDrawProgress);
+
+  // Name types in after avatar is drawn
+  const nameProgress = Math.max(0, (progress - 0.25) / 0.2); // 25%→45%
+  const fullName = 'alice';
+  const typedName = fullName.slice(0, Math.floor(nameProgress * fullName.length));
+  const showQfSuffix = nameProgress >= 1;
+
+  // Bio fades in word by word
+  const bioProgress = Math.max(0, (progress - 0.5) / 0.2); // 50%→70%
+  const bioWords = ['Building', 'on', 'QF', 'Network'];
+  const visibleWordCount = Math.floor(bioProgress * (bioWords.length + 1));
+
+  // Socials appear
+  const showSocials = progress > 0.75;
 
   return (
     <div className="relative w-full max-w-[260px] mx-auto rounded-2xl border border-white/[0.06] bg-[#111] p-6 overflow-hidden">
-      {/* Avatar circle */}
+      {/* Avatar circle — SVG draw animation */}
       <div className="flex justify-center mb-4">
-        <div
-          className={`h-16 w-16 rounded-full border-2 transition-all duration-500 ${
-            showAvatar ? 'border-[#00D179] bg-[#00D179]/10' : 'border-white/[0.06] bg-white/[0.02]'
-          }`}
-        >
-          {showAvatar && (
-            <div className="h-full w-full rounded-full flex items-center justify-center text-[#00D179] text-2xl font-clash font-bold">
-              A
-            </div>
-          )}
+        <div className="relative h-16 w-16">
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 64 64">
+            {/* Background ring */}
+            <circle
+              cx="32" cy="32" r="30"
+              fill="none"
+              stroke="rgba(255,255,255,0.04)"
+              strokeWidth="2"
+            />
+            {/* Animated draw ring */}
+            <circle
+              cx="32" cy="32" r="30"
+              fill="none"
+              stroke="#00D179"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              style={{
+                transition: 'stroke-dashoffset 0.1s linear',
+                transform: 'rotate(-90deg)',
+                transformOrigin: 'center',
+              }}
+            />
+          </svg>
+          {/* Avatar letter — fades in when circle completes */}
+          <div
+            className={`absolute inset-0 flex items-center justify-center text-[#00D179] text-2xl font-clash font-bold transition-opacity duration-500 ${
+              avatarDrawProgress >= 1 ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            A
+          </div>
         </div>
       </div>
-      {/* Name */}
-      <div className="text-center">
-        <div
-          className={`font-clash font-semibold text-lg transition-all duration-500 ${
-            showName ? 'text-white opacity-100' : 'text-white/10 opacity-0'
-          }`}
-        >
-          alice<span className="text-[#00D179]">.qf</span>
-        </div>
+
+      {/* Name — typewriter style */}
+      <div className="text-center h-7">
+        <span className="font-clash font-semibold text-lg text-white">
+          {typedName}
+        </span>
+        {showQfSuffix && (
+          <span className="font-clash font-semibold text-lg text-[#00D179]">.qf</span>
+        )}
+        {nameProgress > 0 && nameProgress < 1 && (
+          <span className="inline-block w-[2px] h-5 bg-[#00D179] ml-0.5 animate-pulse align-middle" />
+        )}
       </div>
-      {/* Bio */}
-      <div
-        className={`mt-3 text-center text-sm transition-all duration-500 ${
-          showBio ? 'text-[#666] opacity-100' : 'opacity-0'
-        }`}
-      >
-        Building on QF Network
+
+      {/* Bio — word by word */}
+      <div className="mt-3 text-center text-sm h-5">
+        {bioWords.map((word, i) => (
+          <span
+            key={i}
+            className={`transition-opacity duration-300 ${
+              i < visibleWordCount ? 'text-[#666] opacity-100' : 'opacity-0'
+            }`}
+          >
+            {word}{i < bioWords.length - 1 ? ' ' : ''}
+          </span>
+        ))}
       </div>
+
       {/* Social row */}
       <div
         className={`mt-4 flex justify-center gap-3 transition-all duration-500 ${
-          showSocials ? 'opacity-100' : 'opacity-0'
+          showSocials ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
         }`}
       >
         {['X', 'GH', 'TG'].map((s) => (
@@ -170,7 +222,7 @@ function EcosystemMotif({ progress }: { progress: number }) {
         const isLit = i < litCount;
         return (
           <div key={app.name}>
-            {/* Connecting line from center */}
+            {/* Connecting line from center — animated stroke */}
             <svg
               className="absolute inset-0 w-full h-full pointer-events-none"
               style={{ zIndex: 0 }}
@@ -182,9 +234,12 @@ function EcosystemMotif({ progress }: { progress: number }) {
                 y2={`${app.y}%`}
                 stroke={isLit ? app.color : 'rgba(255,255,255,0.03)'}
                 strokeWidth="1"
-                strokeDasharray={isLit ? 'none' : '4 4'}
-                className="transition-all duration-700"
-                style={{ opacity: isLit ? 0.4 : 0.15 }}
+                strokeDasharray="200"
+                strokeDashoffset={isLit ? '0' : '200'}
+                style={{
+                  transition: 'stroke-dashoffset 0.8s ease-out, stroke 0.5s ease',
+                  opacity: isLit ? 0.4 : 0.15,
+                }}
               />
             </svg>
             {/* Node */}
@@ -286,21 +341,30 @@ export default function HowItWorks() {
     offset: ['start start', 'end end'],
   });
 
-  // Map scroll to active step index (0, 1, 2)
-  // Each step occupies ~1/3 of the scroll range
-  const step0Opacity = useTransform(scrollYProgress, [0, 0.25, 0.3], [1, 1, 0]);
-  const step1Opacity = useTransform(scrollYProgress, [0.25, 0.35, 0.6, 0.65], [0, 1, 1, 0]);
-  const step2Opacity = useTransform(scrollYProgress, [0.6, 0.7, 1], [0, 1, 1]);
+  // ── Fade zones for the entire sticky theater ──
+  const theaterOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.04, 0.92, 1],
+    [0, 1, 1, 0]
+  );
 
-  // For motif progress within each step's scroll range
-  const step0Progress = useTransform(scrollYProgress, [0, 0.28], [0, 1]);
-  const step1Progress = useTransform(scrollYProgress, [0.3, 0.6], [0, 1]);
-  const step2Progress = useTransform(scrollYProgress, [0.65, 0.95], [0, 1]);
+  // ── Step opacities — clean handoffs, zero overlap ──
+  const step0Opacity = useTransform(scrollYProgress, [0.04, 0.08, 0.27, 0.30], [0, 1, 1, 0]);
+  const step1Opacity = useTransform(scrollYProgress, [0.32, 0.35, 0.58, 0.61], [0, 1, 1, 0]);
+  const step2Opacity = useTransform(scrollYProgress, [0.63, 0.66, 0.88, 0.92], [0, 1, 1, 0]);
 
-  // Active step for progress indicator (derive from scrollYProgress)
+  // ── Header fade-out as step 1 takes over ──
+  const headerOpacity = useTransform(scrollYProgress, [0.04, 0.08, 0.15, 0.20], [0, 1, 1, 0]);
+
+  // ── Motif progress — aligned to each step's visible range ──
+  const step0Progress = useTransform(scrollYProgress, [0.08, 0.27], [0, 1]);
+  const step1Progress = useTransform(scrollYProgress, [0.35, 0.58], [0, 1]);
+  const step2Progress = useTransform(scrollYProgress, [0.66, 0.88], [0, 1]);
+
+  // ── Active step for progress indicator ──
   const activeStep = useTransform(scrollYProgress, (v) => {
-    if (v < 0.3) return 0;
-    if (v < 0.65) return 1;
+    if (v < 0.31) return 0;
+    if (v < 0.62) return 1;
     return 2;
   });
 
@@ -319,28 +383,22 @@ export default function HowItWorks() {
       <div ref={containerRef} className="relative" style={{ height: '300vh' }}>
         {/* Sticky viewport */}
         <div className="sticky top-0 h-screen flex items-center overflow-hidden">
-          <div className="max-w-[1120px] mx-auto px-6 w-full relative">
-            {/* Section header — fixed at top of sticky frame */}
-            <div className="absolute top-0 left-6 right-6 -mt-24 md:-mt-20">
-              <motion.p
-                className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5 }}
-              >
+          <motion.div
+            className="max-w-[1120px] mx-auto px-6 w-full relative"
+            style={{ opacity: theaterOpacity }}
+          >
+            {/* Section header — fades out as step 1 progresses */}
+            <motion.div
+              className="absolute top-0 left-6 right-6 -mt-24 md:-mt-20"
+              style={{ opacity: headerOpacity }}
+            >
+              <p className="mb-4 text-center text-xs font-medium tracking-[0.3em] text-[#00D179]">
                 HOW IT WORKS
-              </motion.p>
-              <motion.h2
-                className="font-clash text-center text-4xl font-bold text-white md:text-5xl"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
+              </p>
+              <h2 className="font-clash text-center text-4xl font-bold text-white md:text-5xl">
                 Three steps. Sixty seconds.
-              </motion.h2>
-            </div>
+              </h2>
+            </motion.div>
 
             {/* Mobile step dots */}
             <MobileStepDots activeStep={currentStep} />
@@ -386,7 +444,7 @@ export default function HowItWorks() {
                 );
               })}
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

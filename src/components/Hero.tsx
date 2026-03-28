@@ -99,11 +99,19 @@ export default function Hero() {
   // First visit tooltip state
   const [showTooltip, setShowTooltip] = useState(false);
   
-  // Auto-focus on desktop
+  // Auto-focus on desktop — but only after typewriter has had time to run
   useEffect(() => {
     if (window.matchMedia('(pointer: fine)').matches) {
-      // Delay focus slightly so letter animation plays first
-      setTimeout(() => inputRef.current?.focus(), 1200);
+      // Wait 6 seconds so the typewriter completes at least one full name cycle
+      // before pulling focus (which kills the typewriter).
+      // If user interacts first, the typewriter stops naturally and this is a no-op.
+      const timer = setTimeout(() => {
+        // Only focus if user hasn't already interacted with the input
+        if (!input && inputRef.current && document.activeElement !== inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 6000);
+      return () => clearTimeout(timer);
     }
   }, []);
 
@@ -264,7 +272,7 @@ export default function Hero() {
     : 'Your identity on Quantum Fusion';
   const subtitleText = isConnected && qnsName
     ? 'Manage your identity or register another name.'
-    : 'Register a .qf name and use it across every dApp — messaging, trading, gaming, and everything built on QF Network.';
+    : 'Register a .qf name and use it across every dApp on QF Network. Messaging, trading, gaming, and everything in between.';
 
   return (
     <section ref={heroRef} className="relative px-6 pb-[100px] pt-16 md:pt-24 overflow-hidden">
@@ -318,7 +326,7 @@ export default function Hero() {
               subtitleText
             ) : (
               <>
-                Register a <span className="text-[#00D179]">.qf</span> name and use it across every dApp — messaging, trading, gaming, and everything built on QF Network.
+                Register a <span className="text-[#00D179]">.qf</span> name and use it across every dApp on QF Network. Messaging, trading, gaming, and everything in between.
               </>
             )}
           </motion.p>

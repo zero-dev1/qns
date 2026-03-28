@@ -74,7 +74,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="mt-12 pt-6 border-t border-white/[0.04] flex items-center justify-center">
           <p className="text-xs text-[#333]">
-            Community-built infrastructure for QF Network · Dapp Labs · {new Date().getFullYear()}
+            Community built infrastructure for QF Network · Dapp Labs · {new Date().getFullYear()}
           </p>
         </div>
       </div>

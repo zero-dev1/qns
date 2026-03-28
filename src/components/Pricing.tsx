@@ -273,7 +273,7 @@ export default function Pricing() {
           viewport={{ once: true, amount: 0.2 }}
           transition={{ duration: 0.6, delay: 0.4 }}
         >
-          Multi-year registration available at checkout. Renew anytime. 30-day grace period after expiry.
+          Multi-year registration available at checkout. Renew anytime. 30 day grace period after expiry.
         </motion.p>
       </div>
 

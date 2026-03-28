@@ -163,10 +163,11 @@
 }
 
 /* Touch-activated spotlight glow on mobile */
-.spotlight-touch-active .spotlight-card::after,
-.spotlight-touch-active::after {
+.spotlight-card.spotlight-touch-active::before {
+  opacity: 0.6 !important;
+}
+.spotlight-card.spotlight-touch-active::after {
   opacity: 0.15 !important;
-  transition: opacity 0.15s ease;
 }
 
 /* .qf gradient text — reusable utility */
@@ -222,10 +223,6 @@
   100% { background-position: 0% center; }
 }
 
-/* ── Touch-activated spotlight glow on mobile ── */
-.spotlight-touch-active::after {
-  opacity: 0.15 !important;
-}
 
 /* ── HowItWorks sticky theater ── */
 .hiw-sticky-viewport {

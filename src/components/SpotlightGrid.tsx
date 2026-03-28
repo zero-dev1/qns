@@ -38,8 +38,10 @@ export default function SpotlightGrid({ children, className = '' }: SpotlightGri
     (e: TouchEvent) => {
       if (e.touches.length > 0) {
         updateCards(e.touches[0].clientX, e.touches[0].clientY);
-        // Also briefly add a class for glow visibility
-        const cards = Array.from(containerRef.current?.children || []) as HTMLElement[];
+        // Find spotlight-card descendants and activate glow
+        const cards = Array.from(
+          containerRef.current?.querySelectorAll('.spotlight-card') || []
+        ) as HTMLElement[];
         cards.forEach((card) => card.classList.add('spotlight-touch-active'));
       }
     },
@@ -47,8 +49,9 @@ export default function SpotlightGrid({ children, className = '' }: SpotlightGri
   );
 
   const handleTouchEnd = useCallback(() => {
-    // Remove the touch-active class after a brief delay so glow fades
-    const cards = Array.from(containerRef.current?.children || []) as HTMLElement[];
+    const cards = Array.from(
+      containerRef.current?.querySelectorAll('.spotlight-card') || []
+    ) as HTMLElement[];
     setTimeout(() => {
       cards.forEach((card) => card.classList.remove('spotlight-touch-active'));
     }, 300);

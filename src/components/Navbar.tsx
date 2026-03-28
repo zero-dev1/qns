@@ -447,7 +447,7 @@ export default function Navbar() {
                       <Info size={18} className="text-[#00D179] shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-300">
-                          <span className="text-[#00D179] font-medium">Tip:</span> Your EVM address can receive tokens from MetaMask and other Ethereum-compatible wallets.
+                          <span className="text-[#00D179] font-medium">Tip:</span> Your EVM address can receive tokens from MetaMask and other Ethereum compatible wallets.
                         </p>
                         <p className="text-xs text-[#8A8A8A] mt-2">
                           Your Substrate address is your primary address. The EVM address is derived from it automatically.
