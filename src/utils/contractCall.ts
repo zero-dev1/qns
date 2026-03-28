@@ -135,7 +135,7 @@ export async function writeContract(
   const typedApi = getTypedApi();
 
   // Dry-run for gas estimation (best-effort)
-  let gasLimit = { ref_time: 100_000_000_000n, proof_size: 5_000_000n };
+  let gasLimit = { ref_time: 200_000_000_000n, proof_size: 10_000_000n };
   let storageDeposit = 0n;
 
   try {
@@ -149,12 +149,13 @@ export async function writeContract(
     );
     const d = dryRun as any;
     if (d.gas_required) {
-      // Add 50% buffer to both ref_time and proof_size.
-      // pallet-revive dry-runs underestimate gas on live chains
-      // due to state trie changes between dry-run and inclusion.
+      // Use 2x buffer on all attempts — QF gas is negligible and
+      // pallet-revive dry-runs underestimate on live chains due to
+      // state trie changes between dry-run and inclusion.
+      // This eliminates first-transaction BadProof failures from Talisman.
       gasLimit = {
-        ref_time: (d.gas_required.ref_time * 150n) / 100n,
-        proof_size: (d.gas_required.proof_size * 150n) / 100n,
+        ref_time: d.gas_required.ref_time * 2n,
+        proof_size: d.gas_required.proof_size * 2n,
       };
     }
     if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
@@ -180,7 +181,7 @@ export async function writeContract(
         );
         const rd = retryDryRun as any;
         if (rd.gas_required) {
-          // Use 2x buffer on retry for maximum safety
+          // Use 2x buffer (same as first attempt — unified generous budget)
           gasLimit = {
             ref_time: rd.gas_required.ref_time * 2n,
             proof_size: rd.gas_required.proof_size * 2n,

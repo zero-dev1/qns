@@ -327,6 +327,69 @@ export const QNS_REGISTRAR_ABI = [
       { name: 'to', type: 'address', indexed: true },
     ],
   },
+  {
+    type: 'event',
+    name: 'AdminChanged',
+    inputs: [
+      { name: 'oldAdmin', type: 'address', indexed: true },
+      { name: 'newAdmin', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'TreasuryChanged',
+    inputs: [
+      { name: 'oldTreasury', type: 'address', indexed: true },
+      { name: 'newTreasury', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PriceChanged',
+    inputs: [
+      { name: 'price3Char', type: 'uint256', indexed: false },
+      { name: 'price4Char', type: 'uint256', indexed: false },
+      { name: 'price5PlusChar', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PermanentMultiplierChanged',
+    inputs: [
+      { name: 'newMultiplier', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'BurnPercentChanged',
+    inputs: [
+      { name: 'newPercent', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'BurnAddressChanged',
+    inputs: [
+      { name: 'oldBurn', type: 'address', indexed: true },
+      { name: 'newBurn', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'ResolverChanged',
+    inputs: [
+      { name: 'oldResolver', type: 'address', indexed: true },
+      { name: 'newResolver', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'TreasuryWithdrawal',
+    inputs: [
+      { name: 'treasury', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
 ] as const;
 
 export const QNS_RESOLVER_ABI = [

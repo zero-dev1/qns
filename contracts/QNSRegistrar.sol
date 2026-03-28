@@ -74,6 +74,12 @@ contract QNSRegistrar {
     );
     event AdminChanged(address indexed oldAdmin, address indexed newAdmin);
     event TreasuryChanged(address indexed oldTreasury, address indexed newTreasury);
+    event PriceChanged(uint256 price3Char, uint256 price4Char, uint256 price5PlusChar);
+    event PermanentMultiplierChanged(uint256 newMultiplier);
+    event BurnPercentChanged(uint256 newPercent);
+    event BurnAddressChanged(address indexed oldBurn, address indexed newBurn);
+    event ResolverChanged(address indexed oldResolver, address indexed newResolver);
+    event TreasuryWithdrawal(address indexed treasury, uint256 amount);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "QNSRegistrar: not admin");
@@ -173,6 +179,12 @@ contract QNSRegistrar {
             "QNSRegistrar: name not available"
         );
 
+        // Clean up previous owner's name list if re-registering an expired name
+        address previousOwner = registrations[labelHash].owner;
+        if (previousOwner != address(0)) {
+            _removeNameFromOwner(previousOwner, lowered);
+        }
+
         uint256 nameLength = bytes(lowered).length;
         uint256 fee = getPrice(nameLength, durationInYears, permanent);
         require(msg.value >= fee, "QNSRegistrar: insufficient payment");
@@ -258,10 +270,11 @@ contract QNSRegistrar {
         return _isAvailable(labelHash);
     }
 
-    function transferName(string memory name, address newOwner) external {
+    function transferName(string memory name, address newOwner) external nonReentrant {
         string memory lowered = validateName(name);
         bytes32 labelHash = keccak256(bytes(lowered));
 
+        require(!_isAvailable(labelHash), "QNSRegistrar: name expired");
         require(
             msg.sender == registrations[labelHash].owner,
             "QNSRegistrar: not name owner"
@@ -357,15 +370,18 @@ contract QNSRegistrar {
         price3Char = new3;
         price4Char = new4;
         price5PlusChar = new5Plus;
+        emit PriceChanged(new3, new4, new5Plus);
     }
 
     function setPermanentMultiplier(uint256 newMult) external onlyAdmin {
         permanentMultiplier = newMult;
+        emit PermanentMultiplierChanged(newMult);
     }
 
     function setBurnPercent(uint256 newPercent) external onlyAdmin {
         require(newPercent <= 50, "QNSRegistrar: burn percent too high");
         burnPercent = newPercent;
+        emit BurnPercentChanged(newPercent);
     }
 
     function setTreasury(address newTreasury) external onlyAdmin {
@@ -376,7 +392,9 @@ contract QNSRegistrar {
     }
 
     function setBurnAddress(address newBurn) external onlyAdmin {
+        address oldBurn = burnAddress;
         burnAddress = newBurn;
+        emit BurnAddressChanged(oldBurn, newBurn);
     }
 
     function withdrawToTreasury() external onlyAdmin nonReentrant {
@@ -384,10 +402,13 @@ contract QNSRegistrar {
         require(balance > 0, "QNSRegistrar: no balance");
         (bool success, ) = payable(treasury).call{value: balance}("");
         require(success, "QNSRegistrar: withdrawal failed");
+        emit TreasuryWithdrawal(treasury, balance);
     }
 
     function setDefaultResolver(address newResolver) external onlyAdmin {
+        address oldResolver = address(resolver);
         resolver = IQNSResolver(newResolver);
+        emit ResolverChanged(oldResolver, newResolver);
     }
 
     function setAdmin(address newAdmin) external onlyAdmin {
