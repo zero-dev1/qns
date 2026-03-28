@@ -11,7 +11,7 @@ interface Stat {
 const stats: Stat[] = [
   { label: 'Identities Claimed', value: 400, suffix: '+' },
   { label: 'Burn Rate', value: 5, suffix: '%', prefix: '' },
-  { label: 'dApps Building', value: 6, suffix: '+' },
+  { label: 'dApps Building', value: 9, suffix: '' },
   { label: 'Seconds to Register', value: 6, suffix: '', prefix: '~' },
 ];
 

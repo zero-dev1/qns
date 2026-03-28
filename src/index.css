@@ -162,6 +162,13 @@
   background: var(--glow-color, rgba(0, 209, 121, 0.3));
 }
 
+/* Touch-activated spotlight glow on mobile */
+.spotlight-touch-active .spotlight-card::after,
+.spotlight-touch-active::after {
+  opacity: 0.15 !important;
+  transition: opacity 0.15s ease;
+}
+
 /* .qf gradient text — reusable utility */
 .text-qf-gradient {
   background: linear-gradient(90deg, #00D179, #00B868);
@@ -190,6 +197,45 @@
 
 .search-bar-available-pulse {
   animation: search-bar-pulse 0.9s ease-out 1;
+}
+
+/* ── Living .qf suffix — breathing gradient ── */
+.qf-suffix-live {
+  background: linear-gradient(
+    90deg,
+    #00D179 0%,
+    #00E88A 25%,
+    #00B868 50%,
+    #00D179 75%,
+    #00E88A 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: qf-breathe 4s ease-in-out infinite;
+}
+
+@keyframes qf-breathe {
+  0% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+
+/* ── Touch-activated spotlight glow on mobile ── */
+.spotlight-touch-active::after {
+  opacity: 0.15 !important;
+}
+
+/* ── HowItWorks sticky theater ── */
+.hiw-sticky-viewport {
+  /* Ensure sticky works within the container */
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
 @keyframes search-bar-pulse {

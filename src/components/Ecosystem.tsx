@@ -1,5 +1,16 @@
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowLeftRight, Landmark, Rocket, Gamepad2, CheckSquare, Globe } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ArrowLeftRight,
+  LayoutGrid,
+  Landmark,
+  Rocket,
+  CheckSquare,
+  Globe,
+  Wrench,
+  MessageCircle,
+  Swords,
+} from 'lucide-react';
 import SpotlightGrid from './SpotlightGrid';
 import SpotlightCard from './SpotlightCard';
 import PulseDot from './PulseDot';
@@ -21,7 +32,8 @@ const apps: EcosystemApp[] = [
   {
     name: 'QNS',
     tagline: 'Your on-chain identity',
-    description: 'Register a .qf name, build your profile, and carry it across every app on QF Network.',
+    description:
+      'Register a .qf name, build your profile, and carry it across every app on QF Network.',
     icon: Globe,
     accentColor: '#00D179',
     status: 'live',
@@ -31,41 +43,73 @@ const apps: EcosystemApp[] = [
   {
     name: 'QFPay',
     tagline: 'Send QF to anyone by name',
-    description: 'Instant payments with a 0.1% burn. alice.qf, not 0x7a3b…',
+    description:
+      'Instant payments with a 0.1% burn. alice.qf, not 0x7a3b…',
     icon: ArrowLeftRight,
-    accentColor: '#3b82f6',
+    accentColor: '#0040FF',
     status: 'soon',
   },
   {
-    name: 'Quorum',
-    tagline: 'Vote as yourself',
-    description: 'Governance with your .qf identity. Propose, vote, shape the network.',
-    icon: CheckSquare,
-    accentColor: '#8b5cf6',
+    name: 'DappStore',
+    tagline: 'Discover every app on QF',
+    description:
+      'The central hub for decentralised apps on QF Network. Discover, access, and use every dApp from one place.',
+    icon: LayoutGrid,
+    accentColor: '#20EAE6',
     status: 'dev',
   },
   {
     name: 'NucleusX',
     tagline: 'Trade under your name',
-    description: 'The QF DEX. Swap, provide liquidity, and build reputation as yourname.qf.',
+    description:
+      'The QF DEX. Swap, provide liquidity, and build reputation as yourname.qf.',
     icon: Landmark,
-    accentColor: '#f59e0b',
+    accentColor: '#5E3AAE',
     status: 'dev',
   },
   {
     name: 'QFPad',
     tagline: 'Launch with a verified identity',
-    description: 'Decentralized launchpad for QF projects. Creator profiles powered by .qf names.',
+    description:
+      'Decentralized launchpad for QF projects. Creator profiles powered by .qf names.',
     icon: Rocket,
-    accentColor: '#ef4444',
+    accentColor: '#89FBFE',
     status: 'dev',
   },
   {
-    name: 'Mini Games',
-    tagline: 'Compete as yourname.qf',
-    description: 'On-chain leaderboards, tournaments, and bragging rights — all tied to your identity.',
-    icon: Gamepad2,
-    accentColor: '#ec4899',
+    name: 'QFTools',
+    tagline: 'See what\'s happening on-chain',
+    description:
+      'The power-user toolkit for QF Network. Explore blocks, inspect transactions, and see the chain in real time.',
+    icon: Wrench,
+    accentColor: '#A1A1AA',
+    status: 'dev',
+  },
+  {
+    name: 'Quorum',
+    tagline: 'Vote as yourself',
+    description:
+      'Governance with your .qf identity. Propose, vote, shape the network.',
+    icon: CheckSquare,
+    accentColor: '#6366F1',
+    status: 'dev',
+  },
+  {
+    name: 'QFLink',
+    tagline: 'Every message. On-chain. Forever.',
+    description:
+      'Fully on-chain messaging. Token-gated pods, direct messages, no server. Just the chain.',
+    icon: MessageCircle,
+    accentColor: '#0991B2',
+    status: 'dev',
+  },
+  {
+    name: 'PROVD',
+    tagline: 'Prove your skill. Every move on-chain.',
+    description:
+      '1v1 strategy card game. No luck after the shuffle — every move is your decision, recorded on-chain. Stake QF if you dare.',
+    icon: Swords,
+    accentColor: '#FF3131',
     status: 'dev',
   },
 ];
@@ -137,7 +181,7 @@ export default function Ecosystem() {
               viewport={{ once: true }}
               transition={{
                 duration: 0.5,
-                delay: 0.2 + i * 0.08,
+                delay: 0.2 + i * 0.06,
                 ease: [0.22, 1, 0.36, 1],
               }}
               className={app.featured ? 'sm:col-span-2' : ''}
