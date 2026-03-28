@@ -52,11 +52,11 @@ export default function MyNamesPage() {
   const [textRecords, setTextRecords] = useState<Record<string, Record<string, string>>>({});
   const [primaryName, setPrimaryNameState] = useState<string | null>(null);
   const [enableTilt, setEnableTilt] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
   
   // Detail modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<'overview' | 'edit' | 'manage' | 'share'>('overview');
 
 
   const loadNames = useCallback(async () => {
@@ -149,7 +149,7 @@ export default function MyNamesPage() {
   useEffect(() => {
     if (expandName && !hasAutoExpanded.current && names.some((n) => n.name === expandName)) {
       hasAutoExpanded.current = true;
-      openDetailModal(expandName, 'edit');
+      openDetailModal(expandName);
     }
   }, [expandName, names]);
 
@@ -161,6 +161,22 @@ export default function MyNamesPage() {
       return () => clearTimeout(timer);
     }
   }, [expandName, address, bgRefresh]);
+
+  // Fetch wallet balance
+  useEffect(() => {
+    async function fetchBalance() {
+      if (!address) return;
+      try {
+        // Use existing balance utility from qns utils
+        const { getQFBalance } = await import('../utils/qns');
+        const bal = await getQFBalance(address);
+        setWalletBalance(Number(bal) / 1e18); // Convert from wei to QF tokens
+      } catch {
+        setWalletBalance(0);
+      }
+    }
+    fetchBalance();
+  }, [address]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -210,9 +226,8 @@ export default function MyNamesPage() {
 
 
   // Detail modal handlers
-  const openDetailModal = (name: string, tab?: 'overview' | 'edit' | 'manage' | 'share') => {
+  const openDetailModal = (name: string) => {
     setSelectedName(name);
-    setDetailTab(tab || 'overview');
     setDetailModalOpen(true);
     if (!textRecords[name]) {
       loadTextRecords(name);
@@ -279,6 +294,27 @@ export default function MyNamesPage() {
       showToast('Failed to save, please try again', 'error');
       hapticError();
     }
+  };
+
+  // QDL: New handlers that match updated DetailModal interface
+  const handleSaveRecordsFromModal = async (records: Record<string, string>) => {
+    if (!selectedName) return;
+    return handleSaveRecords(selectedName, records);
+  };
+
+  const handleSetPrimaryFromModalNew = async () => {
+    if (!selectedName) return;
+    return handleSetPrimaryFromModal(selectedName);
+  };
+
+  const handleRenewFromModal = async (years: number) => {
+    if (!selectedName) return;
+    return handleRenew(selectedName, years);
+  };
+
+  const handleTransferFromModalNew = async (to: string) => {
+    if (!selectedName) return;
+    return handleTransferFromModal(selectedName, to);
   };
 
   const handleSetPrimaryFromModal = async (name: string) => {
@@ -649,18 +685,26 @@ export default function MyNamesPage() {
       <AnimatePresence>
         {detailModalOpen && selectedName && (
           <DetailModal
-            key={selectedName}
-            name={selectedName}
             isOpen={detailModalOpen}
-            defaultTab={detailTab}
-            onClose={closeDetailModal}
-            ownedName={names.find((n) => n.name === selectedName)!}
-            records={cardRecords.get(selectedName) || { avatar: '', bio: '', twitter: '', telegram: '', website: '', email: '' }}
+            onClose={() => { setDetailModalOpen(false); setSelectedName(null); }}
+            name={selectedName}
+            expires={Number(names.find((n) => n.name === selectedName)?.expires || 0)}
+            isPermanent={names.find((n) => n.name === selectedName)?.isPermanent || false}
+            registeredAt={Number(names.find((n) => n.name === selectedName)?.registeredAt || 0)}
+            avatar={textRecords[selectedName]?.avatar}
+            bio={textRecords[selectedName]?.bio}
+            twitter={textRecords[selectedName]?.twitter}
+            telegram={textRecords[selectedName]?.telegram}
+            website={textRecords[selectedName]?.website}
+            email={textRecords[selectedName]?.email}
             isPrimary={primaryName === selectedName}
-            onSaveRecords={handleSaveRecords}
-            onSetPrimary={handleSetPrimaryFromModal}
-            onRenew={handleRenew}
-            onTransfer={handleTransferFromModal}
+            providerType={providerType}
+            address={address || ''}
+            balance={walletBalance}
+            onSaveRecords={handleSaveRecordsFromModal}
+            onSetPrimary={handleSetPrimaryFromModalNew}
+            onRenew={handleRenewFromModal}
+            onTransfer={handleTransferFromModalNew}
           />
         )}
       </AnimatePresence>

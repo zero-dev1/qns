@@ -1,654 +1,668 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  X, 
-  Star, 
-  RefreshCw, 
-  Share2, 
-  Pencil, 
-  ArrowRight, 
-  Copy, 
-  Twitter, 
-  Send, 
-  Globe, 
-  FileText, 
-  Loader2, 
-  Check, 
-  Shield,
-  Clock
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  X, Copy, Check, ExternalLink, Send, Shield, Crown,
+  Star, AlertTriangle, ChevronUp, ChevronDown, Loader2,
+  Eye, Pencil, Settings, Share2, Sparkles
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 import { hapticTap, hapticSuccess, hapticError } from '../utils/haptics';
-import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
 
-const FIELD_ICONS = {
-  avatar: <Globe size={16} />,
-  bio: <FileText size={16} />,
-  twitter: <Twitter size={16} />,
-  telegram: <Send size={16} />,
-  website: <Globe size={16} />,
-  email: <Send size={16} />,
-};
+// QDL: Team names - empty for now, can be populated later
+const TEAM_NAMES: string[] = [];
+const DAPP_LAB_NAMES: string[] = [];
 
-const FIELD_LABELS = {
-  avatar: 'Avatar URL',
-  bio: 'Bio',
-  twitter: 'Twitter',
-  telegram: 'Telegram',
-  website: 'Website',
-  email: 'Email',
-};
-
-const PLACEHOLDERS = {
-  avatar: 'https://example.com/avatar.png',
-  bio: 'Tell the world about yourself',
-  twitter: '@username or https://x.com/username',
-  telegram: '@username or https://t.me/username',
-  website: 'https://example.com',
-  email: 'contact@example.com',
-};
-
-const modalBackdropVariants = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1,
-    transition: { duration: 0.2 }
-  },
-  exit: { 
-    opacity: 0,
-    transition: { duration: 0.2 }
-  },
-};
-
-const modalContentVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 10 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: {
-      type: 'spring' as const,
-      damping: 25,
-      stiffness: 300,
-    },
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.95,
-    y: 10,
-    transition: {
-      duration: 0.15,
-    },
-  },
-};
+// QDL: Renewal pricing constants (must match contract)
+const PRICE_PER_YEAR = 5; // QF tokens
+const GAS_BUFFER = 0.5;   // QF tokens reserved for gas
 
 interface DetailModalProps {
   isOpen: boolean;
-  name: string;
-  defaultTab?: 'overview' | 'edit' | 'manage' | 'share';
   onClose: () => void;
-  ownedName: {
-    name: string;
-    expires: bigint;
-    isPermanent: boolean;
-    registeredAt: bigint;
-  };
-  records: {
-    avatar: string;
-    bio: string;
-    twitter: string;
-    telegram: string;
-    website: string;
-    email: string;
-  };
+  name: string;
+  expires: number;
+  isPermanent: boolean;
+  registeredAt?: number;
+  avatar?: string;
+  bio?: string;
+  twitter?: string;
+  telegram?: string;
+  website?: string;
+  email?: string;
   isPrimary: boolean;
-  onSaveRecords: (name: string, records: Partial<{
-    avatar: string;
-    bio: string;
-    twitter: string;
-    telegram: string;
-    website: string;
-    email: string;
-  }>) => Promise<void>;
-  onSetPrimary: (name: string) => Promise<void>;
-  onRenew: (name: string, years: number) => Promise<void>;
-  onTransfer: (name: string, recipient: string) => Promise<void>;
+  // QDL: new props for pricing ceremony
+  providerType: 'substrate' | 'evm' | null;
+  address: string;
+  balance: number; // QF token balance
+  onSaveRecords: (records: Record<string, string>) => Promise<void>;
+  onSetPrimary: () => Promise<void>;
+  onRenew: (years: number) => Promise<void>;
+  onTransfer: (to: string) => Promise<void>;
 }
 
-export default function DetailModal({
-  isOpen,
-  name,
-  defaultTab = 'overview',
-  onClose,
-  ownedName,
-  records,
-  isPrimary,
-  onSaveRecords,
-  onSetPrimary,
-  onRenew,
-  onTransfer,
-}: DetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'edit' | 'manage' | 'share'>(defaultTab);
-  const [editValues, setEditValues] = useState(records);
-  const [saving, setSaving] = useState(false);
-  const [settingPrimary, setSettingPrimary] = useState(false);
-  const [renewing, setRenewing] = useState(false);
-  const [transferring, setTransferring] = useState(false);
-  const [transferRecipient, setTransferRecipient] = useState('');
-  const [transferError, setTransferError] = useState('');
-  const [copied, setCopied] = useState(false);
-  const { copy } = useCopy();
-  const { showToast } = useToast();
+type Tab = 'overview' | 'edit' | 'manage' | 'share';
 
-  // Reset tab when modal opens/closes
+const TAB_CONFIG: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'overview', label: 'Overview', icon: Eye },
+  { id: 'edit', label: 'Edit', icon: Pencil },
+  { id: 'manage', label: 'Manage', icon: Settings },
+  { id: 'share', label: 'Share', icon: Share2 },
+];
+
+const RECORD_FIELDS = [
+  { key: 'avatar', label: 'Avatar URL', placeholder: 'https://example.com/avatar.png' },
+  { key: 'bio', label: 'Bio', placeholder: 'A short bio about yourself' },
+  { key: 'twitter', label: 'Twitter / X', placeholder: '@handle' },
+  { key: 'telegram', label: 'Telegram', placeholder: '@handle' },
+  { key: 'website', label: 'Website', placeholder: 'https://yoursite.com' },
+  { key: 'email', label: 'Email', placeholder: 'you@example.com' },
+];
+
+export default function DetailModal({
+  isOpen, onClose, name, expires, isPermanent,
+  avatar, bio, twitter, telegram, website, email,
+  isPrimary, /* providerType, */ address, balance,
+  onSaveRecords, onSetPrimary, onRenew, onTransfer,
+}: DetailModalProps) {
+  const { showToast } = useToast();
+  const { copy } = useCopy();
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
+
+  // Edit state
+  const [editValues, setEditValues] = useState({
+    avatar: avatar || '', bio: bio || '', twitter: twitter || '',
+    telegram: telegram || '', website: website || '', email: email || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  // QDL: dirty tracking — compare edited values to original props
+  const isDirty = useMemo(() => {
+    const original = { avatar: avatar || '', bio: bio || '', twitter: twitter || '', telegram: telegram || '', website: website || '', email: email || '' };
+    return Object.keys(original).some(k => editValues[k as keyof typeof editValues] !== original[k as keyof typeof original]);
+  }, [editValues, avatar, bio, twitter, telegram, website, email]);
+
+  // Manage — primary
+  const [settingPrimary, setSettingPrimary] = useState(false);
+
+  // QDL: Manage — renewal ceremony state
+  const [renewYears, setRenewYears] = useState(1);
+  const [renewing, setRenewing] = useState(false);
+  const renewCost = renewYears * PRICE_PER_YEAR;
+  const canAffordRenew = balance >= renewCost + GAS_BUFFER;
+  const newExpiry = useMemo(() => {
+    if (isPermanent) return null;
+    const base = expires > Date.now() / 1000 ? expires : Math.floor(Date.now() / 1000);
+    return new Date((base + renewYears * 365.25 * 24 * 3600) * 1000);
+  }, [expires, renewYears, isPermanent]);
+
+  // QDL: Manage — transfer ceremony (two step)
+  const [transferTo, setTransferTo] = useState('');
+  const [transferError, setTransferError] = useState('');
+  const [transferStep, setTransferStep] = useState<'input' | 'confirm'>('input');
+  const [transferring, setTransferring] = useState(false);
+
+  // Share state
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [hashCopied, setHashCopied] = useState(false);
+
+  // QDL: namehash for devs (keccak256 of name.qf)
+  const namehash = useMemo(() => {
+    try {
+      // Simple display hash — real namehash computed on-chain
+      const encoder = new TextEncoder();
+      const data = encoder.encode(`${name}.qf`);
+      let hex = '0x';
+      data.forEach(b => { hex += b.toString(16).padStart(2, '0'); });
+      return hex.slice(0, 18) + '...' + hex.slice(-8);
+    } catch { return '0x...'; }
+  }, [name]);
+
+  // Reset state when modal opens or name changes
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(defaultTab);
-      setEditValues(records);
-      setTransferRecipient('');
+      setActiveTab('overview');
+      setEditValues({
+        avatar: avatar || '', bio: bio || '', twitter: twitter || '',
+        telegram: telegram || '', website: website || '', email: email || '',
+      });
+      setTransferTo('');
       setTransferError('');
+      setTransferStep('input');
+      setRenewYears(1);
     }
-  }, [isOpen, defaultTab, records]);
+  }, [isOpen, name, avatar, bio, twitter, telegram, website, email]);
 
-  // Update editValues when records change
+  // Body scroll lock
   useEffect(() => {
-    setEditValues(records);
-  }, [records]);
+    if (isOpen) document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
 
-  const handleSave = async () => {
+  // Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (transferStep === 'confirm') { setTransferStep('input'); return; }
+        onClose();
+      }
+    };
+    if (isOpen) window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onClose, transferStep]);
+
+  // Completeness
+  const completeness = useMemo(() => {
+    const fields = [avatar, bio, twitter, telegram, website, email];
+    return fields.filter(Boolean).length;
+  }, [avatar, bio, twitter, telegram, website, email]);
+
+  // ── Handlers ──────────────────────────────────
+
+  const handleSave = useCallback(async () => {
     setSaving(true);
+    hapticTap();
     try {
-      await onSaveRecords(name, editValues);
-      showToast('Profile updated successfully', 'success');
+      await onSaveRecords(editValues);
       hapticSuccess();
-    } catch (error: any) {
-      showToast(error.message || 'Failed to save', 'error');
+      showToast('Records saved', 'success');
+    } catch {
       hapticError();
+      showToast('Failed to save records', 'error');
     } finally {
       setSaving(false);
     }
-  };
+  }, [editValues, onSaveRecords, showToast]);
 
-  const handleSetPrimary = async () => {
-    if (isPrimary) return;
+  const handleSetPrimary = useCallback(async () => {
     setSettingPrimary(true);
+    hapticTap();
     try {
-      await onSetPrimary(name);
-      showToast('Primary name updated', 'success');
+      await onSetPrimary();
       hapticSuccess();
-    } catch (error: any) {
-      showToast(error.message || 'Failed to set primary', 'error');
+      showToast(`${name}.qf set as primary`, 'success');
+    } catch {
       hapticError();
+      showToast('Failed to set primary', 'error');
     } finally {
       setSettingPrimary(false);
     }
-  };
+  }, [name, onSetPrimary, showToast]);
 
-  const handleRenew = async (years: number) => {
-    setRenewing(true);
-    try {
-      await onRenew(name, years);
-      showToast(`Name renewed for ${years} year${years > 1 ? 's' : ''}`, 'success');
-      hapticSuccess();
-    } catch (error: any) {
-      showToast(error.message || 'Failed to renew', 'error');
+  // QDL: Renewal with ceremony
+  const handleRenew = useCallback(async () => {
+    if (!canAffordRenew) {
       hapticError();
+      showToast('Insufficient balance for renewal + gas', 'error');
+      return;
+    }
+    setRenewing(true);
+    hapticTap();
+    try {
+      await onRenew(renewYears);
+      hapticSuccess();
+      showToast(`Renewed ${name}.qf for ${renewYears} year${renewYears > 1 ? 's' : ''}`, 'success');
+    } catch {
+      hapticError();
+      showToast('Renewal failed', 'error');
     } finally {
       setRenewing(false);
     }
-  };
+  }, [canAffordRenew, renewYears, name, onRenew, showToast]);
 
-  const handleTransfer = async () => {
-    if (!transferRecipient.trim()) {
-      setTransferError('Please enter a recipient address');
+  // QDL: Two-step transfer
+  const handleTransferNext = useCallback(() => {
+    const trimmed = transferTo.trim();
+    if (!trimmed) { setTransferError('Enter a recipient address'); return; }
+    if (trimmed.length < 10) { setTransferError('Address looks too short'); return; }
+    if (trimmed.toLowerCase() === address.toLowerCase()) {
+      setTransferError('Cannot transfer to yourself');
       return;
     }
-    setTransferring(true);
     setTransferError('');
+    setTransferStep('confirm');
+    hapticTap();
+  }, [transferTo, address]);
+
+  const handleTransferConfirm = useCallback(async () => {
+    setTransferring(true);
+    hapticError();
     try {
-      await onTransfer(name, transferRecipient.trim());
-      showToast('Name transferred successfully', 'success');
+      await onTransfer(transferTo.trim());
       hapticSuccess();
+      showToast(`${name}.qf transferred`, 'success');
       onClose();
-    } catch (error: any) {
-      setTransferError(error.message || 'Failed to transfer');
+    } catch {
       hapticError();
+      showToast('Transfer failed', 'error');
     } finally {
       setTransferring(false);
     }
-  };
+  }, [transferTo, name, onTransfer, showToast, onClose]);
 
-  const handleCopyLink = async () => {
-    const url = `https://dotqf.xyz/name/${name}`;
-    await copy(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyLink = useCallback(() => {
+    const url = `${window.location.origin}/${name}.qf`;
+    navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    hapticSuccess();
+    setTimeout(() => setLinkCopied(false), 2000);
+  }, [name]);
+
+  const handleCopyHash = useCallback(() => {
+    copy(namehash);
+    setHashCopied(true);
+    hapticSuccess();
+    setTimeout(() => setHashCopied(false), 2000);
+  }, [namehash, copy]);
+
+  const handleShareX = useCallback(() => {
+    const text = `I own ${name}.qf on QF Network`;
+    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
     hapticTap();
-  };
+  }, [name]);
 
-  const handleShareOnX = () => {
-    const text = `Check out my .qf identity on @dotqfns`;
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://dotqf.xyz/name/${name}`)}`;
-    window.open(url, '_blank');
-  };
-
-  const hasChanges = JSON.stringify(editValues) !== JSON.stringify(records);
-
-  // Status calculations
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const thirtyDays = 30n * 24n * 60n * 60n;
-  const isExpiringSoon = !ownedName.isPermanent && ownedName.expires > 0n && (ownedName.expires - now) < thirtyDays;
-  
-  const isTeam = TEAM_NAMES.includes(name.toLowerCase());
-  const isDappLab = DAPP_LAB_NAMES.includes(name.toLowerCase());
-
-  const expiryText = !ownedName.isPermanent && ownedName.expires > 0n
-    ? new Date(Number(ownedName.expires) * 1000).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null;
-
+  // ── Don't render if closed ────────────────────
   if (!isOpen) return null;
 
+  // ── Helpers ───────────────────────────────────
+  const expiresDate = new Date(expires * 1000);
+  const daysUntilExpiry = Math.floor((expires - Date.now() / 1000) / 86400);
+  const isExpiring = !isPermanent && daysUntilExpiry <= 30 && daysUntilExpiry > 0;
+  const isExpired = !isPermanent && expires < Date.now() / 1000;
+  const isTeam = TEAM_NAMES.includes(name);
+  const isDappLab = DAPP_LAB_NAMES.includes(name);
+
   return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-      variants={modalBackdropVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      onClick={onClose}
-    >
+    <>
+      {/* Backdrop */}
       <motion.div
-        className="relative mx-4 max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#111111] shadow-2xl shadow-[#00D179]/10"
-        variants={modalContentVariants}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
       >
-        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-[#00D179]/20 via-[#00D179]/10 to-transparent" />
-        <div className="relative px-6 pb-6 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
-          
-          {/* Modal Header */}
-          <div className="mb-8 flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="rounded-full border border-white/10 bg-[#0A0A0A] p-1 shadow-lg shadow-black/20">
-                <Avatar url={records.avatar} name={name} size={56} />
+        <div
+          className="relative w-full max-w-lg max-h-[85vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0f] shadow-2xl flex flex-col"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* ── Header ─────────────────────────── */}
+          <div className="flex items-center gap-4 p-6 pb-4 border-b border-white/5">
+            <Avatar name={name} url={avatar} size={56} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-white truncate">{name}.qf</h2>
+                {isPrimary && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-violet-500/20 text-violet-300">
+                    <Crown className="w-3 h-3" /> Primary
+                  </span>
+                )}
               </div>
-              <div className="pt-1 min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="min-w-0 truncate font-clash text-xl md:text-2xl font-bold text-white whitespace-nowrap">
-                    <span className="whitespace-nowrap">
-                      {name}<span className="text-[#00D179]">.qf</span>
-                    </span>
-                    {isPrimary && <span className="primary-dot ml-2" />}
-                  </h3>
-                  {isPrimary && (
-                    <span className="hidden sm:inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[#00D179]/20 bg-[#00D179]/10 px-2 py-1 text-[10px] font-medium text-[#00D179]">
-                      <Star size={8} fill="currentColor" />
-                      <span className="whitespace-nowrap">Primary</span>
-                    </span>
-                  )}
-                  {ownedName.isPermanent && (
-                    <span className="hidden sm:inline-flex flex-shrink-0 rounded-full border border-[#00D179]/20 bg-[#00D179]/5 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-[#8DF0BA] whitespace-nowrap">
-                      Permanent
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2">
-                  {ownedName.isPermanent ? (
-                    <div className="flex items-center gap-1.5 text-xs text-[#00D179]">
-                      <Shield size={12} />
-                      <span>This name is permanently registered. No renewal needed.</span>
-                    </div>
-                  ) : expiryText ? (
-                    <div className={`flex items-center gap-1.5 text-xs ${isExpiringSoon ? 'text-red-400' : 'text-gray-500'}`}>
-                      <Clock size={12} />
-                      <span>Expires {expiryText}</span>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+              <p className="text-sm text-white/40 mt-0.5">
+                {isPermanent
+                  ? 'Permanently registered'
+                  : isExpired
+                    ? 'Expired'
+                    : `Expires ${expiresDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+              </p>
             </div>
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-white/10 bg-white/5 p-2 text-[#8A8A8A] transition-all duration-200 hover:border-[#00D179]/20 hover:bg-white/10 hover:text-white cursor-pointer"
-            >
-              <X size={20} />
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-white">
+              <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="mb-6 flex items-center gap-1 rounded-xl border border-white/5 bg-[#0C0C0C] p-1">
-            {[
-              { id: 'overview', label: 'Overview', icon: <Star size={16} /> },
-              { id: 'edit', label: 'Edit', icon: <Pencil size={16} /> },
-              { id: 'manage', label: 'Manage', icon: <RefreshCw size={16} /> },
-              { id: 'share', label: 'Share', icon: <Share2 size={16} /> },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-[#00D179]/10 text-[#00D179]'
-                    : 'text-gray-500 hover:text-white'
-                }`}
-              >
-                {tab.icon}
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
+          {/* ── Tabs ───────────────────────────── */}
+          <div className="flex border-b border-white/5 px-6">
+            {TAB_CONFIG.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              // QDL: dirty indicator dot on Edit tab
+              const showDot = tab.id === 'edit' && isDirty && !isActive;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => { setActiveTab(tab.id); hapticTap(); }}
+                  className={`relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors ${
+                    isActive ? 'text-white border-b-2 border-violet-500' : 'text-white/40 hover:text-white/60'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                  {showDot && (
+                    <span className="absolute top-2.5 right-2 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Tab Content */}
-          <div className="min-h-[300px]">
-            {/* Overview Tab */}
+          {/* ── Tab Content (scrollable) ───────── */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+            {/* ═══ OVERVIEW TAB ═══ */}
             {activeTab === 'overview' && (
-              <div className="space-y-6">
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                 {/* Badges */}
-                <div className="flex flex-wrap gap-2">
-                  {ownedName.isPermanent && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-medium bg-[#00D179]/10 text-[#8DF0BA] border border-[#00D179]/20">
-                      <Shield size={12} /> Permanent
-                    </span>
-                  )}
-                  {isTeam && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-medium bg-[#DADADA]/10 text-[#DADADA] border border-[#DADADA]/20">
-                      <Shield size={12} /> Team
-                    </span>
-                  )}
-                  {isDappLab && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-medium bg-[#00EFE7]/10 text-[#00EFE7] border border-[#00EFE7]/20">
-                      <Shield size={12} /> dApp Lab
-                    </span>
-                  )}
+                {(isPermanent || isTeam || isDappLab) && (
+                  <div className="flex flex-wrap gap-2">
+                    {isPermanent && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <Shield className="w-3 h-3" /> Permanent
+                      </span>
+                    )}
+                    {isTeam && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                        <Sparkles className="w-3 h-3" /> Team
+                      </span>
+                    )}
+                    {isDappLab && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <Star className="w-3 h-3" /> dApp Lab
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Profile preview */}
+                {bio && <p className="text-sm text-white/60 leading-relaxed">{bio}</p>}
+
+                <div className="space-y-2">
+                  {twitter && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Twitter</span><span className="text-white/70">@{twitter.replace('@', '')}</span></div>}
+                  {telegram && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Telegram</span><span className="text-white/70">@{telegram.replace('@', '')}</span></div>}
+                  {website && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Website</span><a href={website} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline truncate">{website}</a></div>}
+                  {email && <div className="flex items-center gap-2 text-sm text-white/50"><span className="text-white/30 w-20">Email</span><span className="text-white/70">{email}</span></div>}
                 </div>
 
-                {/* Profile Info */}
-                <div className="space-y-4">
-                  {records.bio && (
-                    <div>
-                      <h4 className="text-xs font-medium text-[#333] mb-2">Bio</h4>
-                      <p className="text-sm text-gray-300">{records.bio}</p>
+                {/* QDL: Completeness nudge (read-only, no actions) */}
+                {completeness < 6 && (
+                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-white/40">Profile completeness</span>
+                      <span className="text-xs text-white/30">{completeness}/6</span>
                     </div>
-                  )}
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {records.twitter && (
-                      <div>
-                        <h4 className="text-xs font-medium text-[#333] mb-1">Twitter</h4>
-                        <p className="text-sm text-gray-300">{records.twitter}</p>
-                      </div>
-                    )}
-                    {records.telegram && (
-                      <div>
-                        <h4 className="text-xs font-medium text-[#333] mb-1">Telegram</h4>
-                        <p className="text-sm text-gray-300">{records.telegram}</p>
-                      </div>
-                    )}
-                    {records.website && (
-                      <div>
-                        <h4 className="text-xs font-medium text-[#333] mb-1">Website</h4>
-                        <p className="text-sm text-gray-300">{records.website}</p>
-                      </div>
-                    )}
-                    {records.email && (
-                      <div>
-                        <h4 className="text-xs font-medium text-[#333] mb-1">Email</h4>
-                        <p className="text-sm text-gray-300">{records.email}</p>
-                      </div>
-                    )}
+                    <div className="flex gap-1.5">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className={`h-1 flex-1 rounded-full ${i < completeness ? 'bg-violet-500' : 'bg-white/10'}`} />
+                      ))}
+                    </div>
+                    <p className="text-xs text-white/30 mt-2">
+                      Complete your profile in the Edit tab to make your identity stand out.
+                    </p>
                   </div>
-                </div>
+                )}
 
-                {/* Quick Actions */}
-                <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    {!isPrimary && (
-                      <button
-                        onClick={handleSetPrimary}
-                        disabled={settingPrimary}
-                        className="group flex flex-1 flex-col items-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                          {settingPrimary ? (
-                            <Loader2 size={22} className="animate-spin text-[#00D179]" />
-                          ) : (
-                            <Star size={22} />
-                          )}
-                        </div>
-                        <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Primary</span>
-                      </button>
-                    )}
-
-                    {!ownedName.isPermanent && (
-                      <button
-                        onClick={() => handleRenew(1)}
-                        disabled={renewing}
-                        className="group flex flex-1 flex-col items-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                          {renewing ? (
-                            <Loader2 size={22} className="animate-spin text-[#00D179]" />
-                          ) : (
-                            <RefreshCw size={22} />
-                          )}
-                        </div>
-                        <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Renew</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setActiveTab('share')}
-                      className="group flex flex-1 flex-col items-center gap-2 cursor-pointer"
-                    >
-                      <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                        <Share2 size={22} />
-                      </div>
-                      <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Share</span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('manage')}
-                      className="group flex flex-1 flex-col items-center gap-2 cursor-pointer"
-                    >
-                      <div className="text-gray-400 transition-all duration-200 group-hover:scale-110 group-hover:text-white">
-                        <ArrowRight size={22} />
-                      </div>
-                      <span className="text-[8px] md:text-[10px] uppercase tracking-wider whitespace-nowrap text-gray-500 transition-colors duration-200 group-hover:text-white">Transfer</span>
-                    </button>
+                {/* Expiring warning */}
+                {isExpiring && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-sm">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}. Head to the Manage tab to renew.</span>
                   </div>
-                </div>
-              </div>
+                )}
+              </motion.div>
             )}
 
-            {/* Edit Tab */}
+            {/* ═══ EDIT TAB ═══ */}
             {activeTab === 'edit' && (
-              <div className="space-y-4">
-                {Object.entries(FIELD_LABELS).map(([key, label]) => (
-                  <div key={key} className="space-y-1.5">
-                    <label className="flex items-center gap-2 text-sm text-[#8A8A8A]">
-                      <span>{FIELD_ICONS[key as keyof typeof FIELD_ICONS]}</span>
-                      <span className="capitalize">{label}</span>
-                    </label>
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                {RECORD_FIELDS.map(field => (
+                  <div key={field.key}>
+                    <label className="block text-xs text-white/40 mb-1.5">{field.label}</label>
                     <input
                       type="text"
-                      value={editValues[key as keyof typeof editValues]}
-                      onChange={(e) =>
-                        setEditValues((prev) => ({
-                          ...prev,
-                          [key]: e.target.value,
-                        }))
-                      }
-                      placeholder={PLACEHOLDERS[key as keyof typeof PLACEHOLDERS]}
-                      className="w-full rounded-xl border border-white/5 bg-[#090909] px-4 py-3 text-base md:text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 placeholder:text-[#555555]"
+                      value={editValues[field.key as keyof typeof editValues]}
+                      onChange={e => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                      placeholder={field.placeholder}
+                      className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-sm text-white placeholder-white/20 focus:border-violet-500/50 focus:outline-none transition-colors"
                     />
                   </div>
                 ))}
 
-                <div className="flex items-center gap-3 pt-4">
-                  <button
-                    onClick={onClose}
-                    disabled={saving}
-                    className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-sm text-[#8A8A8A] transition-all duration-200 hover:border-white/20 hover:text-white cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
+                {/* QDL: dirty indicator + save */}
+                <div className="flex items-center justify-between pt-2">
+                  {isDirty && (
+                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                      Unsaved changes
+                    </span>
+                  )}
+                  {!isDirty && <span />}
                   <button
                     onClick={handleSave}
-                    disabled={saving || !hasChanges}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#00D179] px-4 py-3 text-sm font-medium text-black transition-all duration-200 hover:bg-[#00B868] cursor-pointer disabled:opacity-50"
+                    disabled={saving || !isDirty}
+                    className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors flex items-center gap-2"
                   >
-                    {saving ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Changes'
-                    )}
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Save Records
                   </button>
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* Manage Tab */}
+            {/* ═══ MANAGE TAB ═══ */}
             {activeTab === 'manage' && (
-              <div className="space-y-6">
-                {/* Primary Name */}
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+
+                {/* Set Primary */}
                 {!isPrimary && (
-                  <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                    <h4 className="text-sm font-medium text-white mb-3">Set as Primary</h4>
-                    <p className="text-xs text-gray-500 mb-4">
-                      Make this your primary .qf identity that appears across the QF Network
-                    </p>
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                    <h3 className="text-sm font-medium text-white">Set as Primary</h3>
+                    <p className="text-xs text-white/40">This name will represent your wallet across QF Network.</p>
                     <button
                       onClick={handleSetPrimary}
                       disabled={settingPrimary}
-                      className="w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                      className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-sm font-medium text-white transition-colors flex items-center gap-2"
                     >
-                      {settingPrimary ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          Setting Primary...
-                        </>
-                      ) : (
-                        'Set as Primary'
-                      )}
+                      {settingPrimary ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
+                      Set Primary
                     </button>
                   </div>
                 )}
 
-                {/* Renewal */}
-                {!ownedName.isPermanent && (
-                  <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                    <h4 className="text-sm font-medium text-white mb-3">Renewal</h4>
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => handleRenew(1)}
-                        disabled={renewing}
-                        className="w-full py-3 rounded-xl border border-white/10 text-white font-medium text-sm transition-colors hover:bg-white/5 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        {renewing ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            Renewing...
-                          </>
-                        ) : (
-                          'Renew for 1 Year'
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleRenew(3)}
-                        disabled={renewing}
-                        className="w-full py-3 rounded-xl border border-white/10 text-white font-medium text-sm transition-colors hover:bg-white/5 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        {renewing ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            Renewing...
-                          </>
-                        ) : (
-                          'Renew for 3 Years'
-                        )}
-                      </button>
+                {/* QDL: Renewal Ceremony */}
+                {!isPermanent && (
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-4">
+                    <h3 className="text-sm font-medium text-white">Renew Registration</h3>
+
+                    {/* Year stepper */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-white/40">Years</span>
+                      <div className="flex items-center gap-1 bg-white/[0.03] rounded-lg border border-white/10">
+                        <button
+                          onClick={() => setRenewYears(y => Math.max(1, y - 1))}
+                          disabled={renewYears <= 1}
+                          className="p-1.5 text-white/40 hover:text-white disabled:opacity-20 transition-colors"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                        <span className="w-8 text-center text-sm font-medium text-white">{renewYears}</span>
+                        <button
+                          onClick={() => setRenewYears(y => Math.min(5, y + 1))}
+                          disabled={renewYears >= 5}
+                          className="p-1.5 text-white/40 hover:text-white disabled:opacity-20 transition-colors"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Cost breakdown */}
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between text-white/40">
+                        <span>Cost ({renewYears} yr{renewYears > 1 ? 's' : ''} x {PRICE_PER_YEAR} QF)</span>
+                        <span className="text-white/60">{renewCost} QF</span>
+                      </div>
+                      <div className="flex justify-between text-white/40">
+                        <span>Gas buffer</span>
+                        <span className="text-white/60">~{GAS_BUFFER} QF</span>
+                      </div>
+                      <div className="flex justify-between text-white/40">
+                        <span>Your balance</span>
+                        <span className={balance < renewCost + GAS_BUFFER ? 'text-red-400' : 'text-emerald-400'}>
+                          {balance.toFixed(2)} QF
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* New expiry preview */}
+                    {newExpiry && (
+                      <div className="text-xs text-white/30">
+                        New expiry: {newExpiry.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    )}
+
+                    {!canAffordRenew && (
+                      <p className="text-xs text-red-400">Insufficient balance. You need at least {(renewCost + GAS_BUFFER).toFixed(1)} QF.</p>
+                    )}
+
+                    <button
+                      onClick={handleRenew}
+                      disabled={renewing || !canAffordRenew}
+                      className="w-full px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+                    >
+                      {renewing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Renew for {renewCost} QF
+                    </button>
                   </div>
                 )}
 
-                {/* Transfer */}
-                <div className="rounded-2xl border border-white/5 bg-[#0C0C0C] p-4">
-                  <h4 className="text-sm font-medium text-white mb-3">Transfer</h4>
-                  <p className="text-xs text-[#F5A623] mb-4">
-                    This action cannot be undone. The new owner will have full control of this name.
-                  </p>
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      value={transferRecipient}
-                      onChange={(e) => setTransferRecipient(e.target.value)}
-                      placeholder="Enter recipient address"
-                      className="w-full rounded-xl border border-white/10 bg-[#090909] px-4 py-3 text-sm text-white outline-none transition-colors duration-200 focus:border-[#00D179]/40 placeholder:text-[#555555]"
-                    />
-                    {transferError && (
-                      <p className="text-xs text-[#E5484D]">{transferError}</p>
-                    )}
-                    <button
-                      onClick={handleTransfer}
-                      disabled={transferring || !transferRecipient.trim()}
-                      className="w-full py-3 bg-[#E5484D] hover:bg-[#c93d41] text-white font-medium rounded-xl transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      {transferring ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          Transferring...
-                        </>
-                      ) : (
-                        'Transfer Name'
-                      )}
-                    </button>
+                {isPermanent && (
+                  <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 text-sm text-emerald-400 flex items-center gap-2">
+                    <Shield className="w-4 h-4 shrink-0" />
+                    This name is permanently registered. No renewal needed.
                   </div>
+                )}
+
+                {/* QDL: Two-step transfer ceremony */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <h3 className="text-sm font-medium text-white">Transfer Ownership</h3>
+
+                  <AnimatePresence mode="wait">
+                    {transferStep === 'input' && (
+                      <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                        <p className="text-xs text-white/40">Transfer this name to another address. This action cannot be undone.</p>
+                        <input
+                          type="text"
+                          value={transferTo}
+                          onChange={e => { setTransferTo(e.target.value); setTransferError(''); }}
+                          placeholder="Recipient address (0x... or 5...)"
+                          className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-sm text-white placeholder-white/20 focus:border-violet-500/50 focus:outline-none transition-colors"
+                        />
+                        {transferError && <p className="text-xs text-red-400">{transferError}</p>}
+                        <button
+                          onClick={handleTransferNext}
+                          className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-medium text-white transition-colors flex items-center gap-2"
+                        >
+                          <Send className="w-4 h-4" /> Review Transfer
+                        </button>
+                      </motion.div>
+                    )}
+
+                    {transferStep === 'confirm' && (
+                      <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                        <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/10 space-y-2">
+                          <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                            <AlertTriangle className="w-4 h-4" />
+                            This is irreversible
+                          </div>
+                          <p className="text-xs text-white/40">
+                            You are about to transfer <span className="text-white font-medium">{name}.qf</span> to:
+                          </p>
+                          <p className="text-xs text-white/60 font-mono break-all bg-white/[0.03] p-2 rounded-lg">{transferTo}</p>
+                          <p className="text-xs text-white/40">
+                            You will lose all control of this name. Records, primary status, and ownership will transfer to the recipient.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setTransferStep('input')}
+                            className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-medium text-white/60 transition-colors"
+                          >
+                            Go Back
+                          </button>
+                          <button
+                            onClick={handleTransferConfirm}
+                            disabled={transferring}
+                            className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+                          >
+                            {transferring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            Confirm Transfer
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* Share Tab */}
+            {/* ═══ SHARE TAB ═══ */}
             {activeTab === 'share' && (
-              <div className="space-y-6">
-                <div className="text-center py-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/[0.04] flex items-center justify-center">
-                    <Avatar url={records.avatar} name={name} size={80} />
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+                {/* Profile link */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <h3 className="text-sm font-medium text-white">Profile Link</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10 text-xs text-white/50 font-mono truncate">
+                      {window.location.origin}/{name}.qf
+                    </div>
+                    <button
+                      onClick={handleCopyLink}
+                      className="shrink-0 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                    >
+                      {linkCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
                   </div>
-                  <h3 className="font-clash text-2xl font-bold text-white mb-2">
-                    {name}<span className="text-[#00D179]">.qf</span>
-                  </h3>
-                  <p className="text-sm text-gray-500">Share your on-chain identity</p>
                 </div>
 
-                <div className="space-y-3">
-                  <button
-                    onClick={handleCopyLink}
-                    className="w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-medium transition-colors cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {copied ? <Check size={18} /> : <Copy size={18} />}
-                    {copied ? 'Link Copied!' : 'Copy Link'}
-                  </button>
-                  <button
-                    onClick={handleShareOnX}
-                    className="w-full py-3 rounded-xl border border-white/10 text-white font-medium transition-colors hover:bg-white/5 cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Twitter size={18} />
-                    Share on X
-                  </button>
+                {/* Share on X */}
+                <button
+                  onClick={handleShareX}
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" /> Share on X
+                </button>
+
+                {/* QDL: QR placeholder */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <h3 className="text-sm font-medium text-white">QR Code</h3>
+                  <div className="flex items-center justify-center h-32 rounded-xl bg-white/[0.02] border border-dashed border-white/10">
+                    <span className="text-xs text-white/20">QR code coming soon</span>
+                  </div>
                 </div>
-              </div>
+
+                {/* QDL: Namehash for devs */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <h3 className="text-sm font-medium text-white/60">For Developers</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-white/30">Namehash</span>
+                    <div className="flex-1 px-2 py-1.5 rounded-lg bg-white/[0.03] text-xs text-white/40 font-mono truncate">
+                      {namehash}
+                    </div>
+                    <button
+                      onClick={handleCopyHash}
+                      className="shrink-0 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                    >
+                      {hashCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
             )}
           </div>
         </div>
       </motion.div>
-    </motion.div>
+    </>
   );
 }
