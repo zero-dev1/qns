@@ -16,6 +16,7 @@ import {
   getQFBalance,
   getSubstrateQFBalance,
   formatQF,
+  checkAvailability,
 } from '../utils/qns';
 import { useWalletStore } from '../stores/walletStore';
 import {
@@ -193,32 +194,38 @@ function ProvenancePanel({
 
 function LedgerPanel({ events }: { events: LedgerEvent[] }) {
   return (
-    <div className="relative pl-4">
-      {/* Vertical line */}
-      <div className="absolute left-[3px] top-3 bottom-3 w-px bg-white/[0.06]" />
+    <div className="relative">
+      {/* Scrollable container — hidden scrollbar */}
+      <div className="relative pl-4 max-h-[320px] overflow-y-auto scrollbar-hide">
+        {/* Vertical line */}
+        <div className="absolute left-[3px] top-3 bottom-3 w-px bg-white/[0.06]" />
 
-      <div className="space-y-4">
-        {events.map((event, i) => (
-          <div key={i} className="relative">
-            {/* Dot on the line */}
-            <div className="absolute -left-4 top-[5px] w-[7px] h-[7px] rounded-full bg-[#00D179] ring-2 ring-[#0c0c0c]" />
+        <div className="space-y-4">
+          {events.map((event, i) => (
+            <div key={i} className="relative">
+              {/* Dot on the line */}
+              <div className="absolute -left-4 top-[5px] w-[7px] h-[7px] rounded-full bg-[#00D179] ring-2 ring-[#0c0c0c]" />
 
-            <p className="text-xs text-[#888] leading-tight">{event.label}</p>
-            {event.detail && (
-              <p className="text-[11px] text-[#444] mt-0.5 leading-tight">{event.detail}</p>
-            )}
-            <p className="text-[10px] text-[#333] mt-1">{event.date}</p>
-          </div>
-        ))}
+              <p className="text-xs text-[#888] leading-tight">{event.label}</p>
+              {event.detail && (
+                <p className="text-[11px] text-[#444] mt-0.5 leading-tight">{event.detail}</p>
+              )}
+              <p className="text-[10px] text-[#333] mt-1">{event.date}</p>
+            </div>
+          ))}
 
-        {/* Ghost entry if few events */}
-        {events.length <= 2 && (
-          <div className="relative">
-            <div className="absolute -left-4 top-[5px] w-[7px] h-[7px] rounded-full bg-white/[0.04] ring-2 ring-[#0c0c0c]" />
-            <p className="text-[11px] text-[#222] italic">What happens next is up to you</p>
-          </div>
-        )}
+          {/* Ghost entry if few events */}
+          {events.length <= 2 && (
+            <div className="relative">
+              <div className="absolute -left-4 top-[5px] w-[7px] h-[7px] rounded-full bg-white/[0.04] ring-2 ring-[#0c0c0c]" />
+              <p className="text-[11px] text-[#222] italic">What happens next is up to you</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Bottom fade gradient — only visible when scrollable */}
+      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0c0c0c] to-transparent pointer-events-none" />
     </div>
   );
 }
@@ -228,12 +235,48 @@ function LedgerPanel({ events }: { events: LedgerEvent[] }) {
 function VisitorCTA() {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [ctaStatus, setCtaStatus] = useState<'idle' | 'available' | 'taken'>('idle');
 
-  const handleSubmit = (e: FormEvent) => {
+  // Clear "taken" state when user types
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchValue(e.target.value);
+    if (ctaStatus === 'taken') setCtaStatus('idle');
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const cleaned = searchValue.trim().toLowerCase().replace(/\.qf$/, '');
-    if (cleaned) {
+    if (!cleaned || checking) return;
+
+    // Basic local validation first
+    const validation = validateNameLocal(cleaned);
+    if (!validation.valid) {
+      setCtaStatus('taken');
+      setTimeout(() => setCtaStatus('idle'), 2000);
+      return;
+    }
+
+    setChecking(true);
+    setCtaStatus('idle');
+
+    try {
+      const available = await checkAvailability(cleaned);
+      if (available) {
+        setCtaStatus('available');
+        // Brief green flash then navigate
+        setTimeout(() => {
+          navigate(`/?search=${encodeURIComponent(cleaned)}`);
+        }, 400);
+      } else {
+        setCtaStatus('taken');
+        setTimeout(() => setCtaStatus('idle'), 2000);
+      }
+    } catch {
+      // Network error — fall back to redirect (hero will handle)
       navigate(`/?search=${encodeURIComponent(cleaned)}`);
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -247,9 +290,15 @@ function VisitorCTA() {
           <input
             type="text"
             value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
+            onChange={handleChange}
             placeholder="Search a name"
-            className="w-full rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 pr-12 text-sm text-white outline-none transition-all focus:border-[#00D179]/30 placeholder:text-[#333] font-satoshi"
+            className={`w-full rounded-lg border bg-white/[0.02] px-3 py-2 pr-12 text-sm text-white outline-none transition-all placeholder:text-[#333] font-satoshi ${
+              ctaStatus === 'taken'
+                ? 'border-red-400/40'
+                : ctaStatus === 'available'
+                  ? 'border-[#00D179]/40'
+                  : 'border-white/[0.06] focus:border-[#00D179]/30'
+            }`}
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00D179] text-xs font-medium select-none qf-suffix-live">
             .qf
@@ -257,9 +306,24 @@ function VisitorCTA() {
         </div>
         <button
           type="submit"
-          className="shrink-0 px-4 py-2 rounded-lg bg-[#00D179] hover:bg-[#00B868] text-black text-sm font-semibold transition-colors"
+          disabled={checking}
+          className={`shrink-0 px-4 py-2 rounded-lg text-sm font-semibold transition-all min-w-[72px] flex items-center justify-center ${
+            ctaStatus === 'taken'
+              ? 'bg-red-400/20 text-red-400'
+              : ctaStatus === 'available'
+                ? 'bg-[#00D179] text-black'
+                : 'bg-[#00D179] hover:bg-[#00B868] text-black'
+          } ${checking ? 'opacity-70' : ''}`}
         >
-          Claim
+          {checking ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : ctaStatus === 'taken' ? (
+            'Taken'
+          ) : ctaStatus === 'available' ? (
+            <Check className="w-4 h-4" />
+          ) : (
+            'Claim'
+          )}
         </button>
       </form>
     </div>
@@ -584,7 +648,7 @@ export default function ProfilePage() {
       <>
         <Navbar />
         <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12 pt-24">
-          <div className="w-full max-w-5xl rounded-2xl border border-white/[0.04] bg-[#0c0c0c] overflow-hidden animate-pulse">
+          <div className="w-full max-w-[1120px] rounded-2xl border border-white/[0.04] bg-[#0c0c0c] overflow-hidden animate-pulse">
             <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_200px]">
               {/* Left skeleton */}
               <div className="hidden md:block p-5 border-r border-white/[0.04]">
@@ -634,7 +698,7 @@ export default function ProfilePage() {
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="w-full max-w-5xl rounded-2xl border border-white/[0.04] bg-[#0c0c0c] overflow-hidden"
+            className="w-full max-w-[1120px] rounded-2xl border border-white/[0.04] bg-[#0c0c0c] overflow-hidden"
           >
             {/* Noise overlay */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{
@@ -709,7 +773,7 @@ export default function ProfilePage() {
       <Navbar />
       <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12 pt-24">
         {/* Ambient glow behind the frame */}
-        <div className="relative w-full max-w-5xl">
+        <div className="relative w-full max-w-[1120px]">
           <div
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full pointer-events-none -z-10"
             style={{ background: 'radial-gradient(ellipse, rgba(0,209,121,0.03) 0%, transparent 70%)' }}
@@ -753,8 +817,8 @@ export default function ProfilePage() {
                   }}
                 />
 
-                {/* Action icons — top right */}
-                <div className="absolute top-4 right-4 flex gap-2 z-20">
+                {/* Action icons — right-aligned row on mobile, absolute top-right on desktop */}
+                <div className="flex justify-end gap-2 mb-3 md:mb-0 md:absolute md:top-4 md:right-4 z-20">
                   <button
                     onClick={openGiftModal}
                     className="w-11 h-11 rounded-full bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-colors"
@@ -776,7 +840,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Name */}
-                <div className="text-center mb-6 pt-2">
+                <div className="text-center mb-6 md:pt-2">
                   <h1 className="font-clash text-4xl md:text-5xl font-bold text-white">
                     {profile.name}<span className="text-[#00D179]">.qf</span>
                   </h1>

@@ -261,6 +261,15 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+/* ── Hidden scrollbar utility ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Terminal container glow on hover ── */
 .terminal-container {
   transition: border-color 0.4s ease, box-shadow 0.4s ease;

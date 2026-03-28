@@ -64,9 +64,11 @@ const SEQUENCE: TerminalLine[] = [
       { text: '  → used by ', color: '#555' },
       { text: 'QFPay', color: '#0040FF' },
       { text: ' · ', color: '#333' },
-      { text: 'Quorum', color: '#6366F1' },
+      { text: 'QFPad', color: '#89FBFE' },
       { text: ' · ', color: '#333' },
       { text: 'NucleusX', color: '#5E3AAE' },
+      { text: ' · ', color: '#333' },
+      { text: 'Quorum', color: '#6366F1' },
     ],
   },
 ];
@@ -165,6 +167,7 @@ export default function HowItWorks() {
   const [visibleCount, setVisibleCount] = useState(0);
   const [activeTypingIndex, setActiveTypingIndex] = useState<number | null>(null);
   const [typingDone, setTypingDone] = useState(false);
+  const [runKey, setRunKey] = useState(0);
 
   // Sequential line reveal engine
   useEffect(() => {
@@ -172,6 +175,11 @@ export default function HowItWorks() {
 
     let cancelled = false;
     let currentIndex = 0;
+
+    // Reset state for this run
+    setVisibleCount(0);
+    setActiveTypingIndex(null);
+    setTypingDone(false);
 
     const showNext = () => {
       if (cancelled || currentIndex >= SEQUENCE.length) return;
@@ -187,7 +195,6 @@ export default function HowItWorks() {
         setVisibleCount(currentIndex);
 
         if (line.type === 'command') {
-          // Command: start typing, wait for estimated typing duration, then next
           setActiveTypingIndex(idx);
           const typingDuration = (line.text.length / (line.cps || 24)) * 1000 + 100;
           setTimeout(() => {
@@ -196,12 +203,10 @@ export default function HowItWorks() {
             showNext();
           }, typingDuration);
         } else if (line.type === 'loading') {
-          // Loading: show spinner for a beat, then next line replaces visual
           setTimeout(() => {
             if (!cancelled) showNext();
-          }, line.delay ? 800 : 800);
+          }, 800);
         } else {
-          // Output/success/detail: appear instantly, small pause, then next
           showNext();
         }
       }, delay);
@@ -212,15 +217,24 @@ export default function HowItWorks() {
     return () => {
       cancelled = true;
     };
-  }, [isInView]);
+  }, [isInView, runKey]);
 
-  // After all lines shown, mark complete
+  // After all lines shown, mark complete then schedule replay
   useEffect(() => {
     if (visibleCount >= SEQUENCE.length) {
       const t = setTimeout(() => setTypingDone(true), 500);
       return () => clearTimeout(t);
     }
   }, [visibleCount]);
+
+  // Replay loop: after idle cursor blinks for 3s, restart
+  useEffect(() => {
+    if (!typingDone) return;
+    const t = setTimeout(() => {
+      setRunKey((k) => k + 1);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [typingDone]);
 
   const visibleLines = SEQUENCE.slice(0, visibleCount);
 
@@ -250,7 +264,7 @@ export default function HowItWorks() {
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          Three commands. One identity.
+          Three steps. One identity.
         </motion.h2>
 
         {/* Terminal container */}
