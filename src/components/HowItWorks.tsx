@@ -254,12 +254,6 @@ export default function HowItWorks() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  // Hide loading line once its successor (success line) is visible
-  const shouldHideLoading = (index: number) => {
-    if (SEQUENCE[index]?.type !== 'loading') return false;
-    return visibleCount > index + 1;
-  };
-
   return (
     <section ref={sectionRef} className="py-24 md:py-32">
       <div className="mx-auto max-w-[1120px] px-6">
@@ -310,52 +304,42 @@ export default function HowItWorks() {
               </span>
             </div>
 
-            {/* Terminal body — all lines always in DOM, visibility controlled by opacity */}
+            {/* Terminal body */}
             <motion.div
-              className="p-5 md:p-6 overflow-hidden"
+              className="relative h-[340px] md:h-[370px] overflow-hidden"
               animate={{ opacity: phase === 'clearing' ? 0 : 1 }}
               transition={{ duration: phase === 'clearing' ? 0.4 : 0.2, ease: 'easeInOut' }}
             >
-              {SEQUENCE.map((line, i) => {
-                const isVisible = i < visibleCount && !shouldHideLoading(i);
-                const isLoadingCollapsed = shouldHideLoading(i);
-
-                return (
-                  <div
+              {/* Absolute positioned content area */}
+              <div className="absolute inset-0 p-5 md:p-6 space-y-2">
+                {SEQUENCE.map((line, i) => (
+                  <motion.div
                     key={i}
-                    className={isLoadingCollapsed ? '' : 'mb-2'}
-                    style={isLoadingCollapsed ? { height: 0, overflow: 'hidden' } : undefined}
+                    animate={{ opacity: i < visibleCount ? 1 : 0 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
                   >
-                    <motion.div
-                      animate={{
-                        opacity: isVisible ? 1 : 0,
-                        y: isVisible ? 0 : 6,
-                      }}
-                      transition={{ duration: 0.2, ease: 'easeOut' }}
-                    >
-                      {line.type === 'command' ? (
-                        <CommandLine
-                          text={line.text}
-                          active={activeTypingIndex === i}
-                          cps={line.cps || 24}
-                        />
-                      ) : (
-                        <OutputLine line={line} />
-                      )}
-                    </motion.div>
-                  </div>
-                );
-              })}
+                    {line.type === 'command' ? (
+                      <CommandLine
+                        text={line.text}
+                        active={activeTypingIndex === i}
+                        cps={line.cps || 24}
+                      />
+                    ) : (
+                      <OutputLine line={line} />
+                    )}
+                  </motion.div>
+                ))}
 
-              {/* Idle cursor — always in DOM, fades in/out */}
-              <motion.div
-                className="flex items-center gap-2 font-mono-addr text-sm pt-2"
-                animate={{ opacity: phase === 'idle' ? 1 : 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-              >
-                <span className="text-[#00D179] select-none">{'>'}</span>
-                <span className="inline-block w-[7px] h-[14px] bg-[#00D179]/60 animate-pulse" />
-              </motion.div>
+                {/* Idle cursor */}
+                <motion.div
+                  className="flex items-center gap-2 font-mono-addr text-sm pt-2"
+                  animate={{ opacity: phase === 'idle' ? 1 : 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <span className="text-[#00D179] select-none">{'>'}</span>
+                  <span className="inline-block w-[7px] h-[14px] bg-[#00D179]/60 animate-pulse" />
+                </motion.div>
+              </div>
             </motion.div>
           </div>
 
