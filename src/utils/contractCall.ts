@@ -1,6 +1,6 @@
 import { encodeFunctionData, decodeFunctionResult } from 'viem';
 import { Binary } from 'polkadot-api';
-import { getTypedApi } from './papiClient';
+import { getTypedApi, getFreshBlockHash } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
@@ -201,6 +201,17 @@ export async function writeContract(
       data: Binary.fromHex(data),
     });
 
+    // Fetch a genuinely fresh block hash to avoid AncientBirthBlock.
+    // QF Network's WS doesn't reliably push new-head events, so PAPI's
+    // internal best-block goes stale. This one-shot RPC call gets a block
+    // the node definitely still has in its BlockHashCount window.
+    let freshAt: string | 'best' = 'best';
+    try {
+      freshAt = await getFreshBlockHash();
+    } catch {
+      // If we can't fetch, fall back to 'best' and hope the subscription isn't too stale
+    }
+
     try {
       const result = await new Promise<TxResult>((resolveResult, rejectResult) => {
         let broadcastReceived = false;
@@ -218,7 +229,7 @@ export async function writeContract(
         let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
 
         const subscription = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
-          at: 'best' as const,
+          at: freshAt,
         }).subscribe({
           next(ev: any) {
             if (ev.type === 'broadcasted') {
@@ -302,8 +313,8 @@ export async function writeContract(
         );
       }
 
-      // On retriable errors (BadProof, gas-related), retry if we have attempts left
-      const isRetriable = msg.includes('BadProof') || msg.includes('OutOfGas') || msg.includes('reverted');
+      // On retriable errors (BadProof, gas-related, stale block), retry if we have attempts left
+      const isRetriable = msg.includes('BadProof') || msg.includes('OutOfGas') || msg.includes('reverted') || msg.includes('AncientBirthBlock');
       if (isRetriable && attempt < maxAttempts) {
         // Small delay before retry
         await new Promise(r => setTimeout(r, 1000));
@@ -391,6 +402,14 @@ export async function sendTransfer(
     data: Binary.fromHex('0x'),
   });
 
+  // Fresh block hash to avoid AncientBirthBlock (see writeContract for explanation)
+  let freshAt: string | 'best' = 'best';
+  try {
+    freshAt = await getFreshBlockHash();
+  } catch {
+    // Fall back to 'best'
+  }
+
   try {
     const result = await new Promise<TxResult>((resolveResult, rejectResult) => {
       let broadcastReceived = false;
@@ -408,7 +427,7 @@ export async function sendTransfer(
       let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
 
       const subscription = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
-        at: 'best' as const,
+        at: freshAt,
       }).subscribe({
         next(ev: any) {
           if (ev.type === 'broadcasted') {

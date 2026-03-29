@@ -6,6 +6,7 @@ const RETRYABLE_PATTERNS = [
   '1010:',        // substrate error code prefix for BadProof
   '1014:',        // substrate error code for Priority
   'WouldBlock',
+  'AncientBirthBlock',  // stale mortal era — birth block pruned from node's hash window
 ];
 
 export function isRetryableError(message: string | undefined | null): boolean {

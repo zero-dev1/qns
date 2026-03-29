@@ -1,5 +1,5 @@
 import { deriveEVMAddress } from './wallet';
-import { getTypedApi } from './papiClient';
+import { getTypedApi, getFreshBlockHash } from './papiClient';
 import { Binary } from 'polkadot-api';
 
 const STORAGE_KEY = 'qns_mapped_accounts-v2';
@@ -78,11 +78,19 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
   const connection = getCurrentConnection();
   if (!connection) throw new Error('No wallet connected');
 
+  // Fresh block hash to avoid AncientBirthBlock (QF WS subscription goes stale)
+  let freshAt: string | 'best' = 'best';
+  try {
+    freshAt = await getFreshBlockHash();
+  } catch {
+    // Fall back to 'best'
+  }
+
   try {
     const result = await api.tx.Revive.map_account().signAndSubmit(
       connection.signer.polkadotSigner,
       {
-        at: 'best' as const,
+        at: freshAt,
       }
     );
 

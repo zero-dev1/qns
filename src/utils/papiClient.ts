@@ -46,3 +46,16 @@ export function destroyClient(): void {
     typedApi = null;
   }
 }
+
+/**
+ * Fetch a fresh finalized block hash directly from the RPC.
+ * This bypasses PAPI's potentially stale best-block subscription.
+ * Used as the `at` parameter for all write transactions to prevent
+ * AncientBirthBlock errors on QF Network (whose RPC doesn't reliably
+ * push new-head subscription events).
+ */
+export async function getFreshBlockHash(): Promise<string> {
+  const client = getClient();
+  const block = await client.getFinalizedBlock();
+  return block.hash;
+}
