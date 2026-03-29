@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Copy, Check, ExternalLink, Send, Shield, Crown,
-  Star, AlertTriangle, ChevronUp, ChevronDown, Loader2,
-  Eye, Pencil, Settings, Share2, Sparkles
+  FlaskConical, Megaphone, AlertTriangle, ChevronUp, ChevronDown, Loader2,
+  Eye, Pencil, Settings, Share2
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { useToast } from '../contexts/ToastContext';
@@ -422,18 +422,19 @@ export default function DetailModal({
                       const getIcon = () => {
                         switch (badge) {
                           case 'pioneer': return <Crown className="w-3 h-3" />;
-                          case 'team': return <Sparkles className="w-3 h-3" />;
-                          case 'dapplab': return <Star className="w-3 h-3" />;
-                          case 'ambassador': return <Shield className="w-3 h-3" />;
+                          case 'team': return <Shield className="w-3 h-3" />;
+                          case 'dapplab': return <FlaskConical className="w-3 h-3" />;
+                          case 'ambassador': return <Megaphone className="w-3 h-3" />;
                           default: return <Shield className="w-3 h-3" />;
                         }
                       };
+                      const isPioneer = badge === 'pioneer';
                       return (
                         <span
                           key={badge}
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border"
+                          className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border ${isPioneer ? 'pioneer-badge' : ''}`}
                           style={{
-                            backgroundColor: `${config.color}10`,
+                            backgroundColor: `${config.color}1A`,
                             color: config.color,
                             borderColor: `${config.color}33`,
                           }}

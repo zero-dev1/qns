@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
-import { Gift, Share2, Check, Loader2, Twitter, Send, X, Copy } from 'lucide-react';
+import { Gift, Share2, Check, Loader2, Twitter, Send, X, Copy, Crown, Shield, FlaskConical, Megaphone } from 'lucide-react';
 import { parseEther } from 'viem';
 import type { FormEvent } from 'react';
 import Navbar from '../components/Navbar';
@@ -30,6 +30,14 @@ import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import { useToast } from '../contexts/ToastContext';
 import Avatar from '../components/Avatar';
 import PulseDot from '../components/PulseDot';
+
+// Badge icon mapper
+const BADGE_ICON_MAP: Record<string, React.ElementType> = {
+  crown: Crown,
+  shield: Shield,
+  flask: FlaskConical,
+  megaphone: Megaphone,
+};
 
 // ── Types ──
 
@@ -931,17 +939,19 @@ export default function ProfilePage() {
                   )}
                   {badges.map((badge) => {
                     const config = BADGE_TYPES[badge];
+                    const IconComponent = BADGE_ICON_MAP[config.icon] || Shield;
+                    const isPioneer = badge === 'pioneer';
                     return (
                       <span
                         key={badge}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${isPioneer ? 'pioneer-badge' : ''}`}
                         style={{
                           backgroundColor: `${config.color}1A`,
                           color: config.color,
                           borderColor: `${config.color}33`,
                         }}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                        <IconComponent size={12} />
                         {config.label}
                       </span>
                     );

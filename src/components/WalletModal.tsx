@@ -54,19 +54,31 @@ export default function WalletModal() {
   
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Get wallet options based on WALLET_MODE
+  // Get wallet options based on platform
   const getWalletOptions = (): WalletOption[] => {
+    if (isMobile()) {
+      return [
+        {
+          id: 'subwallet',
+          name: 'SubWallet',
+          icon: <SubWalletIcon />,
+          description: 'Recommended for QF Network',
+        },
+        {
+          id: 'metamask',
+          name: 'MetaMask',
+          icon: <MetaMaskIcon />,
+          description: 'EVM wallet',
+        },
+      ];
+    }
+
     return [
       {
         id: 'talisman',
         name: 'Talisman',
         icon: <TalismanIcon />,
         description: 'Recommended for QF Network',
-      },
-      {
-        id: 'subwallet',
-        name: 'SubWallet',
-        icon: <SubWalletIcon />,
       },
       {
         id: 'metamask',

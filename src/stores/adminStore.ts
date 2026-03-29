@@ -54,6 +54,16 @@ interface AdminState {
   } | null;
   isLookingUp: boolean;
   
+  // Registration list
+  registrationList: Array<{
+    name: string;
+    owner: string;
+    registeredAt: bigint;
+    isPermanent: boolean;
+    hasPioneer: boolean;
+  }>;
+  isLoadingRegistrations: boolean;
+  
   // Badge management
   badgeLookupName: string;
   badgeLookupResult: { nameHash: string; badges: string[] } | null;
@@ -76,6 +86,9 @@ interface AdminState {
   // Registration lookup
   setLookupName: (name: string) => void;
   lookupRegistration: (name: string) => Promise<void>;
+  
+  // Registration list
+  loadRegistrations: () => Promise<void>;
   
   // Badge actions
   setBadgeLookupName: (name: string) => void;
@@ -129,6 +142,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   lookupName: '',
   lookupResult: null,
   isLookingUp: false,
+  
+  // Registration list
+  registrationList: [],
+  isLoadingRegistrations: false,
   
   // Badge management
   badgeLookupName: '',
@@ -637,6 +654,105 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     });
     
     return txHash;
+  },
+  
+  loadRegistrations: async () => {
+    set({ isLoadingRegistrations: true });
+    try {
+      const REGISTRAR_SS58 = '5EpRx3VESwPSVZL6xrxT2P3hoRhdmWHgVfGFiZqqvWkAftNx';
+      const QF_EXPLORER_API = 'https://qf-explorer.mathswins.co.uk/api';
+
+      // Step 1: Fetch all transfers involving the registrar
+      const res = await fetch(`${QF_EXPLORER_API}/txs/${REGISTRAR_SS58}?limit=200`);
+      const data = await res.json();
+      const items = data?.transfers?.items || [];
+
+      // Step 2: Extract unique sender addresses (people who paid the registrar)
+      const uniqueSenders = new Set<string>();
+      for (const tx of items) {
+        if (tx.to === REGISTRAR_SS58 && tx.from !== REGISTRAR_SS58) {
+          uniqueSenders.add(tx.from);
+        }
+      }
+
+      // Step 3: For each sender, get their EVM address and call getNamesByOwner
+      const client = getPublicClient();
+      const allRegistrations: Array<{
+        name: string;
+        owner: string;
+        registeredAt: bigint;
+        isPermanent: boolean;
+        hasPioneer: boolean;
+      }> = [];
+
+      // We need EVM addresses for getNamesByOwner. The explorer gives SS58.
+      // Use the same derivation the app uses elsewhere.
+      const { ss58ToEvmAddress } = await import('../utils/address');
+
+      for (const ss58 of uniqueSenders) {
+        try {
+          let evmAddr: string;
+          try {
+            evmAddr = ss58ToEvmAddress(ss58);
+          } catch {
+            continue; // Skip if can't derive
+          }
+
+          const names = await client.readContract({
+            address: QNS_REGISTRAR_ADDRESS,
+            abi: QNS_REGISTRAR_ABI,
+            functionName: 'getNamesByOwner',
+            args: [evmAddr],
+          }) as string[];
+
+          for (const name of names) {
+            try {
+              const lh = labelHash(name.toLowerCase());
+              const reg = await client.readContract({
+                address: QNS_REGISTRAR_ADDRESS,
+                abi: QNS_REGISTRAR_ABI,
+                functionName: 'registrations',
+                args: [lh],
+              }) as [string, bigint, bigint];
+
+              if (reg[0] !== '0x0000000000000000000000000000000000000000') {
+                // Check if has pioneer badge
+                let hasPioneer = false;
+                try {
+                  const nh = namehash(`${name}.qf`);
+                  hasPioneer = await client.readContract({
+                    address: QNS_BADGE_REGISTRY_ADDRESS,
+                    abi: QNS_BADGE_REGISTRY_ABI,
+                    functionName: 'hasBadge',
+                    args: [nh, 'pioneer'],
+                  }) as boolean;
+                } catch { /* ignore badge check failures */ }
+
+                allRegistrations.push({
+                  name,
+                  owner: reg[0],
+                  registeredAt: reg[2],
+                  isPermanent: reg[1] === 0n,
+                  hasPioneer,
+                });
+              }
+            } catch { /* skip individual name failures */ }
+          }
+        } catch { /* skip individual owner failures */ }
+      }
+
+      // Step 4: Sort by registeredAt ascending (earliest first)
+      allRegistrations.sort((a, b) => {
+        if (a.registeredAt < b.registeredAt) return -1;
+        if (a.registeredAt > b.registeredAt) return 1;
+        return 0;
+      });
+
+      set({ registrationList: allRegistrations, isLoadingRegistrations: false });
+    } catch (err) {
+      console.error('Failed to load registrations:', err);
+      set({ isLoadingRegistrations: false });
+    }
   },
   
   // Badge actions

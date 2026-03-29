@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
-import { Pencil, Share2 } from 'lucide-react';
+import { Pencil, Share2, Crown, Shield, FlaskConical, Megaphone } from 'lucide-react';
 import Avatar from './Avatar';
 import PulseDot from './PulseDot';
 import { BADGE_TYPES, getBadgesForName, type BadgeType } from '../utils/badges';
@@ -28,11 +28,12 @@ interface IdentityCardProps {
   onOpenDetail: (name: string, tab?: 'overview' | 'edit' | 'manage' | 'share') => void;
 }
 
-const ShieldIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
+const BADGE_ICON_MAP: Record<string, React.ElementType> = {
+  crown: Crown,
+  shield: Shield,
+  flask: FlaskConical,
+  megaphone: Megaphone,
+};
 
 const COMPLETENESS_FIELDS = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'] as const;
 
@@ -170,23 +171,25 @@ export default function IdentityCard({ name, records, isPrimary, enableTilt, onO
       {/* Badge row */}
       <div className="flex items-center gap-2 mb-4">
         {name.isPermanent && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#00D179]/10 text-[#8DF0BA] border border-[#00D179]/20">
-            <ShieldIcon /> Permanent
+          <span className="permanent-badge inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#00D179]/10 text-[#8DF0BA] border border-[#00D179]/20">
+            <Shield size={10} /> Permanent
           </span>
         )}
         {badges.map((badge) => {
           const config = BADGE_TYPES[badge];
+          const IconComponent = BADGE_ICON_MAP[config.icon] || Shield;
+          const isPioneer = badge === 'pioneer';
           return (
             <span
               key={badge}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border"
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${isPioneer ? 'pioneer-badge' : ''}`}
               style={{
-                backgroundColor: `${config.color}10`,
+                backgroundColor: `${config.color}1A`,
                 color: config.color,
                 borderColor: `${config.color}33`,
               }}
             >
-              <ShieldIcon /> {config.label}
+              <IconComponent size={10} /> {config.label}
             </span>
           );
         })}

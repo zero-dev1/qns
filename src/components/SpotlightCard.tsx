@@ -4,11 +4,13 @@ import type { ReactNode, CSSProperties } from 'react';
 interface SpotlightCardProps {
   children: ReactNode;
   className?: string;
-  glowColor?: string; // e.g. '#00D179', 'rgba(139,92,246,0.5)'
+  glowColor?: string;
 }
 
 export default function SpotlightCard({ children, className = '', glowColor }: SpotlightCardProps) {
-  const style = glowColor ? { '--glow-color': glowColor } as CSSProperties : undefined;
+  const style = {
+    ...(glowColor ? { '--glow-color': glowColor } : {}),
+  } as CSSProperties;
 
   return (
     <div
@@ -29,6 +31,13 @@ export default function SpotlightCard({ children, className = '', glowColor }: S
       `}
       style={style}
     >
+      {/* Mobile: static ambient glow — always visible on touch devices */}
+      <div
+        className="spotlight-mobile-glow absolute inset-0 pointer-events-none z-10"
+        style={{
+          background: `radial-gradient(ellipse at center, ${glowColor || 'rgba(0,209,121,0.3)'} 0%, transparent 70%)`,
+        }}
+      />
       <div className="relative h-full bg-[#0A0A0A] rounded-[inherit] z-20 overflow-hidden">
         {children}
       </div>

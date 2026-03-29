@@ -7,27 +7,24 @@ export const DAPP_LAB_NAMES = ['axe', 'doomly', 'key', 'vector', 'boolean', 'use
 export const BADGE_TYPES = {
   pioneer: {
     label: 'Pioneer',
-    color: '#FFD700',       // Gold
-    bgOpacity: '10',
-    borderOpacity: '20',
+    color: '#FFD700',
+    icon: 'crown',       // Crown — "you were first"
+    shimmer: true,        // gets the gold shimmer treatment
   },
   team: {
     label: 'Team',
     color: '#DADADA',
-    bgOpacity: '10',
-    borderOpacity: '20',
+    icon: 'shield',       // Shield — trusted core
   },
   dapplab: {
     label: 'dApp Lab',
-    color: '#00EFE7',       // Cyan
-    bgOpacity: '10',
-    borderOpacity: '20',
+    color: '#00EFE7',
+    icon: 'flask',        // FlaskConical — builders/lab
   },
   ambassador: {
     label: 'Ambassador',
-    color: '#FF6B35',       // Placeholder — TBD
-    bgOpacity: '10',
-    borderOpacity: '20',
+    color: '#FF6B35',
+    icon: 'megaphone',    // Megaphone — voice/advocate
   },
 } as const;
 

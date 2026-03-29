@@ -162,12 +162,53 @@
   background: var(--glow-color, rgba(0, 209, 121, 0.3));
 }
 
-/* Touch-activated spotlight glow on mobile */
-.spotlight-card.spotlight-touch-active::before {
-  opacity: 0.6 !important;
+/* Pioneer badge shimmer — gold variant of holo-shimmer */
+.pioneer-badge {
+  position: relative;
+  overflow: hidden;
 }
-.spotlight-card.spotlight-touch-active::after {
-  opacity: 0.15 !important;
+
+.pioneer-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    transparent 30%,
+    rgba(255, 215, 0, 0.15) 45%,
+    rgba(255, 215, 0, 0.25) 50%,
+    rgba(255, 215, 0, 0.15) 55%,
+    transparent 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: holo-shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: screen;
+}
+
+/* Mobile: static ambient glow — visible on touch devices only */
+.spotlight-mobile-glow {
+  opacity: 0;
+}
+
+@media (pointer: coarse) {
+  .spotlight-mobile-glow {
+    opacity: 0.12;
+  }
+  /* Hide the mouse-tracking pseudo-elements on touch devices */
+  .spotlight-card::before,
+  .spotlight-card::after {
+    display: none !important;
+  }
+}
+
+@media (pointer: fine) {
+  .spotlight-mobile-glow {
+    opacity: 0;
+  }
 }
 
 /* .qf gradient text — reusable utility */
