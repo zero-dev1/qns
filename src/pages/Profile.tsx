@@ -25,7 +25,7 @@ import {
 } from '../config/contracts';
 import { useCopy } from '../hooks/useCopy';
 import { hapticTap, hapticGift } from '../utils/haptics';
-import { DAPP_LAB_NAMES, TEAM_NAMES } from '../utils/badges';
+import { getBadgesForName, BADGE_TYPES, type BadgeType } from '../utils/badges';
 import { isRetryableError, RETRY_MESSAGE_SHORT } from '../utils/errorHelpers';
 import { useToast } from '../contexts/ToastContext';
 import Avatar from '../components/Avatar';
@@ -367,6 +367,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
+  const [badges, setBadges] = useState<BadgeType[]>([]);
   const { copy } = useCopy();
   const { showToast } = useToast();
 
@@ -645,6 +646,13 @@ export default function ProfilePage() {
     }
   }, [profile?.name, profile?.bio, profile?.avatar]);
 
+  // Fetch badges when profile loads
+  useEffect(() => {
+    if (profile?.exists && profile.name) {
+      getBadgesForName(profile.name, namehash(`${profile.name}.qf`)).then(setBadges);
+    }
+  }, [profile?.name, profile?.exists]);
+
   // ═══════════════════════════════════════
   // ── RENDER: Loading skeleton ──
   // ═══════════════════════════════════════
@@ -765,8 +773,6 @@ export default function ProfilePage() {
   // Guard
   if (!profile) return null;
 
-  const isDappLab = DAPP_LAB_NAMES.includes(profile.name.toLowerCase());
-  const isTeam = TEAM_NAMES.includes(profile.name.toLowerCase());
   const hasSocials = profile.twitter || profile.telegram;
   const ledgerEvents = deriveLedgerEvents(profile);
 
@@ -923,18 +929,23 @@ export default function ProfilePage() {
                       Permanent
                     </span>
                   )}
-                  {isDappLab && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#00EFE7]/10 text-[#00EFE7] border border-[#00EFE7]/20">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                      dApp Lab
-                    </span>
-                  )}
-                  {isTeam && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#DADADA]/10 text-[#DADADA] border border-[#DADADA]/20">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                      Team
-                    </span>
-                  )}
+                  {badges.map((badge) => {
+                    const config = BADGE_TYPES[badge];
+                    return (
+                      <span
+                        key={badge}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border"
+                        style={{
+                          backgroundColor: `${config.color}1A`,
+                          color: config.color,
+                          borderColor: `${config.color}33`,
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                        {config.label}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* Mobile-only: Provenance strip + Ledger (below card) */}
