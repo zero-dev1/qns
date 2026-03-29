@@ -231,7 +231,7 @@ export default function Ecosystem() {
                     <button
                       onClick={() => {
                         const searchInput = document.querySelector<HTMLInputElement>(
-                          '.search-bar-shell input'
+                          '[data-search-input]'
                         );
                         if (searchInput) {
                           searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });

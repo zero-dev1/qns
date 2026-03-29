@@ -158,6 +158,7 @@ export default function SearchInput({
 
           <input
             ref={inputRef}
+            data-search-input
             type="text"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}

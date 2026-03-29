@@ -19,13 +19,13 @@ const SEQUENCE: TerminalLine[] = [
   // Step 1: Search
   { type: 'command', text: 'search alice.qf', delay: 400, cps: 24 },
   { type: 'success', text: '✓ alice.qf is available', delay: 300 },
-  { type: 'detail', text: '  100 QF/year · 500 QF forever', delay: 100 },
+  { type: 'detail', text: '  100 QF/year · 1,500 QF forever', delay: 100 },
 
   // Step 2: Register
   { type: 'command', text: 'register alice.qf --permanent', delay: 800, cps: 22 },
   { type: 'loading', text: '⧗ confirming on QF Network...', delay: 200 },
   { type: 'success', text: '✓ alice.qf registered to 0x7a3...f91', delay: 1200 },
-  { type: 'detail', text: '  burned 25 QF to 0x000...dead', delay: 100 },
+  { type: 'detail', text: '  burned 75 QF to 0x000...dead', delay: 100 },
 
   // Step 3: Resolve / Use across ecosystem
   { type: 'command', text: 'resolve alice.qf', delay: 800, cps: 26 },
@@ -169,6 +169,9 @@ export default function HowItWorks() {
   const [typingDone, setTypingDone] = useState(false);
   const [runKey, setRunKey] = useState(0);
 
+  const terminalBodyRef = useRef<HTMLDivElement>(null);
+  const [lockedHeight, setLockedHeight] = useState<number | null>(null);
+
   // Sequential line reveal engine
   useEffect(() => {
     if (!isInView) return;
@@ -226,6 +229,16 @@ export default function HowItWorks() {
       return () => clearTimeout(t);
     }
   }, [visibleCount]);
+
+  // Lock terminal body height after first full sequence render to prevent
+  // content shift below when the loop restarts and lines are cleared.
+  useEffect(() => {
+    if (visibleCount >= SEQUENCE.length && lockedHeight === null && terminalBodyRef.current) {
+      // Measure actual rendered height including all lines
+      const height = terminalBodyRef.current.scrollHeight;
+      setLockedHeight(height);
+    }
+  }, [visibleCount, lockedHeight]);
 
   // Replay loop: after idle cursor blinks for 3s, restart
   useEffect(() => {
@@ -295,7 +308,11 @@ export default function HowItWorks() {
             </div>
 
             {/* Terminal body */}
-            <div className="p-5 md:p-6 space-y-2 min-h-[320px] md:min-h-[360px]">
+            <div
+              ref={terminalBodyRef}
+              className={`p-5 md:p-6 space-y-2 ${lockedHeight === null ? 'min-h-[320px] md:min-h-[360px]' : ''}`}
+              style={lockedHeight !== null ? { minHeight: `${lockedHeight}px` } : undefined}
+            >
               <AnimatePresence initial={false}>
                 {visibleLines.map((line, i) => {
                   if (shouldHideLoading(i)) return null;

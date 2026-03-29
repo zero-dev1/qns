@@ -79,11 +79,11 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
   if (!connection) throw new Error('No wallet connected');
 
   // Fresh block hash to avoid AncientBirthBlock (QF WS subscription goes stale)
-  let freshAt: string | 'best' = 'best';
+  let freshAt: string | 'finalized' = 'finalized';
   try {
     freshAt = await getFreshBlockHash();
   } catch {
-    // Fall back to 'best'
+    // Fall back to 'finalized'
   }
 
   try {

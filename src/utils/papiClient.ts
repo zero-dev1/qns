@@ -48,14 +48,32 @@ export function destroyClient(): void {
 }
 
 /**
- * Fetch a fresh finalized block hash directly from the RPC.
- * This bypasses PAPI's potentially stale best-block subscription.
- * Used as the `at` parameter for all write transactions to prevent
- * AncientBirthBlock errors on QF Network (whose RPC doesn't reliably
- * push new-head subscription events).
+ * Fetch a fresh finalized block hash via a direct RPC call.
+ * 
+ * IMPORTANT: We use client._request() instead of client.getFinalizedBlock()
+ * because getFinalizedBlock() relies on the finalizedBlock$ subscription,
+ * which can hang indefinitely on QF Network where WS doesn't reliably
+ * push new-head events. _request() is a one-shot request/response that
+ * bypasses the subscription system entirely.
+ * 
+ * A 5-second timeout ensures we never block the signing flow.
+ * Fallback is "finalized" (NOT "best" — "best" is what caused AncientBirthBlock).
  */
 export async function getFreshBlockHash(): Promise<string> {
   const client = getClient();
-  const block = await client.getFinalizedBlock();
-  return block.hash;
+  try {
+    const hash = await Promise.race([
+      client._request<string>("chain_getFinalizedHead", []),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("getFreshBlockHash timed out")), 5000)
+      ),
+    ]);
+    if (typeof hash === "string" && hash.startsWith("0x")) {
+      return hash;
+    }
+    return "finalized";
+  } catch (e) {
+    console.warn("[papiClient] getFreshBlockHash failed, falling back to 'finalized'", e);
+    return "finalized";
+  }
 }

@@ -46,6 +46,8 @@ const floatingParticles = [
 ];
 
 function LetterReveal({ text, className }: { text: string; className?: string }) {
+  const words = text.split(' ');
+
   return (
     <motion.h1
       className={className}
@@ -54,14 +56,28 @@ function LetterReveal({ text, className }: { text: string; className?: string })
       animate="visible"
       aria-label={text}
     >
-      {text.split('').map((char, i) => (
-        <motion.span
-          key={`${char}-${i}`}
-          variants={letterVariant}
-          className="inline-block"
-        >
-          {char === ' ' ? '\u00A0' : char}
-        </motion.span>
+      {words.map((word, wordIndex) => (
+        <span key={`word-${wordIndex}`} className="inline-block whitespace-nowrap">
+          {word.split('').map((char, charIndex) => (
+            <motion.span
+              key={`${word}-${charIndex}`}
+              variants={letterVariant}
+              className="inline-block"
+            >
+              {char}
+            </motion.span>
+          ))}
+          {/* Add a non-breaking space after each word except the last */}
+          {wordIndex < words.length - 1 && (
+            <motion.span
+              key={`space-${wordIndex}`}
+              variants={letterVariant}
+              className="inline-block"
+            >
+              {'\u00A0'}
+            </motion.span>
+          )}
+        </span>
       ))}
     </motion.h1>
   );
@@ -260,7 +276,7 @@ export default function Hero() {
     : 'Register a .qf name and use it across every dApp on QF Network. Messaging, trading, gaming, and everything in between.';
 
   return (
-    <section ref={heroRef} className="relative px-6 pb-[100px] pt-16 md:pt-24 overflow-hidden">
+    <section ref={heroRef} className="relative px-6 pb-16 md:pb-[100px] pt-16 md:pt-24 overflow-hidden">
       {/* Animated gradient background */}
       <div className="absolute inset-0 -z-10 hero-gradient-bg" />
 

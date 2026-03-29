@@ -205,11 +205,11 @@ export async function writeContract(
     // QF Network's WS doesn't reliably push new-head events, so PAPI's
     // internal best-block goes stale. This one-shot RPC call gets a block
     // the node definitely still has in its BlockHashCount window.
-    let freshAt: string | 'best' = 'best';
+    let freshAt: string | 'finalized' = 'finalized';
     try {
       freshAt = await getFreshBlockHash();
     } catch {
-      // If we can't fetch, fall back to 'best' and hope the subscription isn't too stale
+      // If we can't fetch, fall back to 'finalized' and hope the subscription isn't too stale
     }
 
     try {
@@ -403,11 +403,11 @@ export async function sendTransfer(
   });
 
   // Fresh block hash to avoid AncientBirthBlock (see writeContract for explanation)
-  let freshAt: string | 'best' = 'best';
+  let freshAt: string | 'finalized' = 'finalized';
   try {
     freshAt = await getFreshBlockHash();
   } catch {
-    // Fall back to 'best'
+    // Fall back to 'finalized'
   }
 
   try {

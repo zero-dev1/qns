@@ -134,9 +134,9 @@ export default function BurnMechanic() {
           </p>
           
           {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-4 mb-5">
+          <div className="grid grid-cols-1 gap-4 mb-5 min-[380px]:grid-cols-3">
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#E5484D] mb-1">
+              <div className="text-2xl min-[380px]:text-3xl font-bold text-[#E5484D] mb-1">
                 {loading ? (
                   '—'
                 ) : (

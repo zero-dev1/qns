@@ -5,7 +5,7 @@ const exampleNames = ['legend', 'pioneer', 'builder', 'voyager', 'cosmic', 'onch
 export default function CTA() {
   const handleScrollToSearch = () => {
     const heroSearchInput = document.querySelector<HTMLInputElement>(
-      'input[placeholder="Search for a name"]'
+      '[data-search-input]'
     );
     if (heroSearchInput) {
       heroSearchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });

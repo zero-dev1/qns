@@ -74,7 +74,7 @@ export default function ActivityTicker() {
                 animate={{ opacity: 0, scale: 1.5 }}
                 transition={{ duration: 0.6 }}
               />
-              <p>
+              <p className="whitespace-nowrap truncate">
                 <Link to={`/name/${current.name}`} className="text-white font-medium hover:text-[#00D179] transition-colors">
                   {current.name}
                 </Link>
