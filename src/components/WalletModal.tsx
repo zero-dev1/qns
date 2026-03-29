@@ -125,14 +125,14 @@ export default function WalletModal() {
         await connectWallet(walletType);
       }
 
-      // Mobile override for substrate wallets (MetaMask has its own mobile flow)
+      // Mobile override: if a substrate wallet fails on mobile,
+      // tell the user to open in the wallet's built-in browser
       if (walletType !== 'metamask') {
         const currentError = useWalletStore.getState().walletError;
         if (currentError && isMobile()) {
-          const walletName = walletType === 'talisman' ? 'Talisman' : 'SubWallet';
           useWalletStore.getState().clearWalletError();
-          useWalletStore.setState({ 
-            walletError: `Open this dApp inside ${walletName}'s built-in browser to connect on mobile.` 
+          useWalletStore.setState({
+            walletError: "Open this dApp inside SubWallet's built-in browser to connect on mobile.",
           });
         }
       }
@@ -227,17 +227,35 @@ export default function WalletModal() {
             {/* Footer */}
             <div className="px-6 py-4 border-t border-white/5 bg-white/[0.01]">
               <p className="text-xs text-center text-[#8A8A8A]">
-                For the fastest experience on QF Network, we recommend{' '}
-                <a 
-                  href="#" 
-                  className="text-[#00D179] hover:underline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.open('https://talisman.xyz', '_blank');
-                  }}
-                >
-                  Talisman
-                </a>
+                {isMobile() ? (
+                  <>
+                    For the best experience on QF Network, we recommend{' '}
+                    <a
+                      href="#"
+                      className="text-[#00D179] hover:underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.open('https://www.subwallet.app/', '_blank');
+                      }}
+                    >
+                      SubWallet
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    For the fastest experience on QF Network, we recommend{' '}
+                    <a
+                      href="#"
+                      className="text-[#00D179] hover:underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.open('https://talisman.xyz', '_blank');
+                      }}
+                    >
+                      Talisman
+                    </a>
+                  </>
+                )}
               </p>
             </div>
           </motion.div>

@@ -159,17 +159,21 @@ export const useWalletStore = create<WalletState>()(
             const msg = mapErr?.message ?? '';
 
             if (
-              msg === METADATA_HASH_ERROR ||
-              msg.includes('METADATA_HASH_ERROR')
-            ) {
-              setError(
-                'QF Network requires CheckMetadataHash to be disabled in your wallet. ' +
+            msg === METADATA_HASH_ERROR ||
+            msg.includes('METADATA_HASH_ERROR')
+          ) {
+            const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            setError(
+              onMobile
+                ? 'QF Network requires metadata hash verification to be disabled in SubWallet. ' +
+                  'Check your wallet settings for QF Network and disable metadata hash verification, then reconnect.'
+                : 'QF Network requires CheckMetadataHash to be disabled in your wallet. ' +
                   'In Talisman: Settings → Networks & Tokens → Manage Networks → find "QF Network" → ' +
                   'uncheck "Verify transaction with metadata hash". Then reconnect.'
-              );
-              set({ accountMapped: false });
-              return;
-            }
+            );
+            set({ accountMapped: false });
+            return;
+          }
 
             if (msg === USER_CANCELLED || msg.includes('USER_CANCELLED')) {
               set({
@@ -223,8 +227,11 @@ export const useWalletStore = create<WalletState>()(
             msg.includes('not installed') ||
             msg.includes('Cannot read properties')
           ) {
+            const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
             setError(
-              'Please install Talisman or SubWallet to use this dApp.'
+              onMobile
+                ? 'SubWallet not detected. Please open this dApp inside SubWallet\'s built-in browser.'
+                : 'Talisman not detected. Please install the Talisman browser extension to continue.'
             );
           } else if (msg.includes('timed out')) {
             setError(msg);
@@ -512,10 +519,20 @@ export const useWalletStore = create<WalletState>()(
                   state.disconnect();
                 });
             } else {
-              // Rehydrate Substrate wallet (existing logic)
-              const walletType = state.walletName as
-                | 'talisman'
-                | 'subwallet';
+              // Rehydrate Substrate wallet — but only if the wallet is valid for this platform
+              const walletType = state.walletName as 'talisman' | 'subwallet';
+              const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+              const walletValidForPlatform =
+                (onMobile && walletType === 'subwallet') ||
+                (!onMobile && walletType === 'talisman');
+
+              if (!walletValidForPlatform) {
+                // Persisted wallet doesn't match current platform — clean disconnect
+                useWalletStore.setState({ _rehydrating: false });
+                state.disconnect();
+                return;
+              }
+
               state
                 .connectWallet(walletType)
                 .then(() => {
