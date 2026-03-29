@@ -33,6 +33,9 @@ export default function RegistrationPanel({
   const { setOwnedNames, ownedNames: existingStoreNames } = useNamesStore();
   const { showToast } = useToast();
 
+  // Component-level derived state
+  const isFirstNameRef = useRef(false);
+
   // Local state
   const [selectedDuration, setSelectedDuration] = useState(0);
   const [txState, setTxState] = useState<TxState>('idle');
@@ -40,12 +43,15 @@ export default function RegistrationPanel({
   const [regPrice, setRegPrice] = useState<bigint | null>(null);
   const [regPriceLoading, setRegPriceLoading] = useState(false);
   const [userBalance, setUserBalance] = useState<bigint | null>(null);
-  const [onboardingStep, setOnboardingStep] = useState<'celebrate' | 'avatar' | 'bio' | 'share'>('celebrate');
+  const [onboardingStep, setOnboardingStep] = useState<'celebrate' | 'avatar' | 'bio' | 'activate'>('celebrate');
   const [stepDirection, setStepDirection] = useState<'forward' | 'back'>('forward');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bioText, setBioText] = useState('');
+  const [activatePhase, setActivatePhase] = useState<
+    'ready' | 'saving_records' | 'records_saved' | 'setting_primary' | 'done' | 'error'
+  >('ready');
+  const [activateError, setActivateError] = useState<string | null>(null);
   const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [savingRecords, setSavingRecords] = useState(false);
 
   const batchSaveRecords = async () => {
     if (!selectedName || !address) return;
@@ -65,18 +71,66 @@ export default function RegistrationPanel({
     // Nothing to save — skip silently
     if (keys.length === 0) return;
 
-    setSavingRecords(true);
+    const signerAddress = providerType === 'evm' ? address : (ss58Address || address);
+    await setMultipleTextRecords(selectedName, keys, values, signerAddress);
+  };
+
+  const handleActivate = async () => {
+    if (!selectedName || !address) return;
+
+    const hasRecords = !!(avatarUrl.trim() || bioText.trim());
+    const isFirstName = isFirstNameRef.current;
+    setActivateError(null);
+
     try {
-      const signerAddress = providerType === 'evm' ? address : (ss58Address || address);
-      await setMultipleTextRecords(selectedName, keys, values, signerAddress);
-    } catch {
-      // Silent fail — don't block onboarding. User can edit later in My Names.
-    } finally {
-      setSavingRecords(false);
+      // Phase 1: Save records (if any)
+      if (hasRecords) {
+        setActivatePhase('saving_records');
+        await batchSaveRecords();
+        setActivatePhase('records_saved');
+        // Brief pause so user sees "Profile saved" flash
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      // Phase 2: Set primary (first name only)
+      if (isFirstName) {
+        setActivatePhase('setting_primary');
+        const signerAddr = providerType === 'evm' ? address : (ss58Address || address);
+        const { confirmation } = await setPrimaryName(selectedName, address, signerAddr);
+
+        // Optimistic navbar update — fires now, at the user's deliberate action
+        useWalletStore.setState({ qnsName: selectedName, displayName: selectedName });
+
+        // Background confirmation (don't block UI)
+        confirmation.then((result) => {
+          if (result.confirmed) {
+            refreshName().catch(() => {});
+          } else {
+            // Reverse record failed — refresh to clear optimistic state
+            refreshName().catch(() => {});
+          }
+        });
+      }
+
+      setActivatePhase('done');
+      hapticSuccess();
+    } catch (err: any) {
+      const msg = err?.message || '';
+      const msgLower = msg.toLowerCase();
+
+      if (msgLower.includes('rejected by user') || msgLower.includes('cancelled')) {
+        setActivateError('Transaction cancelled. Tap to try again.');
+      } else if (isRetryableError(msg)) {
+        setActivateError('Network hiccup. Tap to try again.');
+      } else {
+        setActivateError(msg || 'Something went wrong. Tap to try again.');
+      }
+      setActivatePhase('error');
+      hapticError();
     }
   };
 
-  const goToStep = (target: 'celebrate' | 'avatar' | 'bio' | 'share', direction: 'forward' | 'back') => {
+  const goToStep = (target: 'celebrate' | 'avatar' | 'bio' | 'activate', direction: 'forward' | 'back') => {
     setStepDirection(direction);
     setOnboardingStep(target);
   };
@@ -126,7 +180,7 @@ export default function RegistrationPanel({
   // Auto-advance onboarding flow
   useEffect(() => {
     if (txState === 'success' && onboardingStep === 'celebrate') {
-      const timer = setTimeout(() => goToStep('avatar', 'forward'), 2500);
+      const timer = setTimeout(() => goToStep('avatar', 'forward'), isFirstNameRef.current ? 2500 : 1500);
       return () => clearTimeout(timer);
     }
   }, [txState, onboardingStep]);
@@ -137,6 +191,8 @@ export default function RegistrationPanel({
       setOnboardingStep('celebrate');
       setAvatarUrl('');
       setBioText('');
+      setActivatePhase('ready');
+      setActivateError(null);
     }
   }, [txState]);
 
@@ -145,6 +201,8 @@ export default function RegistrationPanel({
     setOnboardingStep('celebrate');
     setAvatarUrl('');
     setBioText('');
+    setActivatePhase('ready');
+    setActivateError(null);
   }, [selectedName]);
 
   const priceDisplay = () => {
@@ -192,40 +250,11 @@ export default function RegistrationPanel({
       };
       // Snapshot before optimistic add
       const previousNames = [...existingStoreNames];
-      const isFirstName = existingStoreNames.length === 0;
+      isFirstNameRef.current = existingStoreNames.length === 0;
       setOwnedNames([...existingStoreNames, newName]);
       showToast(`Welcome to QF Network, ${selectedName}.qf!`, 'success');
 
-      // QDL: First name ceremony — auto-set as primary so the identity
-      // is immediately live across navbar, profile, and reverse resolution.
-      // Fires in background; must not block the onboarding flow.
-      if (isFirstName && address) {
-        const signerAddr = providerType === 'evm' ? address : (ss58Address || address);
-        setPrimaryName(selectedName, address, signerAddr)
-          .then(({ confirmation }) => {
-            // Optimistically update wallet store so navbar reflects immediately
-            useWalletStore.setState({ qnsName: selectedName, displayName: selectedName });
-
-            confirmation.then((result) => {
-              if (result.confirmed) {
-                // Chain confirmed — refresh to lock in the canonical state
-                refreshName().catch(() => {});
-              } else if (result.error) {
-                // Reverse record failed on-chain — clear optimistic state.
-                // User can set primary manually from My Names.
-                refreshName().catch(() => {});
-              }
-            });
-          })
-          .catch(() => {
-            // setPrimaryName call itself failed (e.g. gas estimation, wallet rejection).
-            // Don't block anything — user can set primary manually.
-            refreshName().catch(() => {});
-          });
-      } else {
-        // Not first name — just refresh to pick up existing primary
-        refreshName().catch(() => {});
-      }
+      refreshName().catch(() => {});
 
       onRegisterSuccess(selectedName);
 
@@ -541,7 +570,7 @@ export default function RegistrationPanel({
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5, duration: 0.4 }}
               >
-                Let's make it yours in every way
+                {isFirstNameRef.current ? "Let's make it yours in every way" : 'Add some personality'}
               </motion.p>
               {regPrice && (
                 <motion.p
@@ -616,13 +645,9 @@ export default function RegistrationPanel({
                 <span className="absolute bottom-3 right-3 text-[11px] text-[#333]">{bioText.length}/160</span>
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={async () => {
-                  await batchSaveRecords();
-                  goToStep('share', 'forward');
-                }}
-                  disabled={savingRecords}
-                  className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-                  {savingRecords ? 'Saving...' : (avatarUrl.trim() || bioText.trim()) ? 'Save & Continue' : 'Skip'}
+                <button onClick={() => goToStep('activate', 'forward')}
+                  className="flex-1 py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer">
+                  {(avatarUrl.trim() || bioText.trim()) ? 'Continue' : 'Skip'}
                 </button>
               </div>
               <div className="flex justify-center gap-2 mt-6">
@@ -633,52 +658,206 @@ export default function RegistrationPanel({
             </motion.div>
           )}
 
-          {onboardingStep === 'share' && (
-            <motion.div className="relative py-6" initial={{ opacity: 0, x: stepDirection === 'forward' ? 20 : -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
-              <StepBackArrow onClick={() => goToStep('bio', 'back')} />
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[#00D179] mb-3">You're all set</p>
-              
-              {/* Completed profile preview */}
-              <div className="rounded-2xl border border-white/[0.08] bg-black/60 p-5 mb-6">
-                <div className="flex items-center gap-4">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
+          {onboardingStep === 'activate' && (
+            <motion.div
+              className="relative py-6"
+              initial={{ opacity: 0, x: stepDirection === 'forward' ? 20 : -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <StepBackArrow onClick={() => {
+                // Only allow back if we haven't started activating
+                if (activatePhase === 'ready' || activatePhase === 'error') {
+                  setActivatePhase('ready');
+                  setActivateError(null);
+                  goToStep('bio', 'back');
+                }
+              }} />
+
+              {/* ── Ready state: show preview + activate button ── */}
+              {activatePhase === 'ready' && (
+                <>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[#00D179] mb-3">
+                    {isFirstNameRef.current ? 'Go live' : (avatarUrl.trim() || bioText.trim()) ? 'Save your profile' : "You're all set"}
+                  </p>
+
+                  {/* Profile preview card */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-black/60 p-5 mb-4">
+                    <div className="flex items-center gap-4">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#00D179] to-[#00A060] flex items-center justify-center text-white font-bold text-lg">
+                          {selectedName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-clash font-semibold text-white text-lg truncate">
+                          {selectedName}<span className="text-[#00D179]">.qf</span>
+                        </p>
+                        {bioText && <p className="text-sm text-[#888] truncate">{bioText}</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Explanation text */}
+                  <p className="text-sm text-[#555] mb-6">
+                    {isFirstNameRef.current
+                      ? (avatarUrl.trim() || bioText.trim())
+                        ? 'Your avatar, bio, and primary identity will be saved to QF Network'
+                        : `This makes ${selectedName}.qf your identity across every dApp on QF Network` 
+                      : 'Your profile data will be saved to QF Network'
+                    }
+                  </p>
+
+                  {/* Activate button — only shown if there's something to do */}
+                  {(isFirstNameRef.current || avatarUrl.trim() || bioText.trim()) ? (
+                    <button
+                      onClick={handleActivate}
+                      className="w-full py-3 bg-[#00D179] hover:bg-[#00B868] text-black font-semibold rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isFirstNameRef.current
+                        ? (avatarUrl.trim() || bioText.trim())
+                          ? `Save & activate ${selectedName}.qf` 
+                          : `Activate ${selectedName}.qf` 
+                        : 'Save profile'
+                      }
+                    </button>
                   ) : (
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#00D179] to-[#00A060] flex items-center justify-center text-white font-bold text-lg">
-                      {selectedName.slice(0, 2).toUpperCase()}
+                    /* Additional name, no records — go straight to share actions */
+                    <div className="flex flex-col gap-3">
+                      <button onClick={handleShareOnX}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white font-medium hover:bg-white/[0.08] transition-colors cursor-pointer">
+                        <Twitter size={18} />
+                        Share on X
+                      </button>
+                      <button onClick={() => navigate(`/name/${selectedName}`)}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold transition-colors cursor-pointer">
+                        View your profile
+                      </button>
+                      <button onClick={onBack}
+                        className="text-sm text-[#555] hover:text-white transition-colors cursor-pointer py-2">
+                        Register another name
+                      </button>
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <p className="font-clash font-semibold text-white text-lg truncate">
-                      {selectedName}<span className="text-[#00D179]">.qf</span>
+                </>
+              )}
+
+              {/* ── Saving records phase ── */}
+              {activatePhase === 'saving_records' && (
+                <div className="text-center py-8">
+                  <div className="relative inline-block mb-5">
+                    <div className="w-12 h-12 border-[3px] border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-2 h-2 bg-[#00D179] rounded-full animate-pulse" />
+                    </div>
+                  </div>
+                  <p className="text-white font-satoshi font-medium mb-1">Saving your profile...</p>
+                  <p className="text-[#555] text-sm">Sign in your wallet to continue</p>
+                </div>
+              )}
+
+              {/* ── Records saved flash ── */}
+              {activatePhase === 'records_saved' && (
+                <div className="text-center py-8 animate-fade-in">
+                  <motion.div
+                    className="w-10 h-10 mx-auto mb-4 bg-[#00D179] rounded-full flex items-center justify-center"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  </motion.div>
+                  <p className="text-[#00D179] font-medium">Profile saved</p>
+                </div>
+              )}
+
+              {/* ── Setting primary phase ── */}
+              {activatePhase === 'setting_primary' && (
+                <div className="text-center py-8">
+                  <div className="relative inline-block mb-5">
+                    <div className="w-12 h-12 border-[3px] border-[#1E1E1E] border-t-[#00D179] rounded-full animate-spin" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-2 h-2 bg-[#00D179] rounded-full animate-pulse" />
+                    </div>
+                  </div>
+                  <p className="text-white font-satoshi font-medium mb-1">Activating your identity...</p>
+                  <p className="text-[#555] text-sm">Sign in your wallet to continue</p>
+                </div>
+              )}
+
+              {/* ── Done — show share actions ── */}
+              {activatePhase === 'done' && (
+                <div className="animate-fade-in">
+                  <div className="text-center mb-6">
+                    <motion.div
+                      className="w-12 h-12 mx-auto mb-4 bg-[#00D179] rounded-full flex items-center justify-center"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    </motion.div>
+                    <p className="text-[#00D179] font-medium">
+                      {isFirstNameRef.current ? "You're live on QF Network" : 'Profile saved'}
                     </p>
-                    {bioText && <p className="text-sm text-[#888] truncate">{bioText}</p>}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button onClick={handleShareOnX}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white font-medium hover:bg-white/[0.08] transition-colors cursor-pointer">
+                      <Twitter size={18} />
+                      Share on X
+                    </button>
+                    <button onClick={() => navigate(`/name/${selectedName}`)}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold transition-colors cursor-pointer">
+                      View your profile
+                    </button>
+                    <button onClick={onBack}
+                      className="text-sm text-[#555] hover:text-white transition-colors cursor-pointer py-2">
+                      Register another name
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex flex-col gap-3">
-                <button onClick={handleShareOnX}
-                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white font-medium hover:bg-white/[0.08] transition-colors cursor-pointer">
-                  <Twitter size={18} />
-                  Share on X
-                </button>
-                <button onClick={() => navigate(`/name/${selectedName}`)}
-                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#00D179] hover:bg-[#00B868] text-black font-semibold transition-colors cursor-pointer">
-                  View your profile
-                </button>
-                <button onClick={onBack}
-                  className="text-sm text-[#555] hover:text-white transition-colors cursor-pointer py-2">
-                  Register another name
-                </button>
-              </div>
-              
-              {/* Progress dots - all filled */}
-              <div className="flex justify-center gap-2 mt-6">
-                {[0,1,2,3].map(i => (
-                  <div key={i} className="w-1.5 h-1.5 rounded-full bg-[#00D179]" />
-                ))}
-              </div>
+              {/* ── Error state ── */}
+              {activatePhase === 'error' && (
+                <div className="text-center py-6 animate-fade-in">
+                  <svg className="mx-auto mb-3" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth="2.5" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M15 9l-6 6M9 9l6 6" />
+                  </svg>
+                  <p className="text-[#E5484D] text-sm mb-4">{activateError}</p>
+                  <button
+                    onClick={() => {
+                      setActivatePhase('ready');
+                      setActivateError(null);
+                    }}
+                    className="px-6 py-2.5 bg-[#E5484D] hover:bg-[#c93d41] text-white rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    Try again
+                  </button>
+                  <button onClick={onBack}
+                    className="block w-full mt-3 py-2 text-sm text-[#555] hover:text-white transition-colors cursor-pointer">
+                    Skip for now
+                  </button>
+                </div>
+              )}
+
+              {/* Progress dots — all filled on done, otherwise up to step 4 */}
+              {activatePhase !== 'done' && (
+                <div className="flex justify-center gap-2 mt-6">
+                  {[0,1,2,3].map(i => (
+                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${i <= 3 ? 'bg-[#00D179]' : 'bg-white/10'}`} />
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </div>
