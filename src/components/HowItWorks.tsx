@@ -1,6 +1,6 @@
 // src/components/HowItWorks.tsx
 import { useRef, useState, useEffect } from 'react';
-import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 
 // ── Terminal line types ──
 
@@ -254,8 +254,6 @@ export default function HowItWorks() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  const visibleLines = SEQUENCE.slice(0, visibleCount);
-
   // Hide loading line once its successor (success line) is visible
   const shouldHideLoading = (index: number) => {
     if (SEQUENCE[index]?.type !== 'loading') return false;
@@ -312,21 +310,27 @@ export default function HowItWorks() {
               </span>
             </div>
 
-            {/* Terminal body */}
+            {/* Terminal body — all lines always in DOM, visibility controlled by opacity */}
             <motion.div
-              className="p-5 md:p-6 space-y-2 min-h-[340px] md:min-h-[370px] overflow-hidden"
+              className="p-5 md:p-6 overflow-hidden"
               animate={{ opacity: phase === 'clearing' ? 0 : 1 }}
               transition={{ duration: phase === 'clearing' ? 0.4 : 0.2, ease: 'easeInOut' }}
             >
-              <AnimatePresence initial={false}>
-                {visibleLines.map((line, i) => {
-                  if (shouldHideLoading(i)) return null;
+              {SEQUENCE.map((line, i) => {
+                const isVisible = i < visibleCount && !shouldHideLoading(i);
+                const isLoadingCollapsed = shouldHideLoading(i);
 
-                  return (
+                return (
+                  <div
+                    key={i}
+                    className={isLoadingCollapsed ? '' : 'mb-2'}
+                    style={isLoadingCollapsed ? { height: 0, overflow: 'hidden' } : undefined}
+                  >
                     <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
+                      animate={{
+                        opacity: isVisible ? 1 : 0,
+                        y: isVisible ? 0 : 6,
+                      }}
                       transition={{ duration: 0.2, ease: 'easeOut' }}
                     >
                       {line.type === 'command' ? (
@@ -339,22 +343,19 @@ export default function HowItWorks() {
                         <OutputLine line={line} />
                       )}
                     </motion.div>
-                  );
-                })}
-              </AnimatePresence>
+                  </div>
+                );
+              })}
 
-              {/* Idle cursor after sequence completes */}
-              {phase === 'idle' && (
-                <motion.div
-                  className="flex items-center gap-2 font-mono-addr text-sm pt-2"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <span className="text-[#00D179] select-none">{'>'}</span>
-                  <span className="inline-block w-[7px] h-[14px] bg-[#00D179]/60 animate-pulse" />
-                </motion.div>
-              )}
+              {/* Idle cursor — always in DOM, fades in/out */}
+              <motion.div
+                className="flex items-center gap-2 font-mono-addr text-sm pt-2"
+                animate={{ opacity: phase === 'idle' ? 1 : 0 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+              >
+                <span className="text-[#00D179] select-none">{'>'}</span>
+                <span className="inline-block w-[7px] h-[14px] bg-[#00D179]/60 animate-pulse" />
+              </motion.div>
             </motion.div>
           </div>
 
