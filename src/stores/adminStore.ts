@@ -11,6 +11,7 @@ import {
   QNS_BADGE_REGISTRY_ABI,
 } from '../config/contracts';
 import type { Address } from 'viem';
+import type { TxResult } from '../utils/contractCall';
 
 export type AdminSection = 'overview' | 'reserve' | 'registrations' | 'pricing' | 'treasury' | 'settings' | 'badges';
 
@@ -79,9 +80,9 @@ interface AdminState {
   // Badge actions
   setBadgeLookupName: (name: string) => void;
   checkBadges: (name: string) => Promise<void>;
-  assignBadge: (name: string, badgeType: string, account: string) => Promise<string>;
-  assignBadgeBatch: (names: string[], badgeType: string, account: string) => Promise<string>;
-  revokeBadge: (name: string, badgeType: string, account: string) => Promise<string>;
+  assignBadge: (name: string, badgeType: string, account: string) => Promise<TxResult>;
+  assignBadgeBatch: (names: string[], badgeType: string, account: string) => Promise<TxResult>;
+  revokeBadge: (name: string, badgeType: string, account: string) => Promise<TxResult>;
   
   // Pricing actions
   updatePrices: (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: string) => Promise<string>;
@@ -684,7 +685,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     
     const nameHash = namehash(`${name}.qf`);
     
-    const { txHash, confirmation } = await walletClient.writeContract({
+    const result = await walletClient.writeContract({
       address: QNS_BADGE_REGISTRY_ADDRESS,
       abi: QNS_BADGE_REGISTRY_ABI,
       functionName: 'assignBadge',
@@ -692,15 +693,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    // Background confirmation
-    confirmation.then((result) => {
-      if (!result.confirmed) {
-        // Re-check badges on failure
-        get().checkBadges(name);
-      }
-    });
-    
-    return txHash;
+    return result;
   },
   
   assignBadgeBatch: async (names: string[], badgeType: string, account: string) => {
@@ -709,7 +702,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     
     const nameHashes = names.map(name => namehash(`${name}.qf`));
     
-    const { txHash, confirmation } = await walletClient.writeContract({
+    const result = await walletClient.writeContract({
       address: QNS_BADGE_REGISTRY_ADDRESS,
       abi: QNS_BADGE_REGISTRY_ABI,
       functionName: 'assignBadgeBatch',
@@ -717,15 +710,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    // Background confirmation
-    confirmation.then((result) => {
-      if (!result.confirmed) {
-        // Re-check badges for all names on failure
-        names.forEach(name => get().checkBadges(name));
-      }
-    });
-    
-    return txHash;
+    return result;
   },
   
   revokeBadge: async (name: string, badgeType: string, account: string) => {
@@ -734,7 +719,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     
     const nameHash = namehash(`${name}.qf`);
     
-    const { txHash, confirmation } = await walletClient.writeContract({
+    const result = await walletClient.writeContract({
       address: QNS_BADGE_REGISTRY_ADDRESS,
       abi: QNS_BADGE_REGISTRY_ABI,
       functionName: 'revokeBadge',
@@ -742,14 +727,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       account,
     });
     
-    // Background confirmation
-    confirmation.then((result) => {
-      if (!result.confirmed) {
-        // Re-check badges on failure
-        get().checkBadges(name);
-      }
-    });
-    
-    return txHash;
+    return result;
   },
 }));

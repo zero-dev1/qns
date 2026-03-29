@@ -4,8 +4,10 @@ import { callContract, writeContract, sendTransfer, type TxResult } from './cont
 import {
   QNS_REGISTRAR_ADDRESS,
   QNS_RESOLVER_ADDRESS,
+  QNS_BADGE_REGISTRY_ADDRESS,
   QNS_REGISTRAR_ABI,
   QNS_RESOLVER_ABI,
+  QNS_BADGE_REGISTRY_ABI,
 } from '../config/contracts';
 
 /**
@@ -25,6 +27,7 @@ async function getProviderType(): Promise<'substrate' | 'evm' | null> {
 // Cast readonly ABIs to mutable any[] for ethers.js compatibility
 const REGISTRAR_ABI = QNS_REGISTRAR_ABI as unknown as any[];
 const RESOLVER_ABI = QNS_RESOLVER_ABI as unknown as any[];
+const BADGE_REGISTRY_ABI = QNS_BADGE_REGISTRY_ABI as unknown as any[];
 
 // Hardcoded fallback prices (in wei/QF units)
 // 3-char: 1000 QF, 4-char: 300 QF, 5+: 100 QF
@@ -78,12 +81,15 @@ export function getPublicClient() {
       const addrLower = address.toLowerCase();
       const registrarLower = QNS_REGISTRAR_ADDRESS.toLowerCase();
       const resolverLower = QNS_RESOLVER_ADDRESS.toLowerCase();
+      const badgeRegistryLower = QNS_BADGE_REGISTRY_ADDRESS.toLowerCase();
       
       let contractAbi: any[];
       if (addrLower === registrarLower) {
         contractAbi = REGISTRAR_ABI;
       } else if (addrLower === resolverLower) {
         contractAbi = RESOLVER_ABI;
+      } else if (addrLower === badgeRegistryLower) {
+        contractAbi = BADGE_REGISTRY_ABI;
       } else {
         contractAbi = abi as any[] || [];
       }
@@ -125,12 +131,15 @@ export function getWalletClient() {
       const addrLower = address.toLowerCase();
       const registrarLower = QNS_REGISTRAR_ADDRESS.toLowerCase();
       const resolverLower = QNS_RESOLVER_ADDRESS.toLowerCase();
+      const badgeRegistryLower = QNS_BADGE_REGISTRY_ADDRESS.toLowerCase();
       
       let contractAbi: any[];
       if (addrLower === registrarLower) {
         contractAbi = REGISTRAR_ABI;
       } else if (addrLower === resolverLower) {
         contractAbi = RESOLVER_ABI;
+      } else if (addrLower === badgeRegistryLower) {
+        contractAbi = BADGE_REGISTRY_ABI;
       } else {
         contractAbi = abi as any[] || [];
       }

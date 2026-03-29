@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWalletStore } from '../../stores/walletStore';
 import { useAdminStore } from '../../stores/adminStore';
 import { hapticSuccess, hapticError } from '../../utils/haptics';
+import { getPublicClient } from '../../utils/qns';
+import { QNS_BADGE_REGISTRY_ADDRESS, QNS_BADGE_REGISTRY_ABI, QNS_REGISTRAR_ADDRESS, QNS_REGISTRAR_ABI } from '../../config/contracts';
 import { Award, Search, Plus, X, Check, Loader2, Copy } from 'lucide-react';
 
 export default function Badges() {
@@ -23,6 +25,9 @@ export default function Badges() {
   const [isBatchAssigning, setIsBatchAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [badgeRegistryAdmin, setBadgeRegistryAdmin] = useState<string | null>(null);
+  const [registrarAdmin, setRegistrarAdmin] = useState<string | null>(null);
+  const [isLoadingAdmin, setIsLoadingAdmin] = useState(true);
 
   const showError = (msg: string) => {
     setError(msg);
@@ -63,11 +68,22 @@ export default function Badges() {
     setError(null);
     try {
       const signerAddress = ss58Address || address;
-      await assignBadge(badgeLookupName.trim(), badgeType, signerAddress);
-      showSuccess(`Assigned ${badgeType} badge to ${badgeLookupName}.qf`);
-      hapticSuccess();
-      // Re-check badges to refresh display
-      setTimeout(() => checkBadges(badgeLookupName.trim()), 2000);
+      const { confirmation } = await assignBadge(badgeLookupName.trim(), badgeType, signerAddress);
+      showSuccess(`Assigning ${badgeType} badge to ${badgeLookupName}.qf — confirming...`);
+
+      // Await on-chain confirmation
+      confirmation.then(async (result) => {
+        if (result.confirmed) {
+          showSuccess(`${badgeType} badge assigned to ${badgeLookupName}.qf`);
+          hapticSuccess();
+        } else {
+          showError(`Badge assignment failed on-chain: ${result.error || 'Transaction reverted'}`);
+          hapticError();
+        }
+        // Re-check badges regardless to get fresh state
+        await checkBadges(badgeLookupName.trim());
+        setIsAssigning(false);
+      });
     } catch (err: any) {
       let userMessage = 'Failed to assign badge';
       if (err.message) {
@@ -80,7 +96,6 @@ export default function Badges() {
       }
       showError(err.message || userMessage);
       hapticError();
-    } finally {
       setIsAssigning(false);
     }
   };
@@ -92,11 +107,22 @@ export default function Badges() {
     setError(null);
     try {
       const signerAddress = ss58Address || address;
-      await revokeBadge(badgeLookupName.trim(), badgeType, signerAddress);
-      showSuccess(`Revoked ${badgeType} badge from ${badgeLookupName}.qf`);
-      hapticSuccess();
-      // Re-check badges to refresh display
-      setTimeout(() => checkBadges(badgeLookupName.trim()), 2000);
+      const { confirmation } = await revokeBadge(badgeLookupName.trim(), badgeType, signerAddress);
+      showSuccess(`Revoking ${badgeType} badge from ${badgeLookupName}.qf — confirming...`);
+
+      // Await on-chain confirmation
+      confirmation.then(async (result) => {
+        if (result.confirmed) {
+          showSuccess(`${badgeType} badge revoked from ${badgeLookupName}.qf`);
+          hapticSuccess();
+        } else {
+          showError(`Badge revocation failed on-chain: ${result.error || 'Transaction reverted'}`);
+          hapticError();
+        }
+        // Re-check badges regardless to get fresh state
+        await checkBadges(badgeLookupName.trim());
+        setIsRevoking(false);
+      });
     } catch (err: any) {
       let userMessage = 'Failed to revoke badge';
       if (err.message) {
@@ -109,7 +135,6 @@ export default function Badges() {
       }
       showError(err.message || userMessage);
       hapticError();
-    } finally {
       setIsRevoking(false);
     }
   };
@@ -131,10 +156,20 @@ export default function Badges() {
     setError(null);
     try {
       const signerAddress = ss58Address || address;
-      await assignBadgeBatch(names, 'pioneer', signerAddress);
-      showSuccess(`Assigned pioneer badges to ${names.length} names`);
-      hapticSuccess();
-      setBulkNames('');
+      const { confirmation } = await assignBadgeBatch(names, 'pioneer', signerAddress);
+      showSuccess(`Assigning pioneer badges to ${names.length} names — confirming...`);
+
+      confirmation.then(async (result) => {
+        if (result.confirmed) {
+          showSuccess(`Pioneer badges assigned to ${names.length} names`);
+          hapticSuccess();
+          setBulkNames('');
+        } else {
+          showError(`Batch assignment failed on-chain: ${result.error || 'Transaction reverted'}`);
+          hapticError();
+        }
+        setIsBatchAssigning(false);
+      });
     } catch (err: any) {
       let userMessage = 'Failed to assign badges in batch';
       if (err.message) {
@@ -147,7 +182,6 @@ export default function Badges() {
       }
       showError(err.message || userMessage);
       hapticError();
-    } finally {
       setIsBatchAssigning(false);
     }
   };
@@ -167,6 +201,42 @@ export default function Badges() {
     { key: 'dapplab', label: 'dApp Lab', color: '#00EFE7' },
     { key: 'ambassador', label: 'Ambassador', color: '#FF6B35' },
   ];
+
+  // Admin address diagnostic
+  useEffect(() => {
+    const loadAdminAddresses = async () => {
+      try {
+        const client = getPublicClient();
+        
+        // Read badge registry admin
+        const badgeAdminResult = await client.readContract({
+          address: QNS_BADGE_REGISTRY_ADDRESS,
+          abi: QNS_BADGE_REGISTRY_ABI,
+          functionName: 'admin',
+        });
+        setBadgeRegistryAdmin(badgeAdminResult as string);
+        
+        // Read registrar admin
+        const registrarAdminResult = await client.readContract({
+          address: QNS_REGISTRAR_ADDRESS,
+          abi: QNS_REGISTRAR_ABI,
+          functionName: 'admin',
+        });
+        setRegistrarAdmin(registrarAdminResult as string);
+      } catch (err) {
+        console.error('Failed to read admin addresses:', err);
+        setBadgeRegistryAdmin('Failed to read admin address');
+        setRegistrarAdmin('Failed to read admin address');
+      } finally {
+        setIsLoadingAdmin(false);
+      }
+    };
+    
+    loadAdminAddresses();
+  }, []);
+
+  const isAdminMatch = badgeRegistryAdmin && address && 
+    badgeRegistryAdmin.toLowerCase() === address.toLowerCase();
 
   return (
     <div className="space-y-6">
@@ -189,6 +259,42 @@ export default function Badges() {
           {success}
         </div>
       )}
+
+      {/* Admin Address Diagnostic */}
+      <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6">
+        <h2 className="font-clash text-lg font-semibold text-white mb-4">Admin Address Diagnostic (temporary label)</h2>
+        <div className="space-y-3">
+          <div>
+            <span className="text-[#8A8A8A] text-sm">Registrar Admin: </span>
+            <span className="font-mono text-sm text-[#8A8A8A]">{registrarAdmin || 'Loading...'}</span>
+          </div>
+          <div>
+            <span className="text-[#8A8A8A] text-sm">Badge Registry Admin: </span>
+            <span className="font-mono text-sm text-[#8A8A8A]">{badgeRegistryAdmin || 'Loading...'}</span>
+          </div>
+          <div>
+            <span className="text-[#8A8A8A] text-sm">Your Wallet (EVM): </span>
+            <span className="font-mono text-sm text-[#8A8A8A]">{address || 'Not connected'}</span>
+          </div>
+          <div className="pt-2 border-t border-[#1E1E1E]">
+            {isLoadingAdmin ? (
+              <span className="text-[#8A8A8A]">Checking...</span>
+            ) : badgeRegistryAdmin === 'Failed to read admin address' ? (
+              <span className="text-[#E5484D]">Failed to read admin address</span>
+            ) : isAdminMatch ? (
+              <span className="text-[#00D179] flex items-center gap-2">
+                <Check size={16} />
+                Badge Registry admin matches your wallet
+              </span>
+            ) : (
+              <span className="text-[#E5484D] flex items-center gap-2">
+                <X size={16} />
+                MISMATCH — Badge Registry admin does not match your wallet. Badge writes will fail.
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Card 1: Check Badges */}
       <div className="bg-[#141414] border border-[#1E1E1E] rounded-[12px] p-6">
