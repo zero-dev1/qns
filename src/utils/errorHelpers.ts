@@ -7,6 +7,7 @@ const RETRYABLE_PATTERNS = [
   '1014:',        // substrate error code for Priority
   'WouldBlock',
   'AncientBirthBlock',  // stale mortal era — birth block pruned from node's hash window
+  'ExhaustsResources',  // gas_limit exceeds block weight — retry with lower gas
 ];
 
 export function isRetryableError(message: string | undefined | null): boolean {

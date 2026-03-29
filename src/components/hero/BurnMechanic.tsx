@@ -141,72 +141,67 @@ export default function BurnMechanic() {
             of the fee permanently. The supply gets scarcer with every name registered and renewed.
           </p>
 
-          {/* ── Stats — horizontal scroll on mobile, 3-col grid on wider ── */}
-          <div className="mb-5 min-[380px]:grid min-[380px]:grid-cols-3 min-[380px]:gap-4">
-            <div
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide min-[380px]:contents"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              {/* ── QNS Burned ── */}
-              <div className="snap-start shrink-0 w-[72vw] min-[380px]:w-auto text-center min-[380px]:snap-align-none rounded-xl border border-white/[0.04] p-4 min-[380px]:border-0 min-[380px]:p-0">
-                <div className="text-2xl min-[380px]:text-3xl font-bold mb-1">
-                  {loading ? (
-                    <span className="text-[#E5484D]">—</span>
-                  ) : burnUnavailable ? (
-                    <span className="text-[#E5484D]" title="Burn data temporarily unavailable">—</span>
-                  ) : (
-                    <>
-                      {useCounter ? (
-                        <span className="burn-amount-shimmer">
-                          <AnimatedNumber
-                            value={burnValue}
-                            suffix=""
-                            shouldAnimate={isInView}
-                          />
-                        </span>
-                      ) : (
-                        <motion.span
-                          className={isStale ? 'text-[#E5484D]/50' : 'burn-amount-shimmer'}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={isInView ? { opacity: 1, y: 0 } : {}}
-                          transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.4, 0.25, 1] }}
-                        >
-                          {formatBurnAmount(burnValue)}
-                        </motion.span>
-                      )}
-                      <span className="text-[#E5484D]/60 text-xl ml-1">QF</span>
-                    </>
-                  )}
-                </div>
-                <p className="text-xs text-[#555] uppercase tracking-wider">QNS Burned</p>
-                {isStale && !loading && (
-                  <p className="text-[10px] text-[#333] mt-0.5">last known</p>
+          {/* ── Stats — always 3-col, compact on mobile ── */}
+          <div className="grid grid-cols-3 gap-2 min-[380px]:gap-4 mb-5">
+            {/* ── QNS Burned ── */}
+            <div className="text-center">
+              <div className="text-lg min-[380px]:text-3xl font-bold mb-1">
+                {loading ? (
+                  <span className="text-[#E5484D]">—</span>
+                ) : burnUnavailable ? (
+                  <span className="text-[#E5484D]" title="Burn data temporarily unavailable">—</span>
+                ) : (
+                  <>
+                    {useCounter ? (
+                      <span className="burn-amount-shimmer">
+                        <AnimatedNumber
+                          value={burnValue}
+                          suffix=""
+                          shouldAnimate={isInView}
+                        />
+                      </span>
+                    ) : (
+                      <motion.span
+                        className={isStale ? 'text-[#E5484D]/50' : 'burn-amount-shimmer'}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={isInView ? { opacity: 1, y: 0 } : {}}
+                        transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.4, 0.25, 1] }}
+                      >
+                        {formatBurnAmount(burnValue)}
+                      </motion.span>
+                    )}
+                    <span className="text-[#E5484D]/60 text-sm min-[380px]:text-xl ml-1">QF</span>
+                  </>
                 )}
               </div>
+              <p className="text-[10px] min-[380px]:text-xs text-[#555] uppercase tracking-wider">QNS Burned</p>
+              {isStale && !loading && (
+                <p className="text-[10px] text-[#333] mt-0.5">last known</p>
+              )}
+            </div>
 
-              {/* ── Burn Rate ── */}
-              <div className="snap-start shrink-0 w-[72vw] min-[380px]:w-auto text-center min-[380px]:snap-align-none rounded-xl border border-white/[0.04] p-4 min-[380px]:border-0 min-[380px]:p-0">
-                <div className="text-xl font-bold text-white mb-1">
-                  {loading ? '—' : `${burnStats?.burnPercent || 5}%`}
-                </div>
-                <p className="text-xs text-[#555] uppercase tracking-wider">Burn Rate</p>
+            {/* ── Burn Rate ── */}
+            <div className="text-center">
+              <div className="text-lg min-[380px]:text-xl font-bold text-white mb-1">
+                {loading ? '—' : `${burnStats?.burnPercent || 5}%`}
               </div>
+              <p className="text-[10px] min-[380px]:text-xs text-[#555] uppercase tracking-wider">Burn Rate</p>
+            </div>
 
-              {/* ── Names Registered ── */}
-              <div className="snap-start shrink-0 w-[72vw] min-[380px]:w-auto text-center min-[380px]:snap-align-none rounded-xl border border-white/[0.04] p-4 min-[380px]:border-0 min-[380px]:p-0">
-                <div className="text-xl font-bold text-white mb-1">
-                  {loading ? (
-                    '—'
-                  ) : (
-                    <AnimatedNumber
-                      value={burnStats?.totalRegistrations || 0}
-                      suffix=""
-                      shouldAnimate={isInView}
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-[#555] uppercase tracking-wider">Names Registered</p>
+            {/* ── Names Registered ── */}
+            <div className="text-center">
+              <div className="text-lg min-[380px]:text-xl font-bold text-white mb-1">
+                {loading ? (
+                  '—'
+                ) : (
+                  <AnimatedNumber
+                    value={burnStats?.totalRegistrations || 0}
+                    suffix=""
+                    shouldAnimate={isInView}
+                  />
+                )}
               </div>
+              <p className="text-[10px] min-[380px]:text-xs text-[#555] uppercase tracking-wider">Registered</p>
             </div>
           </div>
 
@@ -248,13 +243,6 @@ export default function BurnMechanic() {
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
         }
         @keyframes shimmer {
           0% { background-position: -200% 0; }

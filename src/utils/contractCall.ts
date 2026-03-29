@@ -149,13 +149,11 @@ export async function writeContract(
     );
     const d = dryRun as any;
     if (d.gas_required) {
-      // Use 2x buffer on all attempts — QF gas is negligible and
-      // pallet-revive dry-runs underestimate on live chains due to
-      // state trie changes between dry-run and inclusion.
-      // This eliminates first-transaction BadProof failures from Talisman.
+      // 1.3x buffer on first attempt — fits within block weight limits.
+      // The 2x buffer caused ExhaustsResources pre-dispatch rejections.
       gasLimit = {
-        ref_time: d.gas_required.ref_time * 2n,
-        proof_size: d.gas_required.proof_size * 2n,
+        ref_time: (d.gas_required.ref_time * 130n) / 100n,
+        proof_size: (d.gas_required.proof_size * 130n) / 100n,
       };
     }
     if (d.storage_deposit?.value) storageDeposit = d.storage_deposit.value;
@@ -181,10 +179,12 @@ export async function writeContract(
         );
         const rd = retryDryRun as any;
         if (rd.gas_required) {
-          // Use 2x buffer (same as first attempt — unified generous budget)
+          // 1.1x buffer on retry — tighter estimate since the first 1.3x
+          // may have hit ExhaustsResources. Less headroom but more likely
+          // to fit within block weight.
           gasLimit = {
-            ref_time: rd.gas_required.ref_time * 2n,
-            proof_size: rd.gas_required.proof_size * 2n,
+            ref_time: (rd.gas_required.ref_time * 110n) / 100n,
+            proof_size: (rd.gas_required.proof_size * 110n) / 100n,
           };
         }
         if (rd.storage_deposit?.value) storageDeposit = rd.storage_deposit.value;
@@ -314,7 +314,7 @@ export async function writeContract(
       }
 
       // On retriable errors (BadProof, gas-related, stale block), retry if we have attempts left
-      const isRetriable = msg.includes('BadProof') || msg.includes('OutOfGas') || msg.includes('reverted') || msg.includes('AncientBirthBlock');
+      const isRetriable = msg.includes('BadProof') || msg.includes('OutOfGas') || msg.includes('reverted') || msg.includes('AncientBirthBlock') || msg.includes('ExhaustsResources');
       if (isRetriable && attempt < maxAttempts) {
         // Small delay before retry
         await new Promise(r => setTimeout(r, 1000));

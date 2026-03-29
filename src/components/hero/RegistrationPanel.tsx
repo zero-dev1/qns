@@ -45,7 +45,6 @@ export default function RegistrationPanel({
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bioText, setBioText] = useState('');
   const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasAutoRetried = useRef(false);
   const [savingRecords, setSavingRecords] = useState(false);
 
   const batchSaveRecords = async () => {
@@ -138,7 +137,6 @@ export default function RegistrationPanel({
       setOnboardingStep('celebrate');
       setAvatarUrl('');
       setBioText('');
-      hasAutoRetried.current = false;
     }
   }, [txState]);
 
@@ -147,7 +145,6 @@ export default function RegistrationPanel({
     setOnboardingStep('celebrate');
     setAvatarUrl('');
     setBioText('');
-    hasAutoRetried.current = false;
   }, [selectedName]);
 
   const priceDisplay = () => {
@@ -249,15 +246,10 @@ export default function RegistrationPanel({
           return;
         }
         // Hard failure — rollback
-        if (result.error && isRetryableError(result.error) && !hasAutoRetried.current) {
-          // Auto-retry once — keep ceremony alive, user just signs again
-          hasAutoRetried.current = true;
-          setTxState('pending');
-          setTimeout(() => handleRegister(), 800);
-          return;
-        }
         if (result.error && isRetryableError(result.error)) {
-          // Already auto-retried once — now fall back to amber warning
+          // Retriable error — drop to idle with amber toast so user can tap to try again.
+          // The internal retry in contractCall.ts already attempted with lower gas,
+          // so this is a second-chance manual retry.
           setTxState('idle');
           showToast(RETRY_MESSAGE_SHORT, 'warning');
         } else {
@@ -273,16 +265,9 @@ export default function RegistrationPanel({
     } catch (err: any) {
       const errorMessage = err?.message || '';
       
-      // Check if this is a retryable error
-      if (isRetryableError(errorMessage) && !hasAutoRetried.current) {
-        // Auto-retry once — keep ceremony alive
-        hasAutoRetried.current = true;
-        setTxState('pending');
-        setTimeout(() => handleRegister(), 800);
-        return;
-      }
+      // Retriable error (BadProof, ExhaustsResources, etc.) — contractCall.ts already
+      // retried internally with lower gas. Show amber toast and let user try manually.
       if (isRetryableError(errorMessage)) {
-        // Already auto-retried — show amber warning
         setTxState('idle');
         showToast(RETRY_MESSAGE_SHORT, 'warning');
         hapticError();
@@ -311,6 +296,8 @@ export default function RegistrationPanel({
         setTxError({ type: 'generic', message: 'Transaction rejected' });
       } else if (errorMessageLower.includes('not included within')) {
         setTxError({ type: 'generic', message: 'Transaction sent but confirmation timed out. Check the explorer — it may have succeeded. Try refreshing the page.' });
+      } else if (errorMessageLower.includes('exhaustsresources') || errorMessageLower.includes('exhaust')) {
+        setTxError({ type: 'generic', message: 'Transaction too large for the current block. Please try again.' });
       } else {
         setTxError({ type: 'generic', message: errorMessage });
       }

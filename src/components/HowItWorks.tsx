@@ -170,9 +170,6 @@ export default function HowItWorks() {
   const [activeTypingIndex, setActiveTypingIndex] = useState<number | null>(null);
   const [runKey, setRunKey] = useState(0);
 
-  const terminalBodyRef = useRef<HTMLDivElement>(null);
-  const [lockedHeight, setLockedHeight] = useState<number | null>(null);
-
   // Sequential line reveal engine
   useEffect(() => {
     if (!isInView || phase !== 'typing') return;
@@ -230,13 +227,6 @@ export default function HowItWorks() {
     }
   }, [visibleCount, phase]);
 
-  // Lock terminal body height after first full render
-  useEffect(() => {
-    if (visibleCount >= SEQUENCE.length && lockedHeight === null && terminalBodyRef.current) {
-      const height = terminalBodyRef.current.scrollHeight;
-      setLockedHeight(height);
-    }
-  }, [visibleCount, lockedHeight]);
 
   // Idle → wait 3s → start clearing
   useEffect(() => {
@@ -324,9 +314,7 @@ export default function HowItWorks() {
 
             {/* Terminal body */}
             <motion.div
-              ref={terminalBodyRef}
-              className={`p-5 md:p-6 space-y-2 ${lockedHeight === null ? 'min-h-[320px] md:min-h-[360px]' : ''}`}
-              style={lockedHeight !== null ? { minHeight: `${lockedHeight}px` } : undefined}
+              className="p-5 md:p-6 space-y-2 min-h-[340px] md:min-h-[370px] overflow-hidden"
               animate={{ opacity: phase === 'clearing' ? 0 : 1 }}
               transition={{ duration: phase === 'clearing' ? 0.4 : 0.2, ease: 'easeInOut' }}
             >
