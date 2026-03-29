@@ -62,7 +62,7 @@ const SEQUENCE: TerminalLine[] = [
     delay: 150,
     segments: [
       { text: '  → used by ', color: '#555' },
-      { text: 'QFPay', color: '#0040FF' },
+      { text: 'DappStore', color: '#20EAE6' },
       { text: ' · ', color: '#333' },
       { text: 'QFPad', color: '#89FBFE' },
       { text: ' · ', color: '#333' },
@@ -163,10 +163,11 @@ export default function HowItWorks() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(sectionRef, { once: true, amount: 0.3 });
 
-  // Track which lines are visible and which line is actively typing
+  // Phase state machine for smooth loop transitions
+  type Phase = 'typing' | 'idle' | 'clearing' | 'restarting';
+  const [phase, setPhase] = useState<Phase>('typing');
   const [visibleCount, setVisibleCount] = useState(0);
   const [activeTypingIndex, setActiveTypingIndex] = useState<number | null>(null);
-  const [typingDone, setTypingDone] = useState(false);
   const [runKey, setRunKey] = useState(0);
 
   const terminalBodyRef = useRef<HTMLDivElement>(null);
@@ -174,7 +175,7 @@ export default function HowItWorks() {
 
   // Sequential line reveal engine
   useEffect(() => {
-    if (!isInView) return;
+    if (!isInView || phase !== 'typing') return;
 
     let cancelled = false;
     let currentIndex = 0;
@@ -182,7 +183,6 @@ export default function HowItWorks() {
     // Reset state for this run
     setVisibleCount(0);
     setActiveTypingIndex(null);
-    setTypingDone(false);
 
     const showNext = () => {
       if (cancelled || currentIndex >= SEQUENCE.length) return;
@@ -220,34 +220,49 @@ export default function HowItWorks() {
     return () => {
       cancelled = true;
     };
-  }, [isInView, runKey]);
+  }, [isInView, runKey, phase]);
 
-  // After all lines shown, mark complete then schedule replay
+  // After all lines shown → transition to idle phase
   useEffect(() => {
-    if (visibleCount >= SEQUENCE.length) {
-      const t = setTimeout(() => setTypingDone(true), 500);
+    if (visibleCount >= SEQUENCE.length && phase === 'typing') {
+      const t = setTimeout(() => setPhase('idle'), 500);
       return () => clearTimeout(t);
     }
-  }, [visibleCount]);
+  }, [visibleCount, phase]);
 
-  // Lock terminal body height after first full sequence render to prevent
-  // content shift below when the loop restarts and lines are cleared.
+  // Lock terminal body height after first full render
   useEffect(() => {
     if (visibleCount >= SEQUENCE.length && lockedHeight === null && terminalBodyRef.current) {
-      // Measure actual rendered height including all lines
       const height = terminalBodyRef.current.scrollHeight;
       setLockedHeight(height);
     }
   }, [visibleCount, lockedHeight]);
 
-  // Replay loop: after idle cursor blinks for 3s, restart
+  // Idle → wait 3s → start clearing
   useEffect(() => {
-    if (!typingDone) return;
-    const t = setTimeout(() => {
-      setRunKey((k) => k + 1);
-    }, 3000);
+    if (phase !== 'idle') return;
+    const t = setTimeout(() => setPhase('clearing'), 3000);
     return () => clearTimeout(t);
-  }, [typingDone]);
+  }, [phase]);
+
+  // Clearing → wait for fade-out (400ms) → reset lines while invisible → restart
+  useEffect(() => {
+    if (phase !== 'clearing') return;
+    const t = setTimeout(() => {
+      setVisibleCount(0);
+      setActiveTypingIndex(null);
+      setRunKey((k) => k + 1);
+      setPhase('restarting');
+    }, 400);
+    return () => clearTimeout(t);
+  }, [phase]);
+
+  // Restarting → brief pause while invisible → begin typing again
+  useEffect(() => {
+    if (phase !== 'restarting') return;
+    const t = setTimeout(() => setPhase('typing'), 150);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const visibleLines = SEQUENCE.slice(0, visibleCount);
 
@@ -308,10 +323,12 @@ export default function HowItWorks() {
             </div>
 
             {/* Terminal body */}
-            <div
+            <motion.div
               ref={terminalBodyRef}
               className={`p-5 md:p-6 space-y-2 ${lockedHeight === null ? 'min-h-[320px] md:min-h-[360px]' : ''}`}
               style={lockedHeight !== null ? { minHeight: `${lockedHeight}px` } : undefined}
+              animate={{ opacity: phase === 'clearing' ? 0 : 1 }}
+              transition={{ duration: phase === 'clearing' ? 0.4 : 0.2, ease: 'easeInOut' }}
             >
               <AnimatePresence initial={false}>
                 {visibleLines.map((line, i) => {
@@ -339,7 +356,7 @@ export default function HowItWorks() {
               </AnimatePresence>
 
               {/* Idle cursor after sequence completes */}
-              {typingDone && (
+              {phase === 'idle' && (
                 <motion.div
                   className="flex items-center gap-2 font-mono-addr text-sm pt-2"
                   initial={{ opacity: 0 }}
@@ -350,7 +367,7 @@ export default function HowItWorks() {
                   <span className="inline-block w-[7px] h-[14px] bg-[#00D179]/60 animate-pulse" />
                 </motion.div>
               )}
-            </div>
+            </motion.div>
           </div>
 
           {/* Subtle ambient glow behind terminal */}

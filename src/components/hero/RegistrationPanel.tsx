@@ -45,6 +45,7 @@ export default function RegistrationPanel({
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bioText, setBioText] = useState('');
   const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasAutoRetried = useRef(false);
   const [savingRecords, setSavingRecords] = useState(false);
 
   const batchSaveRecords = async () => {
@@ -137,6 +138,7 @@ export default function RegistrationPanel({
       setOnboardingStep('celebrate');
       setAvatarUrl('');
       setBioText('');
+      hasAutoRetried.current = false;
     }
   }, [txState]);
 
@@ -145,6 +147,7 @@ export default function RegistrationPanel({
     setOnboardingStep('celebrate');
     setAvatarUrl('');
     setBioText('');
+    hasAutoRetried.current = false;
   }, [selectedName]);
 
   const priceDisplay = () => {
@@ -246,8 +249,15 @@ export default function RegistrationPanel({
           return;
         }
         // Hard failure — rollback
+        if (result.error && isRetryableError(result.error) && !hasAutoRetried.current) {
+          // Auto-retry once — keep ceremony alive, user just signs again
+          hasAutoRetried.current = true;
+          setTxState('pending');
+          setTimeout(() => handleRegister(), 800);
+          return;
+        }
         if (result.error && isRetryableError(result.error)) {
-          // Retryable error - show amber warning instead of red error
+          // Already auto-retried once — now fall back to amber warning
           setTxState('idle');
           showToast(RETRY_MESSAGE_SHORT, 'warning');
         } else {
@@ -264,7 +274,15 @@ export default function RegistrationPanel({
       const errorMessage = err?.message || '';
       
       // Check if this is a retryable error
+      if (isRetryableError(errorMessage) && !hasAutoRetried.current) {
+        // Auto-retry once — keep ceremony alive
+        hasAutoRetried.current = true;
+        setTxState('pending');
+        setTimeout(() => handleRegister(), 800);
+        return;
+      }
       if (isRetryableError(errorMessage)) {
+        // Already auto-retried — show amber warning
         setTxState('idle');
         showToast(RETRY_MESSAGE_SHORT, 'warning');
         hapticError();

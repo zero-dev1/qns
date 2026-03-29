@@ -857,10 +857,39 @@ export interface BurnStats {
   qnsBurned: number;        // QF burned via QNS registrations only
   totalRegistrations: number;
   burnPercent: number;       // e.g. 5
+  stale: boolean;           // ← ADD THIS FIELD
+}
+
+const BURN_CACHE_KEY = 'qns:burnStats';
+const BURN_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function readBurnCache(): BurnStats | null {
+  try {
+    const raw = localStorage.getItem(BURN_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > BURN_CACHE_TTL) {
+      localStorage.removeItem(BURN_CACHE_KEY);
+      return null;
+    }
+    return { ...data, stale: true };
+  } catch {
+    return null;
+  }
+}
+
+function writeBurnCache(stats: BurnStats): void {
+  try {
+    const { stale, ...data } = stats;
+    localStorage.setItem(BURN_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    // localStorage full or unavailable — ignore
+  }
 }
 
 export async function getBurnStats(): Promise<BurnStats> {
-  // Fetch burn data from QFTools explorer API and on-chain in parallel
+  const cached = readBurnCache();
+
   const [transfersRes, totalRegs, burnPct] = await Promise.allSettled([
     fetch(`${QF_EXPLORER_API}/txs/${BURN_ADDRESS_SS58}?limit=200`)
       .then(r => {
@@ -902,8 +931,7 @@ export async function getBurnStats(): Promise<BurnStats> {
     ? Number(burnPct.value)
     : 5;
 
-  // If explorer was down but on-chain totalBurned is available (post-redeploy), use it.
-  // For now, this is future-proofing — totalBurned doesn't exist on current contract.
+  // If explorer was down, try on-chain totalBurned (future contract upgrade)
   if (!explorerAvailable) {
     try {
       const onChainBurned = await callContract<bigint>(
@@ -913,10 +941,27 @@ export async function getBurnStats(): Promise<BurnStats> {
         qnsBurned = Number(onChainBurned) / 1e18;
       }
     } catch {
-      // totalBurned doesn't exist on current contract — that's expected pre-redeploy.
-      // qnsBurned stays 0, card will show "—" via the display logic below.
+      // totalBurned doesn't exist on current contract — expected pre-redeploy
     }
   }
 
-  return { totalBurned, qnsBurned, totalRegistrations, burnPercent };
+  // If explorer available → fresh data, cache it and return
+  if (explorerAvailable) {
+    const stats: BurnStats = { totalBurned, qnsBurned, totalRegistrations, burnPercent, stale: false };
+    writeBurnCache(stats);
+    return stats;
+  }
+
+  // Explorer down → return cache if available, otherwise return zeros
+  if (cached) {
+    // Overlay fresh on-chain values onto cached explorer data
+    return {
+      ...cached,
+      totalRegistrations: totalRegistrations || cached.totalRegistrations,
+      burnPercent: burnPercent || cached.burnPercent,
+      stale: true,
+    };
+  }
+
+  return { totalBurned, qnsBurned, totalRegistrations, burnPercent, stale: false };
 }
