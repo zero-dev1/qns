@@ -10,7 +10,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useCopy } from '../hooks/useCopy';
 import { hapticTap, hapticSuccess, hapticError } from '../utils/haptics';
 import { namehash as computeNamehash } from '../utils/qns';
-import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
+import { BADGE_TYPES, getBadgesForName, type BadgeType } from '../utils/badges';
 
 // QDL: Renewal pricing constants (must match contract)
 const GAS_BUFFER = 0.5;   // QF tokens reserved for gas — UI estimate only
@@ -156,6 +156,7 @@ export default function DetailModal({
   // Share state
   const [linkCopied, setLinkCopied] = useState(false);
   const [hashCopied, setHashCopied] = useState(false);
+  const [badges, setBadges] = useState<BadgeType[]>([]);
 
   // QDL: real EIP-137 namehash for devs
   const fullNamehash = useMemo(() => {
@@ -179,6 +180,7 @@ export default function DetailModal({
       setTransferError('');
       setTransferStep('input');
       setRenewYears(1);
+      getBadgesForName(name, computeNamehash(`${name}.qf`)).then(setBadges);
     }
   }, [isOpen, name, avatar, bio, twitter, telegram, website, email]);
 
@@ -327,8 +329,6 @@ export default function DetailModal({
   const daysUntilExpiry = Math.floor((expires - Date.now() / 1000) / 86400);
   const isExpiring = !isPermanent && daysUntilExpiry <= 30 && daysUntilExpiry > 0;
   const isExpired = !isPermanent && expires < Date.now() / 1000;
-  const isTeam = TEAM_NAMES.includes(name);
-  const isDappLab = DAPP_LAB_NAMES.includes(name);
 
   return (
     <>
@@ -410,23 +410,38 @@ export default function DetailModal({
             {activeTab === 'overview' && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                 {/* Badges */}
-                {(isPermanent || isTeam || isDappLab) && (
+                {(isPermanent || badges.length > 0) && (
                   <div className="flex flex-wrap gap-2">
                     {isPermanent && (
                       <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         <Shield className="w-3 h-3" /> Permanent
                       </span>
                     )}
-                    {isTeam && (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-[#00D179]/10 text-[#00D179] border border-[#00D179]/20">
-                        <Sparkles className="w-3 h-3" /> Team
-                      </span>
-                    )}
-                    {isDappLab && (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                        <Star className="w-3 h-3" /> dApp Lab
-                      </span>
-                    )}
+                    {badges.map((badge) => {
+                      const config = BADGE_TYPES[badge];
+                      const getIcon = () => {
+                        switch (badge) {
+                          case 'pioneer': return <Crown className="w-3 h-3" />;
+                          case 'team': return <Sparkles className="w-3 h-3" />;
+                          case 'dapplab': return <Star className="w-3 h-3" />;
+                          case 'ambassador': return <Shield className="w-3 h-3" />;
+                          default: return <Shield className="w-3 h-3" />;
+                        }
+                      };
+                      return (
+                        <span
+                          key={badge}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border"
+                          style={{
+                            backgroundColor: `${config.color}10`,
+                            color: config.color,
+                            borderColor: `${config.color}33`,
+                          }}
+                        >
+                          {getIcon()} {config.label}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
 

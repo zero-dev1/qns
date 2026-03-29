@@ -26,6 +26,7 @@ export const quantumFusion = defineChain({
 export const QNS_REGISTRY_ADDRESS = (import.meta.env.VITE_QNS_REGISTRY_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 export const QNS_REGISTRAR_ADDRESS = (import.meta.env.VITE_QNS_REGISTRAR_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 export const QNS_RESOLVER_ADDRESS = (import.meta.env.VITE_QNS_RESOLVER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+export const QNS_BADGE_REGISTRY_ADDRESS = (import.meta.env.VITE_QNS_BADGE_REGISTRY_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 
 export const QNS_REGISTRY_ABI = [
   {
@@ -489,5 +490,88 @@ export const QNS_RESOLVER_ABI = [
     ],
     outputs: [],
     stateMutability: 'nonpayable',
+  },
+] as const;
+
+export const QNS_BADGE_REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'admin',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'hasBadge',
+    inputs: [
+      { name: 'nameHash', type: 'bytes32' },
+      { name: 'badgeType', type: 'string' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'assignBadge',
+    inputs: [
+      { name: 'nameHash', type: 'bytes32' },
+      { name: 'badgeType', type: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'assignBadgeBatch',
+    inputs: [
+      { name: 'nameHashes', type: 'bytes32[]' },
+      { name: 'badgeType', type: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'revokeBadge',
+    inputs: [
+      { name: 'nameHash', type: 'bytes32' },
+      { name: 'badgeType', type: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'transferAdmin',
+    inputs: [
+      { name: 'newAdmin', type: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'event',
+    name: 'BadgeAssigned',
+    inputs: [
+      { name: 'nameHash', type: 'bytes32', indexed: true },
+      { name: 'badgeType', type: 'string', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'BadgeRevoked',
+    inputs: [
+      { name: 'nameHash', type: 'bytes32', indexed: true },
+      { name: 'badgeType', type: 'string', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'AdminTransferred',
+    inputs: [
+      { name: 'previousAdmin', type: 'address', indexed: true },
+      { name: 'newAdmin', type: 'address', indexed: true },
+    ],
   },
 ] as const;

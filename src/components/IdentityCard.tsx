@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
 import { Pencil, Share2 } from 'lucide-react';
 import Avatar from './Avatar';
 import PulseDot from './PulseDot';
-import { TEAM_NAMES, DAPP_LAB_NAMES } from '../utils/badges';
+import { BADGE_TYPES, getBadgesForName, type BadgeType } from '../utils/badges';
+import { namehash } from '../utils/qns';
 
 interface OwnedName {
   name: string;
@@ -37,11 +38,16 @@ const COMPLETENESS_FIELDS = ['avatar', 'bio', 'twitter', 'telegram', 'website', 
 
 export default function IdentityCard({ name, records, isPrimary, enableTilt, onOpenDetail }: IdentityCardProps) {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [badges, setBadges] = useState<BadgeType[]>([]);
   const rotateX = useMotionValue(0);
   const rotateY = useMotionValue(0);
   const springRotateX = useSpring(rotateX, { stiffness: 150, damping: 20 });
   const springRotateY = useSpring(rotateY, { stiffness: 150, damping: 20 });
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getBadgesForName(name.name, namehash(name.name + '.qf')).then(setBadges);
+  }, [name.name]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRef.current) return;
@@ -78,8 +84,6 @@ export default function IdentityCard({ name, records, isPrimary, enableTilt, onO
         ? 'bg-gradient-to-r from-amber-400 to-amber-400/40'
         : 'bg-gradient-to-r from-[#00D179] to-[#00D179]/40';
 
-  const isTeam = TEAM_NAMES.includes(name.name.toLowerCase());
-  const isDappLab = DAPP_LAB_NAMES.includes(name.name.toLowerCase());
 
   const filledFields = COMPLETENESS_FIELDS.filter(
     (field) => records[field as keyof typeof records]
@@ -170,16 +174,22 @@ export default function IdentityCard({ name, records, isPrimary, enableTilt, onO
             <ShieldIcon /> Permanent
           </span>
         )}
-        {isTeam && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#DADADA]/10 text-[#DADADA] border border-[#DADADA]/20">
-            <ShieldIcon /> Team
-          </span>
-        )}
-        {isDappLab && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#00EFE7]/10 text-[#00EFE7] border border-[#00EFE7]/20">
-            <ShieldIcon /> dApp Lab
-          </span>
-        )}
+        {badges.map((badge) => {
+          const config = BADGE_TYPES[badge];
+          return (
+            <span
+              key={badge}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border"
+              style={{
+                backgroundColor: `${config.color}10`,
+                color: config.color,
+                borderColor: `${config.color}33`,
+              }}
+            >
+              <ShieldIcon /> {config.label}
+            </span>
+          );
+        })}
       </div>
 
       {/* Avatar with layoutId for shared animation */}

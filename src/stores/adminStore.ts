@@ -7,10 +7,12 @@ import {
   QNS_REGISTRAR_ABI,
   QNS_RESOLVER_ADDRESS,
   QNS_RESOLVER_ABI,
+  QNS_BADGE_REGISTRY_ADDRESS,
+  QNS_BADGE_REGISTRY_ABI,
 } from '../config/contracts';
 import type { Address } from 'viem';
 
-export type AdminSection = 'overview' | 'reserve' | 'registrations' | 'pricing' | 'treasury' | 'settings';
+export type AdminSection = 'overview' | 'reserve' | 'registrations' | 'pricing' | 'treasury' | 'settings' | 'badges';
 
 interface AdminState {
   // Access control
@@ -51,6 +53,11 @@ interface AdminState {
   } | null;
   isLookingUp: boolean;
   
+  // Badge management
+  badgeLookupName: string;
+  badgeLookupResult: { nameHash: string; badges: string[] } | null;
+  isCheckingBadges: boolean;
+  
   // Actions
   checkAdmin: (userAddress: Address) => Promise<void>;
   setCurrentSection: (section: AdminSection) => void;
@@ -68,6 +75,13 @@ interface AdminState {
   // Registration lookup
   setLookupName: (name: string) => void;
   lookupRegistration: (name: string) => Promise<void>;
+  
+  // Badge actions
+  setBadgeLookupName: (name: string) => void;
+  checkBadges: (name: string) => Promise<void>;
+  assignBadge: (name: string, badgeType: string, account: string) => Promise<string>;
+  assignBadgeBatch: (names: string[], badgeType: string, account: string) => Promise<string>;
+  revokeBadge: (name: string, badgeType: string, account: string) => Promise<string>;
   
   // Pricing actions
   updatePrices: (prices: { char3: bigint; char4: bigint; char5Plus: bigint }, account: string) => Promise<string>;
@@ -114,6 +128,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   lookupName: '',
   lookupResult: null,
   isLookingUp: false,
+  
+  // Badge management
+  badgeLookupName: '',
+  badgeLookupResult: null,
+  isCheckingBadges: false,
   
   // Check if connected wallet is admin
   checkAdmin: async (_userAddress: Address) => {
@@ -613,6 +632,121 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       if (!result.confirmed) {
         // Revert state on failure
         get().loadOverviewData();
+      }
+    });
+    
+    return txHash;
+  },
+  
+  // Badge actions
+  setBadgeLookupName: (name) => set({ badgeLookupName: name }),
+  
+  checkBadges: async (name: string) => {
+    set({ isCheckingBadges: true, badgeLookupResult: null });
+    try {
+      const client = getPublicClient();
+      const nameHash = namehash(`${name}.qf`);
+      const badgeTypes = ['pioneer', 'team', 'dapplab', 'ambassador'];
+      const badges: string[] = [];
+      
+      // Check each badge type
+      await Promise.all(
+        badgeTypes.map(async (badgeType) => {
+          try {
+            const hasBadge = await client.readContract({
+              address: QNS_BADGE_REGISTRY_ADDRESS,
+              abi: QNS_BADGE_REGISTRY_ABI,
+              functionName: 'hasBadge',
+              args: [nameHash, badgeType],
+            }) as boolean;
+            
+            if (hasBadge) {
+              badges.push(badgeType);
+            }
+          } catch {
+            // Ignore errors for individual badge checks
+          }
+        })
+      );
+      
+      set({
+        badgeLookupResult: { nameHash, badges },
+        isCheckingBadges: false,
+      });
+    } catch (err) {
+      set({ badgeLookupResult: null, isCheckingBadges: false });
+    }
+  },
+  
+  assignBadge: async (name: string, badgeType: string, account: string) => {
+    const walletClient = getWalletClient();
+    if (!walletClient) throw new Error('No wallet connected');
+    
+    const nameHash = namehash(`${name}.qf`);
+    
+    const { txHash, confirmation } = await walletClient.writeContract({
+      address: QNS_BADGE_REGISTRY_ADDRESS,
+      abi: QNS_BADGE_REGISTRY_ABI,
+      functionName: 'assignBadge',
+      args: [nameHash, badgeType],
+      account,
+    });
+    
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Re-check badges on failure
+        get().checkBadges(name);
+      }
+    });
+    
+    return txHash;
+  },
+  
+  assignBadgeBatch: async (names: string[], badgeType: string, account: string) => {
+    const walletClient = getWalletClient();
+    if (!walletClient) throw new Error('No wallet connected');
+    
+    const nameHashes = names.map(name => namehash(`${name}.qf`));
+    
+    const { txHash, confirmation } = await walletClient.writeContract({
+      address: QNS_BADGE_REGISTRY_ADDRESS,
+      abi: QNS_BADGE_REGISTRY_ABI,
+      functionName: 'assignBadgeBatch',
+      args: [nameHashes, badgeType],
+      account,
+    });
+    
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Re-check badges for all names on failure
+        names.forEach(name => get().checkBadges(name));
+      }
+    });
+    
+    return txHash;
+  },
+  
+  revokeBadge: async (name: string, badgeType: string, account: string) => {
+    const walletClient = getWalletClient();
+    if (!walletClient) throw new Error('No wallet connected');
+    
+    const nameHash = namehash(`${name}.qf`);
+    
+    const { txHash, confirmation } = await walletClient.writeContract({
+      address: QNS_BADGE_REGISTRY_ADDRESS,
+      abi: QNS_BADGE_REGISTRY_ABI,
+      functionName: 'revokeBadge',
+      args: [nameHash, badgeType],
+      account,
+    });
+    
+    // Background confirmation
+    confirmation.then((result) => {
+      if (!result.confirmed) {
+        // Re-check badges on failure
+        get().checkBadges(name);
       }
     });
     

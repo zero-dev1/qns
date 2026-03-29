@@ -8,6 +8,7 @@ import Registrations from './Registrations';
 import Pricing from './Pricing';
 import Treasury from './Treasury';
 import Settings from './Settings';
+import Badges from './Badges';
 import {
   LayoutDashboard,
   Bookmark,
@@ -15,6 +16,7 @@ import {
   DollarSign,
   Wallet,
   Settings as SettingsIcon,
+  Award,
   Menu,
   X,
 } from 'lucide-react';
@@ -32,6 +34,7 @@ const navItems: NavItem[] = [
   { id: 'pricing', label: 'Pricing', icon: DollarSign },
   { id: 'treasury', label: 'Treasury', icon: Wallet },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  { id: 'badges', label: 'Badges', icon: Award },
 ];
 
 export default function AdminLayout() {
@@ -122,6 +125,8 @@ export default function AdminLayout() {
         return <Treasury />;
       case 'settings':
         return <Settings />;
+      case 'badges':
+        return <Badges />;
       default:
         return <Overview />;
     }
