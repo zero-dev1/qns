@@ -306,7 +306,7 @@ export default function HowItWorks() {
 
             {/* Terminal body */}
             <motion.div
-              className="relative h-[340px] md:h-[370px] overflow-hidden"
+              className="relative h-[430px] md:h-[400px] overflow-hidden"
               animate={{ opacity: phase === 'clearing' ? 0 : 1 }}
               transition={{ duration: phase === 'clearing' ? 0.4 : 0.2, ease: 'easeInOut' }}
             >
