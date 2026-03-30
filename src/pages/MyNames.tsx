@@ -489,7 +489,6 @@ export default function MyNamesPage() {
         twitter: textRecords[name.name]?.twitter || '',
         telegram: textRecords[name.name]?.telegram || '',
         website: textRecords[name.name]?.website || '',
-        email: textRecords[name.name]?.email || '',
       },
     ])
   );
@@ -733,7 +732,7 @@ export default function MyNamesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {sortedNames.map((item) => {
                     const recs = cardRecords.get(item.name) || {
-                      avatar: '', bio: '', twitter: '', telegram: '', website: '', email: '',
+                      avatar: '', bio: '', twitter: '', telegram: '', website: '',
                     };
                     return (
                       <IdentityCard
@@ -770,7 +769,6 @@ export default function MyNamesPage() {
             twitter={textRecords[selectedName]?.twitter}
             telegram={textRecords[selectedName]?.telegram}
             website={textRecords[selectedName]?.website}
-            email={textRecords[selectedName]?.email}
             isPrimary={primaryName === selectedName}
             providerType={providerType}
             address={address || ''}

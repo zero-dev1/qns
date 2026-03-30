@@ -111,6 +111,18 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
 
     markAccountMappedLocally(ss58Address);
   } catch (err: any) {
+    // ── Structured PAPI error detection ──
+    // PAPI throws InvalidTxError as { type: "Invalid", value: { type: "Payment" } }
+    // with no .message containing our substring checks. Detect the object shape first.
+    const errObj = (err as any)?.value !== undefined ? err : null;
+    if (
+      errObj?.type === 'Invalid' && errObj?.value?.type === 'Payment' ||
+      err?.type === 'Invalid' && err?.value?.type === 'Payment'
+    ) {
+      console.warn('[QNS] ensureAccountMapped: InvalidTransaction::Payment (insufficient balance)');
+      throw new Error(INSUFFICIENT_BALANCE_FOR_MAPPING);
+    }
+
     const msg = err?.message ?? '';
 
     // Already mapped → treat as success
@@ -129,12 +141,20 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
       throw new Error(METADATA_HASH_ERROR);
     }
 
-    // Insufficient balance for mapping transaction
+    // Insufficient balance — string-based fallback (belt-and-suspenders)
     if (msg.includes('InsufficientBalance') || msg.includes('Inability to pay') || 
         msg.includes('1010:') || msg.includes('insufficient') ||
         msg.includes('balance') || msg.includes('fund') ||
         msg.includes('Token') || msg.includes('Exhausted') ||
-        msg.includes('FundsUnavailable')) {
+        msg.includes('FundsUnavailable') ||
+        msg.includes('Payment') || msg.includes('payment')) {
+      throw new Error(INSUFFICIENT_BALANCE_FOR_MAPPING);
+    }
+
+    // Stringified error object fallback — catches cases where .message is the JSON repr
+    const errStr = String(err);
+    if (errStr.includes('"Payment"') || errStr.includes('InvalidTransaction::Payment')) {
+      console.warn('[QNS] ensureAccountMapped: Payment error caught via string fallback');
       throw new Error(INSUFFICIENT_BALANCE_FOR_MAPPING);
     }
 
