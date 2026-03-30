@@ -1,6 +1,6 @@
 import { encodeFunctionData, decodeFunctionResult } from 'viem';
 import { Binary } from 'polkadot-api';
-import { getTypedApi, getFreshBlockHash } from './papiClient';
+import { getTypedApi, getFreshBlockHash, warmUpPapi } from './papiClient';
 import { getCurrentConnection } from './wallet';
 import { ensureAccountMapped } from './accountMapping';
 
@@ -110,6 +110,8 @@ export async function writeContract(
         const walletId = walletName === 'talisman' ? 'talisman' : 'subwallet-js';
         await connectSubstrateWallet(walletId);
         connection = getCurrentConnection();
+        // Warm up PAPI after re-connection — subscriptions may be stale
+        if (connection) await warmUpPapi();
       }
     } catch {
       // Re-connection failed — fall through to error
@@ -230,6 +232,7 @@ export async function writeContract(
 
         const subscription = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
           at: freshAt,
+          mortality: { mortal: true, period: 128 },
         }).subscribe({
           next(ev: any) {
             if (ev.type === 'broadcasted') {
@@ -348,6 +351,8 @@ export async function sendTransfer(
         const walletId = walletName === 'talisman' ? 'talisman' : 'subwallet-js';
         await connectSubstrateWallet(walletId);
         connection = getCurrentConnection();
+        // Warm up PAPI after re-connection — subscriptions may be stale
+        if (connection) await warmUpPapi();
       }
     } catch {
       // Re-connection failed — fall through to error
@@ -428,6 +433,7 @@ export async function sendTransfer(
 
       const subscription = tx.signSubmitAndWatch(connection.signer.polkadotSigner, {
         at: freshAt,
+        mortality: { mortal: true, period: 128 },
       }).subscribe({
         next(ev: any) {
           if (ev.type === 'broadcasted') {

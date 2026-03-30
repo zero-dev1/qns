@@ -129,6 +129,7 @@ export async function isOnQFNetwork(): Promise<boolean> {
 
 /**
  * Ensure MetaMask is on the QF Network chain. If not, request switch/add.
+ * Handles: chain not added (4902), switch unsupported, already on correct chain.
  */
 export async function ensureQFNetwork(): Promise<void> {
   if (!window.ethereum) throw new Error('MetaMask not installed');
@@ -156,6 +157,12 @@ export async function ensureQFNetwork(): Promise<void> {
         ],
       });
     } else {
+      // Switch failed for another reason (method unsupported, etc.)
+      // Check if we're already on QF Network — if so, proceed silently
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' }) as string;
+      if (parseInt(currentChainId, 16) === qfNetwork.id) {
+        return; // Already on correct chain — safe to proceed
+      }
       throw switchError;
     }
   }

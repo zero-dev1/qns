@@ -198,6 +198,7 @@ export const useWalletStore = create<WalletState>()(
               return;
             }
 
+            console.warn('[QNS] ensureAccountMapped catch-all:', mapErr);
             disconnectWallet();
             setError(
               'Account setup incomplete — please try connecting again.'
@@ -508,7 +509,7 @@ export const useWalletStore = create<WalletState>()(
             useWalletStore.setState({ _rehydrating: true });
 
             if (state.walletName === 'metamask') {
-              // Rehydrate MetaMask
+              // MetaMask rehydration — no PAPI warmup needed (MetaMask bypasses PAPI entirely)
               state
                 .connectMetaMask()
                 .then(() => {
@@ -519,7 +520,7 @@ export const useWalletStore = create<WalletState>()(
                   state.disconnect();
                 });
             } else {
-              // Rehydrate Substrate wallet — but only if the wallet is valid for this platform
+              // Substrate wallet rehydration — must warm up PAPI first
               const walletType = state.walletName as 'talisman' | 'subwallet';
               const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
               const walletValidForPlatform =
@@ -527,38 +528,27 @@ export const useWalletStore = create<WalletState>()(
                 (!onMobile && walletType === 'talisman');
 
               if (!walletValidForPlatform) {
-                // Persisted wallet doesn't match current platform — clean disconnect
                 useWalletStore.setState({ _rehydrating: false });
                 state.disconnect();
                 return;
               }
 
-              state
-                .connectWallet(walletType)
-                .then(() => {
-                  useWalletStore.setState({ _rehydrating: false });
-                  if (!useWalletStore.getState().address) {
-                    useWalletStore.setState({ _rehydrating: true });
-                    setTimeout(() => {
-                      state
-                        .connectWallet(walletType)
-                        .then(() => {
-                          useWalletStore.setState({
-                            _rehydrating: false,
-                          });
-                        })
-                        .catch(() => {
-                          useWalletStore.setState({
-                            _rehydrating: false,
-                          });
-                        });
-                    }, 1500);
-                  }
+              // Warm up PAPI before connecting — this ensures PAPI's internal
+              // nonce tracker has processed at least one block before
+              // ensureAccountMapped fires a transaction.
+              import('../utils/papiClient').then(({ warmUpPapi }) =>
+                warmUpPapi().then(() => {
+                  state
+                    .connectWallet(walletType)
+                    .then(() => {
+                      useWalletStore.setState({ _rehydrating: false });
+                    })
+                    .catch(() => {
+                      useWalletStore.setState({ _rehydrating: false });
+                      state.disconnect();
+                    });
                 })
-                .catch(() => {
-                  useWalletStore.setState({ _rehydrating: false });
-                  state.disconnect();
-                });
+              );
             }
           } else if (state?.address) {
             state.refreshName();

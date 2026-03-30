@@ -77,3 +77,50 @@ export async function getFreshBlockHash(): Promise<string> {
     return "finalized";
   }
 }
+
+/**
+ * Wait for PAPI to process at least one block header from the WebSocket.
+ *
+ * On QF Network (100ms blocks), PAPI's internal nonce tracker and block
+ * state aren't ready until the first bestBlocks$ emission arrives. If we
+ * sign a transaction before that, PAPI may use stale/uninitialized state,
+ * producing BadProof or InvalidTransaction.
+ *
+ * Uses bestBlocks$ (not finalizedBlock$) because QF's GRANDPA finalization
+ * lags behind best block — waiting for finalization would hang.
+ *
+ * 3-second timeout resolves gracefully (does not reject) so callers can
+ * proceed with degraded reliability rather than blocking entirely.
+ */
+let _papiWarmedUp = false;
+
+export async function warmUpPapi(): Promise<void> {
+  if (_papiWarmedUp) return;
+
+  const client = getClient();
+
+  try {
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('[papiClient] warmUpPapi timed out after 3s — proceeding anyway');
+        resolve();
+      }, 3000);
+
+      const sub = client.bestBlocks$.subscribe({
+        next() {
+          _papiWarmedUp = true;
+          clearTimeout(timeout);
+          sub.unsubscribe();
+          resolve();
+        },
+        error() {
+          clearTimeout(timeout);
+          resolve();
+        },
+      });
+    });
+  } catch {
+    // Graceful degradation — proceed without warmup
+    console.warn('[papiClient] warmUpPapi failed — proceeding anyway');
+  }
+}

@@ -91,6 +91,7 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
       connection.signer.polkadotSigner,
       {
         at: freshAt,
+        mortality: { mortal: true, period: 128 },
       }
     );
 

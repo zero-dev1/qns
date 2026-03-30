@@ -59,32 +59,32 @@ export default function WalletModal() {
     if (isMobile()) {
       return [
         {
-          id: 'subwallet',
-          name: 'SubWallet',
-          icon: <SubWalletIcon />,
-          description: 'Recommended for QF Network',
-        },
-        {
           id: 'metamask',
           name: 'MetaMask',
           icon: <MetaMaskIcon />,
-          description: 'EVM wallet',
+          description: 'Recommended — fastest experience',
+        },
+        {
+          id: 'subwallet',
+          name: 'SubWallet',
+          icon: <SubWalletIcon />,
+          description: 'Substrate wallet for QF Network',
         },
       ];
     }
 
     return [
       {
-        id: 'talisman',
-        name: 'Talisman',
-        icon: <TalismanIcon />,
-        description: 'Recommended for QF Network',
-      },
-      {
         id: 'metamask',
         name: 'MetaMask',
         icon: <MetaMaskIcon />,
-        description: 'EVM wallet',
+        description: 'Recommended — fastest experience',
+      },
+      {
+        id: 'talisman',
+        name: 'Talisman',
+        icon: <TalismanIcon />,
+        description: 'Substrate wallet for QF Network',
       },
     ];
   };
@@ -229,7 +229,7 @@ export default function WalletModal() {
               <p className="text-xs text-center text-[#8A8A8A]">
                 {isMobile() ? (
                   <>
-                    For the best experience on QF Network, we recommend{' '}
+                    Using SubWallet?{' '}
                     <a
                       href="#"
                       className="text-[#00D179] hover:underline"
@@ -238,12 +238,13 @@ export default function WalletModal() {
                         window.open('https://www.subwallet.app/', '_blank');
                       }}
                     >
-                      SubWallet
+                      Open in SubWallet browser
                     </a>
+                    {' '}for Substrate features
                   </>
                 ) : (
                   <>
-                    For the fastest experience on QF Network, we recommend{' '}
+                    Need a Substrate wallet?{' '}
                     <a
                       href="#"
                       className="text-[#00D179] hover:underline"
@@ -252,8 +253,9 @@ export default function WalletModal() {
                         window.open('https://talisman.xyz', '_blank');
                       }}
                     >
-                      Talisman
+                      Get Talisman
                     </a>
+                    {' '}for advanced QF Network features
                   </>
                 )}
               </p>
