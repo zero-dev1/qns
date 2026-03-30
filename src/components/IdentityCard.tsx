@@ -20,7 +20,6 @@ interface IdentityCardProps {
     bio: string;
     twitter: string;
     telegram: string;
-    website: string;
   };
   isPrimary: boolean;
   enableTilt: boolean;
@@ -34,7 +33,7 @@ const BADGE_ICON_MAP: Record<string, React.ElementType> = {
   megaphone: Megaphone,
 };
 
-const COMPLETENESS_FIELDS = ['avatar', 'bio', 'twitter', 'telegram', 'website'] as const;
+const COMPLETENESS_FIELDS = ['avatar', 'bio', 'twitter', 'telegram'] as const;
 
 export default function IdentityCard({ name, records, isPrimary, enableTilt, onOpenDetail }: IdentityCardProps) {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });

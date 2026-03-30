@@ -26,8 +26,6 @@ interface DetailModalProps {
   bio?: string;
   twitter?: string;
   telegram?: string;
-  website?: string;
-  email?: string;
   isPrimary: boolean;
   initialTab?: Tab;
   // QDL: new props for pricing ceremony
@@ -55,22 +53,10 @@ const RECORD_FIELDS = [
   { key: 'bio', label: 'Bio', placeholder: 'A short bio about yourself' },
   { key: 'twitter', label: 'Twitter / X', placeholder: '@handle' },
   { key: 'telegram', label: 'Telegram', placeholder: '@handle' },
-  { key: 'website', label: 'Website', placeholder: 'https://yoursite.com' },
 ];
 
 // ── QDL: Record normalization ─────────────────────
 // Matches the SOCIAL_CONFIG pattern from Profile.tsx
-
-function normalizeWebsite(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return '';
-  // Already has protocol
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  // Has protocol-like prefix but mangled
-  if (trimmed.startsWith('//')) return `https:${trimmed}`;
-  // Raw domain — prepend https://
-  return `https://${trimmed}`;
-}
 
 function normalizeTwitter(raw: string): string {
   const trimmed = raw.trim();
@@ -108,7 +94,7 @@ function getTelegramUrl(handle: string): string {
 
 export default function DetailModal({
   isOpen, onClose, name, expires, isPermanent, registeredAt,
-  avatar, bio, twitter, telegram, website,
+  avatar, bio, twitter, telegram,
   isPrimary, initialTab, address, balance,
   renewalPricePerYear,  // ADD THIS
   onSaveRecords, onSetPrimary, onRenew, onTransfer,
@@ -122,15 +108,15 @@ export default function DetailModal({
   // Edit state
   const [editValues, setEditValues] = useState({
     avatar: avatar || '', bio: bio || '', twitter: twitter || '',
-    telegram: telegram || '', website: website || '',
+    telegram: telegram || '',
   });
   const [saving, setSaving] = useState(false);
 
   // QDL: dirty tracking — compare edited values to original props
   const isDirty = useMemo(() => {
-    const original = { avatar: avatar || '', bio: bio || '', twitter: twitter || '', telegram: telegram || '', website: website || '' };
+    const original = { avatar: avatar || '', bio: bio || '', twitter: twitter || '', telegram: telegram || '' };
     return Object.keys(original).some(k => editValues[k as keyof typeof editValues] !== original[k as keyof typeof original]);
-  }, [editValues, avatar, bio, twitter, telegram, website]);
+  }, [editValues, avatar, bio, twitter, telegram]);
 
   // Manage — primary
   const [settingPrimary, setSettingPrimary] = useState(false);
@@ -173,7 +159,7 @@ export default function DetailModal({
       setActiveTab(initialTab || 'overview');
       setEditValues({
         avatar: avatar || '', bio: bio || '', twitter: twitter || '',
-        telegram: telegram || '', website: website || '',
+        telegram: telegram || '',
       });
       setTransferTo('');
       setTransferError('');
@@ -181,7 +167,7 @@ export default function DetailModal({
       setRenewYears(1);
       getBadgesForName(name, computeNamehash(`${name}.qf`)).then(setBadges);
     }
-  }, [isOpen, name, avatar, bio, twitter, telegram, website]);
+  }, [isOpen, name, avatar, bio, twitter, telegram]);
 
   // Body scroll lock
   useEffect(() => {
@@ -203,9 +189,9 @@ export default function DetailModal({
 
   // Completeness
   const completeness = useMemo(() => {
-    const fields = [avatar, bio, twitter, telegram, website];
+    const fields = [avatar, bio, twitter, telegram];
     return fields.filter(Boolean).length;
-  }, [avatar, bio, twitter, telegram, website]);
+  }, [avatar, bio, twitter, telegram]);
 
   // ── Handlers ──────────────────────────────────
 
@@ -216,7 +202,6 @@ export default function DetailModal({
       // QDL: Normalize records before saving
       const normalized = {
         ...editValues,
-        website: normalizeWebsite(editValues.website),
         twitter: normalizeTwitter(editValues.twitter),
         telegram: normalizeTelegram(editValues.telegram),
       };
@@ -475,25 +460,17 @@ export default function DetailModal({
                       </a>
                     </div>
                   )}
-                  {website && (
-                    <div className="flex items-center gap-2 text-sm text-white/50">
-                      <span className="text-white/30 w-20">Website</span>
-                      <a href={normalizeWebsite(website)} target="_blank" rel="noopener noreferrer" className="text-[#00D179] hover:underline truncate">
-                        {website.replace(/^https?:\/\//, '')}
-                      </a>
-                    </div>
-                  )}
                 </div>
 
                 {/* QDL: Completeness nudge (read-only, no actions) */}
-                {completeness < 5 && (
+                {completeness < 4 && (
                   <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-white/40">Profile completeness</span>
-                      <span className="text-xs text-white/30">{completeness}/5</span>
+                      <span className="text-xs text-white/30">{completeness}/4</span>
                     </div>
                     <div className="flex gap-1.5">
-                      {Array.from({ length: 5 }).map((_, i) => (
+                      {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className={`h-1 flex-1 rounded-full ${i < completeness ? 'bg-[#00D179]' : 'bg-white/10'}`} />
                       ))}
                     </div>

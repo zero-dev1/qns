@@ -32,7 +32,7 @@ interface OwnedName {
   registeredAt: bigint;
 }
 
-const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'telegram', 'website'] as const;
+const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'telegram'] as const;
 
 
 
@@ -488,7 +488,6 @@ export default function MyNamesPage() {
         bio: textRecords[name.name]?.bio || '',
         twitter: textRecords[name.name]?.twitter || '',
         telegram: textRecords[name.name]?.telegram || '',
-        website: textRecords[name.name]?.website || '',
       },
     ])
   );
@@ -732,7 +731,7 @@ export default function MyNamesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {sortedNames.map((item) => {
                     const recs = cardRecords.get(item.name) || {
-                      avatar: '', bio: '', twitter: '', telegram: '', website: '',
+                      avatar: '', bio: '', twitter: '', telegram: '',
                     };
                     return (
                       <IdentityCard
@@ -768,7 +767,6 @@ export default function MyNamesPage() {
             bio={textRecords[selectedName]?.bio}
             twitter={textRecords[selectedName]?.twitter}
             telegram={textRecords[selectedName]?.telegram}
-            website={textRecords[selectedName]?.website}
             isPrimary={primaryName === selectedName}
             providerType={providerType}
             address={address || ''}
