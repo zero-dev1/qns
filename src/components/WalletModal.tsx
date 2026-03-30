@@ -59,32 +59,32 @@ export default function WalletModal() {
     if (isMobile()) {
       return [
         {
-          id: 'metamask',
-          name: 'MetaMask',
-          icon: <MetaMaskIcon />,
-          description: 'Recommended — fastest experience',
-        },
-        {
           id: 'subwallet',
           name: 'SubWallet',
           icon: <SubWalletIcon />,
-          description: 'Substrate wallet for QF Network',
+          description: 'Substrate',
+        },
+        {
+          id: 'metamask',
+          name: 'MetaMask',
+          icon: <MetaMaskIcon />,
+          description: 'EVM',
         },
       ];
     }
 
     return [
       {
-        id: 'metamask',
-        name: 'MetaMask',
-        icon: <MetaMaskIcon />,
-        description: 'Recommended — fastest experience',
-      },
-      {
         id: 'talisman',
         name: 'Talisman',
         icon: <TalismanIcon />,
-        description: 'Substrate wallet for QF Network',
+        description: 'Substrate',
+      },
+      {
+        id: 'metamask',
+        name: 'MetaMask',
+        icon: <MetaMaskIcon />,
+        description: 'EVM',
       },
     ];
   };
@@ -229,33 +229,45 @@ export default function WalletModal() {
               <p className="text-xs text-center text-[#8A8A8A]">
                 {isMobile() ? (
                   <>
-                    Using SubWallet?{' '}
+                    Need a wallet?{' '}
                     <a
-                      href="#"
+                      href="https://www.subwallet.app/"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-[#00D179] hover:underline"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        window.open('https://www.subwallet.app/', '_blank');
-                      }}
                     >
-                      Open in SubWallet browser
+                      SubWallet
                     </a>
-                    {' '}for Substrate features
+                    {' · '}
+                    <a
+                      href="https://metamask.io/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#00D179] hover:underline"
+                    >
+                      MetaMask
+                    </a>
                   </>
                 ) : (
                   <>
-                    Need a Substrate wallet?{' '}
+                    Need a wallet?{' '}
                     <a
-                      href="#"
+                      href="https://talisman.xyz/"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-[#00D179] hover:underline"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        window.open('https://talisman.xyz', '_blank');
-                      }}
                     >
-                      Get Talisman
+                      Talisman
                     </a>
-                    {' '}for advanced QF Network features
+                    {' · '}
+                    <a
+                      href="https://metamask.io/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#00D179] hover:underline"
+                    >
+                      MetaMask
+                    </a>
                   </>
                 )}
               </p>

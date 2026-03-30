@@ -35,7 +35,7 @@ export default function SpotlightCard({ children, className = '', glowColor }: S
       <div
         className="spotlight-mobile-glow absolute inset-0 pointer-events-none z-10"
         style={{
-          background: `radial-gradient(ellipse at center, ${glowColor || 'rgba(0,209,121,0.3)'} 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse at center, ${glowColor || 'rgba(0,209,121,0.3)'} 0%, transparent 80%)`,
         }}
       />
       <div className="relative h-full bg-[#0A0A0A] rounded-[inherit] z-20 overflow-hidden">

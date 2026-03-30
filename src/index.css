@@ -196,7 +196,7 @@
 
 @media (pointer: coarse) {
   .spotlight-mobile-glow {
-    opacity: 0.12;
+    opacity: 0.18;
   }
   /* Hide the mouse-tracking pseudo-elements on touch devices */
   .spotlight-card::before,
