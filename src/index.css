@@ -111,18 +111,21 @@
   background: rgba(0, 209, 121, 0.5);
 }
 
-/* Holographic permanent badge shimmer animation */
+/* Badge shimmer animation — shared by all badge types */
 @keyframes holo-shimmer {
   0% { background-position: -200% center; }
   100% { background-position: 200% center; }
 }
 
-.permanent-badge {
+/* Generic badge shimmer — reads color from --shimmer-color CSS variable.
+   Each badge sets --shimmer-color inline via style={{ '--shimmer-color': config.color }}.
+   Defaults to emerald if unset. */
+.badge-shimmer {
   position: relative;
   overflow: hidden;
 }
 
-.permanent-badge::after {
+.badge-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -130,9 +133,9 @@
     120deg,
     transparent 0%,
     transparent 30%,
-    rgba(0, 209, 121, 0.12) 45%,
-    rgba(0, 239, 231, 0.08) 50%,
-    rgba(0, 209, 121, 0.12) 55%,
+    color-mix(in srgb, var(--shimmer-color, #00D179) 15%, transparent) 45%,
+    color-mix(in srgb, var(--shimmer-color, #00D179) 25%, transparent) 50%,
+    color-mix(in srgb, var(--shimmer-color, #00D179) 15%, transparent) 55%,
     transparent 70%,
     transparent 100%
   );
@@ -162,32 +165,6 @@
   background: var(--glow-color, rgba(0, 209, 121, 0.3));
 }
 
-/* Pioneer badge shimmer — gold variant of holo-shimmer */
-.pioneer-badge {
-  position: relative;
-  overflow: hidden;
-}
-
-.pioneer-badge::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    120deg,
-    transparent 0%,
-    transparent 30%,
-    rgba(255, 215, 0, 0.15) 45%,
-    rgba(255, 215, 0, 0.25) 50%,
-    rgba(255, 215, 0, 0.15) 55%,
-    transparent 70%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: holo-shimmer 4s ease-in-out infinite;
-  pointer-events: none;
-  border-radius: inherit;
-  mix-blend-mode: screen;
-}
 
 /* Mobile: static ambient glow — visible on touch devices only */
 .spotlight-mobile-glow {

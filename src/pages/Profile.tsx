@@ -929,34 +929,30 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* Badges */}
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                  {profile.isPermanent && (
-                    <span className="permanent-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#00D179]/10 text-[#8DF0BA] border border-[#00D179]/20">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                      Permanent
-                    </span>
-                  )}
-                  {badges.map((badge) => {
-                    const config = BADGE_TYPES[badge];
-                    const IconComponent = BADGE_ICON_MAP[config.icon] || Shield;
-                    const isPioneer = badge === 'pioneer';
-                    return (
-                      <span
-                        key={badge}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${isPioneer ? 'pioneer-badge' : ''}`}
-                        style={{
-                          backgroundColor: `${config.color}1A`,
-                          color: config.color,
-                          borderColor: `${config.color}33`,
-                        }}
-                      >
-                        <IconComponent size={12} />
-                        {config.label}
-                      </span>
-                    );
-                  })}
-                </div>
+                {/* Badges — only rendered if there are non-permanent badges */}
+                {badges.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                    {badges.map((badge) => {
+                      const config = BADGE_TYPES[badge];
+                      const IconComponent = BADGE_ICON_MAP[config.icon] || Shield;
+                      return (
+                        <span
+                          key={badge}
+                          className="badge-shimmer inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border"
+                          style={{
+                            backgroundColor: `${config.color}1A`,
+                            color: config.color,
+                            borderColor: `${config.color}33`,
+                            '--shimmer-color': config.color,
+                          } as React.CSSProperties}
+                        >
+                          <IconComponent size={12} />
+                          {config.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {/* Mobile-only: Provenance strip + Ledger (below card) */}
                 <div className="md:hidden mt-8">

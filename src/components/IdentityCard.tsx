@@ -166,32 +166,29 @@ export default function IdentityCard({ name, records, isPrimary, enableTilt, onO
         </button>
       </div>
 
-      {/* Badge row */}
-      <div className="flex items-center gap-2 mb-4">
-        {name.isPermanent && (
-          <span className="permanent-badge inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#00D179]/10 text-[#8DF0BA] border border-[#00D179]/20">
-            <Shield size={10} /> Permanent
-          </span>
-        )}
-        {badges.map((badge) => {
-          const config = BADGE_TYPES[badge];
-          const IconComponent = BADGE_ICON_MAP[config.icon] || Shield;
-          const isPioneer = badge === 'pioneer';
-          return (
-            <span
-              key={badge}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${isPioneer ? 'pioneer-badge' : ''}`}
-              style={{
-                backgroundColor: `${config.color}1A`,
-                color: config.color,
-                borderColor: `${config.color}33`,
-              }}
-            >
-              <IconComponent size={10} /> {config.label}
-            </span>
-          );
-        })}
-      </div>
+      {/* Badge row — only rendered if there are non-permanent badges */}
+      {badges.length > 0 && (
+        <div className="flex items-center gap-2 mb-4">
+          {badges.map((badge) => {
+            const config = BADGE_TYPES[badge];
+            const IconComponent = BADGE_ICON_MAP[config.icon] || Shield;
+            return (
+              <span
+                key={badge}
+                className="badge-shimmer inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border"
+                style={{
+                  backgroundColor: `${config.color}1A`,
+                  color: config.color,
+                  borderColor: `${config.color}33`,
+                  '--shimmer-color': config.color,
+                } as React.CSSProperties}
+              >
+                <IconComponent size={10} /> {config.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Avatar with layoutId for shared animation */}
       <motion.div

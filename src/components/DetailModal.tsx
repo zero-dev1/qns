@@ -393,14 +393,9 @@ export default function DetailModal({
             {/* ═══ OVERVIEW TAB ═══ */}
             {activeTab === 'overview' && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-                {/* Badges */}
-                {(isPermanent || badges.length > 0) && (
+                {/* Badges — only rendered if there are non-permanent badges */}
+                {badges.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {isPermanent && (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <Shield className="w-3 h-3" /> Permanent
-                      </span>
-                    )}
                     {badges.map((badge) => {
                       const config = BADGE_TYPES[badge];
                       const getIcon = () => {
@@ -412,16 +407,16 @@ export default function DetailModal({
                           default: return <Shield className="w-3 h-3" />;
                         }
                       };
-                      const isPioneer = badge === 'pioneer';
                       return (
                         <span
                           key={badge}
-                          className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border ${isPioneer ? 'pioneer-badge' : ''}`}
+                          className="badge-shimmer flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border"
                           style={{
                             backgroundColor: `${config.color}1A`,
                             color: config.color,
                             borderColor: `${config.color}33`,
-                          }}
+                            '--shimmer-color': config.color,
+                          } as React.CSSProperties}
                         >
                           {getIcon()} {config.label}
                         </span>
