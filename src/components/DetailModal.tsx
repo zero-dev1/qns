@@ -300,7 +300,7 @@ export default function DetailModal({
   }, [transferTo, name, onTransfer, showToast, onClose]);
 
   const handleCopyLink = useCallback(() => {
-    const url = `${window.location.origin}/${name}.qf`;
+    const url = `${window.location.origin}/name/${name}`;
     copy(url);
     setLinkCopied(true);
     hapticSuccess();
@@ -715,7 +715,7 @@ export default function DetailModal({
                   <h3 className="text-sm font-medium text-white">Profile Link</h3>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10 text-xs text-white/50 font-mono truncate">
-                      {window.location.origin}/{name}.qf
+                      {window.location.origin}/name/{name}
                     </div>
                     <button
                       onClick={handleCopyLink}
