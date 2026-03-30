@@ -131,10 +131,14 @@ export async function ensureAccountMapped(ss58Address: string): Promise<void> {
 
     // Insufficient balance for mapping transaction
     if (msg.includes('InsufficientBalance') || msg.includes('Inability to pay') || 
-        msg.includes('1010:') || msg.includes('insufficient')) {
+        msg.includes('1010:') || msg.includes('insufficient') ||
+        msg.includes('balance') || msg.includes('fund') ||
+        msg.includes('Token') || msg.includes('Exhausted') ||
+        msg.includes('FundsUnavailable')) {
       throw new Error(INSUFFICIENT_BALANCE_FOR_MAPPING);
     }
 
+    console.warn('[QNS] ensureAccountMapped unmatched error:', msg, err);
     throw err;
   }
 }

@@ -187,14 +187,12 @@ export const useWalletStore = create<WalletState>()(
               msg === INSUFFICIENT_BALANCE_FOR_MAPPING ||
               msg.includes('INSUFFICIENT_BALANCE')
             ) {
+              setError(
+                'Your wallet needs QF to get started. Fund your wallet and reconnect.'
+              );
               set({
                 accountMapped: false,
-                showWalletModal: false,
               });
-              setError(
-                'Your wallet needs a small amount of QF to complete account setup. ' +
-                  'Bridge some QF tokens, then reconnect.'
-              );
               return;
             }
 

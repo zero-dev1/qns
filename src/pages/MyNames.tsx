@@ -32,7 +32,7 @@ interface OwnedName {
   registeredAt: bigint;
 }
 
-const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'telegram', 'website', 'email'] as const;
+const TEXT_KEYS = ['avatar', 'bio', 'twitter', 'telegram', 'website'] as const;
 
 
 

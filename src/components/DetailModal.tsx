@@ -56,7 +56,6 @@ const RECORD_FIELDS = [
   { key: 'twitter', label: 'Twitter / X', placeholder: '@handle' },
   { key: 'telegram', label: 'Telegram', placeholder: '@handle' },
   { key: 'website', label: 'Website', placeholder: 'https://yoursite.com' },
-  { key: 'email', label: 'Email', placeholder: 'you@example.com' },
 ];
 
 // ── QDL: Record normalization ─────────────────────
@@ -109,7 +108,7 @@ function getTelegramUrl(handle: string): string {
 
 export default function DetailModal({
   isOpen, onClose, name, expires, isPermanent, registeredAt,
-  avatar, bio, twitter, telegram, website, email,
+  avatar, bio, twitter, telegram, website,
   isPrimary, initialTab, address, balance,
   renewalPricePerYear,  // ADD THIS
   onSaveRecords, onSetPrimary, onRenew, onTransfer,
@@ -123,15 +122,15 @@ export default function DetailModal({
   // Edit state
   const [editValues, setEditValues] = useState({
     avatar: avatar || '', bio: bio || '', twitter: twitter || '',
-    telegram: telegram || '', website: website || '', email: email || '',
+    telegram: telegram || '', website: website || '',
   });
   const [saving, setSaving] = useState(false);
 
   // QDL: dirty tracking — compare edited values to original props
   const isDirty = useMemo(() => {
-    const original = { avatar: avatar || '', bio: bio || '', twitter: twitter || '', telegram: telegram || '', website: website || '', email: email || '' };
+    const original = { avatar: avatar || '', bio: bio || '', twitter: twitter || '', telegram: telegram || '', website: website || '' };
     return Object.keys(original).some(k => editValues[k as keyof typeof editValues] !== original[k as keyof typeof original]);
-  }, [editValues, avatar, bio, twitter, telegram, website, email]);
+  }, [editValues, avatar, bio, twitter, telegram, website]);
 
   // Manage — primary
   const [settingPrimary, setSettingPrimary] = useState(false);
@@ -174,7 +173,7 @@ export default function DetailModal({
       setActiveTab(initialTab || 'overview');
       setEditValues({
         avatar: avatar || '', bio: bio || '', twitter: twitter || '',
-        telegram: telegram || '', website: website || '', email: email || '',
+        telegram: telegram || '', website: website || '',
       });
       setTransferTo('');
       setTransferError('');
@@ -182,7 +181,7 @@ export default function DetailModal({
       setRenewYears(1);
       getBadgesForName(name, computeNamehash(`${name}.qf`)).then(setBadges);
     }
-  }, [isOpen, name, avatar, bio, twitter, telegram, website, email]);
+  }, [isOpen, name, avatar, bio, twitter, telegram, website]);
 
   // Body scroll lock
   useEffect(() => {
@@ -204,9 +203,9 @@ export default function DetailModal({
 
   // Completeness
   const completeness = useMemo(() => {
-    const fields = [avatar, bio, twitter, telegram, website, email];
+    const fields = [avatar, bio, twitter, telegram, website];
     return fields.filter(Boolean).length;
-  }, [avatar, bio, twitter, telegram, website, email]);
+  }, [avatar, bio, twitter, telegram, website]);
 
   // ── Handlers ──────────────────────────────────
 
@@ -484,23 +483,17 @@ export default function DetailModal({
                       </a>
                     </div>
                   )}
-                  {email && (
-                    <div className="flex items-center gap-2 text-sm text-white/50">
-                      <span className="text-white/30 w-20">Email</span>
-                      <a href={`mailto:${email}`} className="text-white/70 hover:underline truncate">{email}</a>
-                    </div>
-                  )}
                 </div>
 
                 {/* QDL: Completeness nudge (read-only, no actions) */}
-                {completeness < 6 && (
+                {completeness < 5 && (
                   <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-white/40">Profile completeness</span>
-                      <span className="text-xs text-white/30">{completeness}/6</span>
+                      <span className="text-xs text-white/30">{completeness}/5</span>
                     </div>
                     <div className="flex gap-1.5">
-                      {Array.from({ length: 6 }).map((_, i) => (
+                      {Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className={`h-1 flex-1 rounded-full ${i < completeness ? 'bg-[#00D179]' : 'bg-white/10'}`} />
                       ))}
                     </div>
