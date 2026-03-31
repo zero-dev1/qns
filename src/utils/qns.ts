@@ -856,7 +856,6 @@ export async function isReserved(name: string): Promise<boolean> {
 }
 
 export const BURN_ADDRESS_SS58 = '5C4hrfjw9DjXZTzV3MwzrrAr9PUr9y8SHgV3cmVGNUWRiJL5';
-const REGISTRAR_SS58 = '5EpRx3VESwPSVZL6xrxT2P3hoRhdmWHgVfGFiZqqvWkAftNx'; // QNS Registrar on-chain SS58 (pallet-revive contract account)
 const QF_EXPLORER_API = 'https://qf-explorer.mathswins.co.uk/api';
 
 export const BURN_ADDRESS_EVM = '0x000000000000000000000000000000000000dEaD';
@@ -899,38 +898,12 @@ function writeBurnCache(stats: BurnStats): void {
 export async function getBurnStats(): Promise<BurnStats> {
   const cached = readBurnCache();
 
-  const [transfersRes, totalRegs, burnPct] = await Promise.allSettled([
-    fetch(`${QF_EXPLORER_API}/txs/${BURN_ADDRESS_SS58}?limit=200`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Explorer API ${r.status}`);
-        return r.json();
-      }),
+  // Fetch on-chain values in parallel: totalBurned, totalRegistrations, burnPercent
+  const [onChainBurned, totalRegs, burnPct] = await Promise.allSettled([
+    getTotalBurnedContract(),
     getTotalRegistrations(),
     getBurnPercentContract(),
   ]);
-
-  let totalBurned = 0;
-  let qnsBurned = 0;
-  let explorerAvailable = false;
-
-  if (transfersRes.status === 'fulfilled' && transfersRes.value?.transfers?.items) {
-    explorerAvailable = true;
-    const items = transfersRes.value.transfers.items as Array<{
-      from: string;
-      to: string;
-      amountQF: string;
-    }>;
-
-    for (const tx of items) {
-      if (tx.to === BURN_ADDRESS_SS58) {
-        const amount = parseFloat(tx.amountQF);
-        totalBurned += amount;
-        if (tx.from === REGISTRAR_SS58) {
-          qnsBurned += amount;
-        }
-      }
-    }
-  }
 
   const totalRegistrations = totalRegs.status === 'fulfilled' && totalRegs.value
     ? Number(totalRegs.value)
@@ -940,30 +913,51 @@ export async function getBurnStats(): Promise<BurnStats> {
     ? Number(burnPct.value)
     : 5;
 
-  // If explorer was down, try on-chain totalBurned (future contract upgrade)
-  if (!explorerAvailable) {
-    try {
-      const onChainBurned = await callContract<bigint>(
-        QNS_REGISTRAR_ADDRESS, REGISTRAR_ABI, 'totalBurned', []
-      );
-      if (onChainBurned !== undefined && onChainBurned !== null) {
-        qnsBurned = Number(onChainBurned) / 1e18;
-      }
-    } catch {
-      // totalBurned doesn't exist on current contract — expected pre-redeploy
-    }
-  }
-
-  // If explorer available → fresh data, cache it and return
-  if (explorerAvailable) {
-    const stats: BurnStats = { totalBurned, qnsBurned, totalRegistrations, burnPercent, stale: false };
+  // Primary: on-chain totalBurned from the Registrar contract
+  if (onChainBurned.status === 'fulfilled' && onChainBurned.value !== null && onChainBurned.value !== undefined) {
+    const qnsBurned = Number(onChainBurned.value) / 1e18;
+    const stats: BurnStats = {
+      totalBurned: qnsBurned, // on-chain only tracks QNS burns, so they're equal
+      qnsBurned,
+      totalRegistrations,
+      burnPercent,
+      stale: false,
+    };
     writeBurnCache(stats);
     return stats;
   }
 
-  // Explorer down → return cache if available, otherwise return zeros
+  // Fallback: Explorer API transfer history
+  try {
+    const res = await fetch(`${QF_EXPLORER_API}/txs/${BURN_ADDRESS_SS58}?limit=200`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.transfers?.items) {
+        let totalBurned = 0;
+        for (const tx of json.transfers.items) {
+          if (tx.to === BURN_ADDRESS_SS58) {
+            totalBurned += parseFloat(tx.amountQF);
+          }
+        }
+        // Explorer can't reliably distinguish QNS burns from other sources
+        // without a current REGISTRAR_SS58, so use totalBurned for both
+        const stats: BurnStats = {
+          totalBurned,
+          qnsBurned: totalBurned,
+          totalRegistrations,
+          burnPercent,
+          stale: false,
+        };
+        writeBurnCache(stats);
+        return stats;
+      }
+    }
+  } catch {
+    // Explorer unavailable — fall through to cache
+  }
+
+  // Last resort: cached data
   if (cached) {
-    // Overlay fresh on-chain values onto cached explorer data
     return {
       ...cached,
       totalRegistrations: totalRegistrations || cached.totalRegistrations,
@@ -972,5 +966,6 @@ export async function getBurnStats(): Promise<BurnStats> {
     };
   }
 
-  return { totalBurned, qnsBurned, totalRegistrations, burnPercent, stale: false };
+  // Nothing available
+  return { totalBurned: 0, qnsBurned: 0, totalRegistrations, burnPercent, stale: false };
 }
